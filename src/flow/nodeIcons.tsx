@@ -1,0 +1,92 @@
+import {
+  ArrowLeftRight,
+  Binary,
+  Bomb,
+  Bot,
+  Braces,
+  Code,
+  Combine,
+  Equal,
+  Eye,
+  EyeOff,
+  FileArchive,
+  FileDown,
+  FileText,
+  FileUp,
+  FolderInput,
+  Gauge,
+  GitBranch,
+  Hash,
+  KeyRound,
+  Link,
+  Link2,
+  type LucideIcon,
+  Package,
+  QrCode,
+  Repeat,
+  Replace,
+  RotateCw,
+  Ruler,
+  ScanEye,
+  ScanLine,
+  Search,
+  Sparkles,
+  Split,
+  Type,
+  VenetianMask,
+  Wand2,
+  Zap,
+} from "lucide-react";
+
+// A distinct icon per module.
+const NODE_ICONS: Record<string, LucideIcon> = {
+  text_input: Type,
+  file_import: FileUp,
+  file_output: FileDown,
+  text_output: FileText,
+  base64_encode: Code,
+  base64_decode: Braces,
+  hex_encode: Hash,
+  hex_decode: Binary,
+  url_encode: Link,
+  url_decode: Link2,
+  rot13: RotateCw,
+  xor: Zap,
+  xor_bruteforce: Bomb,
+  loop_decode: Repeat,
+  magic_decode: Wand2,
+  qr_encode: QrCode,
+  qr_decode: ScanLine,
+  reverse: ArrowLeftRight,
+  regex_extract: Search,
+  text_score: Gauge,
+  concat: Combine,
+  split: Split,
+  length: Ruler,
+  replace: Replace,
+  switch: GitBranch,
+  compare: Equal,
+  archive_extract: FileArchive,
+  zero_width_decode: ScanEye,
+  zero_width_encode: EyeOff,
+  ai_judge: Bot,
+  ai_vision: Eye,
+};
+
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  输入输出: FolderInput,
+  "编码/加密": KeyRound,
+  文本处理: Type,
+  "控制/逻辑": GitBranch,
+  压缩包: Package,
+  隐写术: VenetianMask,
+  AI: Sparkles,
+};
+
+export function nodeIcon(id: string, category?: string): LucideIcon {
+  return NODE_ICONS[id] ?? (category ? CATEGORY_ICONS[category] : undefined) ?? Braces;
+}
+
+export function categoryIcon(category: string): LucideIcon {
+  return CATEGORY_ICONS[category] ?? Braces;
+}

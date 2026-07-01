@@ -1,0 +1,27 @@
+[package]
+name = "misclab-core"
+description = "LovelyMiscLab analysis engine — Tauri-agnostic core (typed node-graph engine + node registry)."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+petgraph = "0.8"
+base64 = "0.22"
+hex = "0.4"
+urlencoding = "2"
+regex = "1"
+ureq = { version = "2", features = ["json"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "webp"] }
+qrcode = "0.14"
+rxing = { version = "0.7", default-features = false }
+zip = { version = "2", default-features = false, features = ["deflate", "aes-crypto"] }
+sevenz-rust = "0.6"
+flate2 = "1"
+tar = "0.4"
+unrar = "0.5"

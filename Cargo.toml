@@ -1,0 +1,22 @@
+# LovelyMiscLab — Cargo workspace root
+# Splits the Tauri-agnostic analysis engine (crates/misclab-core) from the
+# thin Tauri adapter (src-tauri). See docs/plan for architecture.
+[workspace]
+resolver = "2"
+members = ["src-tauri", "crates/misclab-core"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["LovelyMiscLab"]
+license = "MIT"
+
+[profile.dev]
+# Faster incremental builds during development.
+opt-level = 0
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
