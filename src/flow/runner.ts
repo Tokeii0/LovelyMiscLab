@@ -1,6 +1,6 @@
 import { api } from "@/lib/bindings";
 import { inTauri } from "@/lib/devMocks";
-import type { PortValue, ProgressMsg, SerializedGraph } from "@/lib/types";
+import type { ParamWidget, PortValue, ProgressMsg, SerializedGraph } from "@/lib/types";
 import { useDescriptorStore } from "@/store/descriptors";
 import { useGraphStore } from "@/store/graph";
 import { useRunStore } from "@/store/run";
@@ -12,6 +12,32 @@ let pending = false;
 
 function now() {
   return new Date().toLocaleTimeString();
+}
+
+/** Coerce a connected port value into the JS type a param widget expects (mirrors
+ * the Rust executor), so single-node execution honors param connections too. */
+function coerceParam(v: PortValue, widget: ParamWidget): unknown {
+  if (widget.kind === "number" || widget.kind === "slider") {
+    if (v.type === "number") return v.value;
+    if (v.type === "bool") return v.value ? 1 : 0;
+    if (v.type === "text") {
+      const n = parseFloat(v.value);
+      return Number.isNaN(n) ? 0 : n;
+    }
+    return 0;
+  }
+  if (widget.kind === "toggle") {
+    if (v.type === "bool") return v.value;
+    if (v.type === "number") return v.value !== 0;
+    if (v.type === "text")
+      return ["true", "1", "yes", "on", "是"].includes(v.value.trim().toLowerCase());
+    return false;
+  }
+  if (v.type === "text") return v.value;
+  if (v.type === "number") return String(v.value);
+  if (v.type === "bool") return String(v.value);
+  if (v.type === "stringList") return v.value.join("\n");
+  return "";
 }
 
 /** Serialize the current graph, excluding disabled nodes (and their edges). */
@@ -109,12 +135,21 @@ export async function runSingleNode(nodeId: string) {
   if (!node) return;
   const descriptor = useDescriptorStore.getState().byId[node.data.descriptorId];
 
+  const inputPortNames = new Set((descriptor?.inputs ?? []).map((p) => p.name));
   const inputs: Record<string, PortValue> = {};
+  const paramOverrides: Record<string, unknown> = {};
   for (const e of g.edges) {
     if (e.target === nodeId && e.sourceHandle && e.targetHandle) {
       const src = g.nodes.find((n) => n.id === e.source);
       const val = src?.data.outputs?.[e.sourceHandle];
-      if (val) inputs[e.targetHandle] = val;
+      if (!val) continue;
+      if (inputPortNames.has(e.targetHandle)) {
+        inputs[e.targetHandle] = val;
+      } else {
+        // An edge into a promoted parameter overrides that param's value.
+        const spec = descriptor?.params.find((p) => p.name === e.targetHandle);
+        if (spec) paramOverrides[e.targetHandle] = coerceParam(val, spec.widget);
+      }
     }
   }
 
@@ -142,7 +177,8 @@ export async function runSingleNode(nodeId: string) {
     logs: [{ time: now(), level: "info", message: "单独执行" }],
   });
   try {
-    const outputs = await api.runNode(node.data.descriptorId, inputs, node.data.params);
+    const params = { ...node.data.params, ...paramOverrides };
+    const outputs = await api.runNode(node.data.descriptorId, inputs, params);
     g.updateRuntime(nodeId, { status: "done", progress: 1, outputs });
     g.appendLog(nodeId, { time: now(), level: "success", message: "执行成功" });
   } catch (e) {

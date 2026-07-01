@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Handle, NodeToolbar, Position, type NodeProps } from "@xyflow/react";
 import { Ban, Check, Copy, Eye, Play, Trash2, X } from "lucide-react";
 
@@ -9,8 +9,9 @@ import { useGraphStore, type FlowNodeData } from "@/store/graph";
 import { useInspectorStore } from "@/store/inspector";
 
 import { nodeIcon } from "./nodeIcons";
-import { portColor } from "./portColors";
+import { paramPortType, portColor } from "./portColors";
 import { runSingleNode } from "./runner";
+import { WidgetRenderer } from "./WidgetRenderer";
 
 // In-flow handle — each port sits on its own row; React Flow still measures it.
 const handleStyle = (color: string): React.CSSProperties => ({
@@ -63,7 +64,10 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
   const deleteNode = useGraphStore((s) => s.deleteNode);
   const duplicateNode = useGraphStore((s) => s.duplicateNode);
   const setDisabled = useGraphStore((s) => s.setDisabled);
+  const setParam = useGraphStore((s) => s.setParam);
+  const renameNode = useGraphStore((s) => s.renameNode);
   const setInspectorTab = useInspectorStore((s) => s.setTab);
+  const [editing, setEditing] = useState(false);
 
   if (!descriptor) {
     return (
@@ -76,6 +80,11 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
   const Icon = nodeIcon(descriptor.id, descriptor.category);
   const outputs = data.outputs;
   const firstOut = outputs ? Object.entries(outputs)[0] : undefined;
+  // Source nodes (no input ports) show their param widgets inline for direct entry.
+  const inlineParams =
+    descriptor.inputs.length === 0
+      ? descriptor.params.filter((p) => !(data.inputParams ?? []).includes(p.name))
+      : [];
 
   const action =
     "flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground";
@@ -138,7 +147,37 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
           >
             <Icon className="h-3.5 w-3.5" />
           </span>
-          <span className="flex-1 truncate text-xs font-medium">{descriptor.displayName}</span>
+          {editing ? (
+            <input
+              autoFocus
+              defaultValue={data.label || descriptor.displayName}
+              onClick={(e) => e.stopPropagation()}
+              onBlur={(e) => {
+                renameNode(id, e.target.value);
+                setEditing(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  renameNode(id, (e.target as HTMLInputElement).value);
+                  setEditing(false);
+                } else if (e.key === "Escape") {
+                  setEditing(false);
+                }
+              }}
+              className="nodrag min-w-0 flex-1 rounded border border-input bg-background px-1 text-xs font-medium focus:outline-none"
+            />
+          ) : (
+            <span
+              className="flex-1 truncate text-xs font-medium"
+              title="双击重命名"
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                setEditing(true);
+              }}
+            >
+              {data.label?.trim() || descriptor.displayName}
+            </span>
+          )}
           <StatusIcon status={data.status} />
           <button
             className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-primary"
@@ -173,6 +212,21 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
               <span className="text-muted-foreground">{p.label}</span>
             </div>
           ))}
+          {(data.inputParams ?? []).map((name) => {
+            const spec = descriptor.params.find((pp) => pp.name === name);
+            if (!spec) return null;
+            return (
+              <div key={`param-${name}`} className="flex items-center gap-1.5 text-[11px]">
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id={name}
+                  style={handleStyle(portColor(paramPortType(spec.widget)))}
+                />
+                <span className="italic text-muted-foreground/80">{spec.label}</span>
+              </div>
+            );
+          })}
           {descriptor.outputs.map((p) => (
             <div
               key={`out-${p.name}`}
@@ -188,6 +242,23 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
             </div>
           ))}
         </div>
+
+        {inlineParams.length > 0 && (
+          <div className="flex flex-col gap-1.5 border-t border-border p-2">
+            {inlineParams.map((p) => (
+              <div key={`ip-${p.name}`} className="text-[10px]">
+                {inlineParams.length > 1 && (
+                  <div className="mb-0.5 text-muted-foreground">{p.label}</div>
+                )}
+                <WidgetRenderer
+                  spec={p}
+                  value={data.params[p.name]}
+                  onChange={(v) => setParam(id, p.name, v)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
 
         {firstOut &&
           (firstOut[1].type === "image" ? (

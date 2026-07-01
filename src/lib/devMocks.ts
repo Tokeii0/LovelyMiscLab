@@ -1,6 +1,6 @@
 import { useGraphStore } from "@/store/graph";
 
-import type { NodeDescriptor } from "./types";
+import type { NodeDescriptor, ParamSpec, PortSpec, PortType } from "./types";
 
 /** True when running inside the Tauri webview (IPC available). */
 export const inTauri =
@@ -314,6 +314,148 @@ export const mockDescriptors: NodeDescriptor[] = [
     cost: "cheap",
   },
 ];
+
+// Base-N family (Base32/45/58/62/85/92) — generated as encode/decode pairs to
+// keep the mock list readable. Mirrors the real backend descriptors.
+const sel = (name: string, label: string, options: string[], def: string): ParamSpec => ({
+  name,
+  label,
+  widget: { kind: "select", options },
+  default: def,
+});
+const tog = (name: string, label: string, def: boolean): ParamSpec => ({
+  name,
+  label,
+  widget: { kind: "toggle" },
+  default: def,
+});
+const txt = (name: string, label: string, def: string): ParamSpec => ({
+  name,
+  label,
+  widget: { kind: "text", multiline: false },
+  default: def,
+});
+
+function basePair(
+  id: string,
+  name: string,
+  encParams: ParamSpec[],
+  decParams: ParamSpec[]
+): void {
+  mockDescriptors.push(
+    {
+      id: `${id}_encode`,
+      category: "编码/加密",
+      displayName: `${name} 编码`,
+      color: "#3b82f6",
+      inputs: [{ name: "data", label: "输入", type: "any", required: true }],
+      outputs: [{ name: "text", label: "输出", type: "text", required: true }],
+      params: encParams,
+      cost: "cheap",
+    },
+    {
+      id: `${id}_decode`,
+      category: "编码/加密",
+      displayName: `${name} 解码`,
+      color: "#3b82f6",
+      inputs: [{ name: "text", label: "输入", type: "text", required: true }],
+      outputs: [
+        { name: "text", label: "文本", type: "text", required: true },
+        { name: "bytes", label: "字节", type: "bytes", required: false },
+      ],
+      params: decParams,
+      cost: "cheap",
+    }
+  );
+}
+
+const b32v = () => sel("variant", "码表", ["标准", "Hex 扩展"], "标准");
+const b58v = () => sel("variant", "码表", ["Bitcoin", "Ripple", "自定义"], "Bitcoin");
+const b85v = () => sel("variant", "码表", ["标准", "Z85", "IPv6"], "标准");
+const strip = () => tog("strip", "去除非码表字符", true);
+
+basePair("base32", "Base32", [b32v()], [b32v(), strip()]);
+basePair("base45", "Base45", [], [strip()]);
+basePair(
+  "base58",
+  "Base58",
+  [b58v(), txt("alphabet", "自定义码表(58字符)", "")],
+  [b58v(), txt("alphabet", "自定义码表(58字符)", ""), strip()]
+);
+basePair("base62", "Base62", [txt("alphabet", "码表", "0-9A-Za-z")], [txt("alphabet", "码表", "0-9A-Za-z")]);
+basePair("base85", "Base85", [b85v(), tog("delim", "包含 <~ ~> 分隔符", false)], [b85v(), strip()]);
+basePair("base92", "Base92", [], []);
+
+// Hash / radix / charset / cipher families.
+const num = (name: string, label: string, min: number, max: number, step: number, def: number): ParamSpec => ({
+  name,
+  label,
+  widget: { kind: "number", min, max, step },
+  default: def,
+});
+const p = (name: string, label: string, type: PortType, required = true): PortSpec => ({
+  name,
+  label,
+  type,
+  required,
+});
+const anyIn = () => [p("data", "输入", "any")];
+const textIn = () => [p("text", "输入", "text")];
+const textOut = () => [p("text", "输出", "text")];
+const decOut = () => [p("text", "文本", "text"), p("bytes", "字节", "bytes", false)];
+
+function pushDesc(
+  id: string,
+  category: string,
+  name: string,
+  color: string,
+  inputs: PortSpec[],
+  outputs: PortSpec[],
+  params: ParamSpec[]
+): void {
+  mockDescriptors.push({ id, category, displayName: name, color, inputs, outputs, params, cost: "cheap" });
+}
+
+const CHARSETS = [
+  "UTF-8", "UTF-16LE", "UTF-16BE", "GBK", "GB18030", "Big5", "Shift-JIS",
+  "EUC-JP", "EUC-KR", "Windows-1252", "Windows-1251", "ISO-8859-1", "KOI8-R",
+];
+const HASH_ALGOS = [
+  "MD5", "MD4", "SHA1", "SHA224", "SHA256", "SHA384", "SHA512", "SHA3-256",
+  "SHA3-512", "Keccak-256", "RIPEMD-160", "CRC32",
+];
+const CYAN = "#06b6d4", SLATE = "#64748b", ROSE = "#f43f5e", TEAL = "#14b8a6";
+const fmt = (name: string, label: string, def: string) =>
+  sel(name, label, ["UTF8", "Hex", "Base64"], def);
+
+pushDesc("hash", "哈希/摘要", "哈希计算", CYAN, anyIn(), [p("text", "摘要(hex)", "text")], [sel("algorithm", "算法", HASH_ALGOS, "SHA256")]);
+pushDesc("hmac", "哈希/摘要", "HMAC", CYAN, anyIn(), [p("text", "摘要(hex)", "text")], [sel("algorithm", "算法", ["SHA256", "SHA1", "MD5", "SHA512"], "SHA256"), txt("key", "密钥", ""), sel("keyFormat", "密钥格式", ["UTF8", "Hex", "Base64"], "UTF8")]);
+pushDesc("radix_convert", "进制转换", "进制转换", SLATE, [p("text", "数字", "text")], [p("text", "结果", "text")], [num("from", "源进制", 2, 36, 1, 10), num("to", "目标进制", 2, 36, 1, 16)]);
+pushDesc("to_binary", "进制转换", "转二进制", SLATE, anyIn(), textOut(), [sel("delimiter", "分隔符", ["空格", "无", "逗号"], "空格")]);
+pushDesc("from_binary", "进制转换", "二进制转文本", SLATE, textIn(), decOut(), []);
+pushDesc("to_decimal", "进制转换", "转十进制", SLATE, anyIn(), textOut(), [sel("delimiter", "分隔符", ["空格", "逗号"], "空格")]);
+pushDesc("from_decimal", "进制转换", "十进制转文本", SLATE, textIn(), decOut(), []);
+pushDesc("encode_text", "字符编码", "文本编码", TEAL, [p("text", "文本", "text")], [p("hex", "hex", "text"), p("bytes", "字节", "bytes", false)], [sel("charset", "字符集", CHARSETS, "UTF-8")]);
+pushDesc("decode_text", "字符编码", "文本解码", TEAL, [p("data", "字节/文本", "any")], [p("text", "文本", "text")], [sel("charset", "字符集", CHARSETS, "UTF-8")]);
+pushDesc("aes", "加密解密", "AES", ROSE, textIn(), decOut(), [sel("operation", "操作", ["加密", "解密"], "加密"), sel("mode", "模式", ["CBC", "ECB", "CTR"], "CBC"), txt("key", "密钥", ""), fmt("keyFormat", "密钥格式", "Hex"), txt("iv", "IV", ""), fmt("ivFormat", "IV 格式", "Hex"), fmt("inputFormat", "输入格式", "UTF8"), sel("outputFormat", "输出格式", ["Hex", "Base64", "UTF8"], "Hex")]);
+pushDesc("rc4", "加密解密", "RC4", ROSE, textIn(), decOut(), [txt("key", "密钥", ""), fmt("keyFormat", "密钥格式", "UTF8"), fmt("inputFormat", "输入格式", "UTF8"), sel("outputFormat", "输出格式", ["Hex", "UTF8", "Base64"], "Hex")]);
+pushDesc("vigenere", "加密解密", "维吉尼亚密码", ROSE, textIn(), textOut(), [sel("operation", "操作", ["加密", "解密"], "加密"), txt("key", "密钥(字母)", "KEY")]);
+pushDesc("affine", "加密解密", "仿射密码", ROSE, textIn(), textOut(), [sel("operation", "操作", ["加密", "解密"], "加密"), num("a", "a (与26互质)", 1, 25, 1, 5), num("b", "b", 0, 25, 1, 8)]);
+pushDesc("atbash", "加密解密", "Atbash", ROSE, textIn(), textOut(), []);
+pushDesc("rot47", "加密解密", "ROT47", ROSE, textIn(), textOut(), []);
+
+// Control / logic
+const AMBER = "#f59e0b";
+const XFORMS = ["大写", "小写", "反转", "去空白", "Base64编码", "Base64解码", "Hex编码", "Hex解码", "URL编码", "URL解码", "ROT13", "MD5", "SHA1", "SHA256"];
+pushDesc("switch", "控制/逻辑", "条件选择", AMBER, [p("condition", "条件", "bool"), p("a", "真", "any"), p("b", "假", "any")], [p("output", "输出", "any")], []);
+pushDesc("logic", "控制/逻辑", "逻辑运算", AMBER, [p("a", "A", "bool"), p("b", "B", "bool", false)], [p("result", "结果", "bool")], [sel("op", "运算", ["AND", "OR", "NOT", "XOR", "NAND", "NOR"], "AND")]);
+pushDesc("switch_case", "控制/逻辑", "多路分支", AMBER, [p("selector", "选择器", "any"), p("case0", "分支0", "any", false), p("case1", "分支1", "any", false), p("case2", "分支2", "any", false), p("case3", "分支3", "any", false), p("default", "默认", "any", false)], [p("output", "输出", "any")], []);
+pushDesc("gate", "控制/逻辑", "条件门", AMBER, [p("value", "值", "any"), p("condition", "条件", "bool")], [p("output", "输出", "any"), p("passed", "已通过", "bool", false)], []);
+pushDesc("range", "控制/逻辑", "数值范围", AMBER, [], [p("list", "序列", "stringList"), p("count", "数量", "number", false)], [num("start", "起始", -1000000, 1000000, 1, 0), num("end", "结束(不含)", -1000000, 1000000, 1, 10), num("step", "步长", -1000000, 1000000, 1, 1)]);
+pushDesc("map", "控制/逻辑", "逐项映射", AMBER, [p("list", "列表", "stringList")], [p("list", "结果", "stringList")], [sel("op", "操作", XFORMS, "大写")]);
+pushDesc("filter_list", "控制/逻辑", "列表过滤", AMBER, [p("list", "列表", "stringList")], [p("list", "结果", "stringList"), p("count", "数量", "number", false)], [txt("pattern", "正则", "."), sel("mode", "模式", ["保留匹配", "排除匹配"], "保留匹配")]);
+pushDesc("join_list", "控制/逻辑", "列表合并", AMBER, [p("list", "列表", "stringList")], [p("text", "文本", "text")], [sel("sep", "分隔符", ["换行", "逗号", "空格", "无"], "换行")]);
+pushDesc("iterate", "控制/逻辑", "迭代循环", AMBER, textIn(), [p("text", "结果", "text"), p("iterations", "迭代次数", "number", false), p("hit", "命中", "bool", false)], [sel("op", "操作", XFORMS, "Base64解码"), txt("until", "停止正则(可选)", "flag\\{[^}]*\\}"), num("max", "最大次数", 1, 100, 1, 16)]);
 
 const DEMO_IMAGE =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='100%25' height='100%25' fill='%23000'/%3E%3Crect x='16' y='16' width='88' height='88' fill='%23fff'/%3E%3Ctext x='60' y='66' font-size='18' text-anchor='middle'%3EQR%3C/text%3E%3C/svg%3E";

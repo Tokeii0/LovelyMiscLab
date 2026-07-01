@@ -10,15 +10,53 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::cancel::CancellationToken;
 use crate::error::CoreError;
 use crate::graph::compute::ComputeGraph;
 use crate::graph::model::{NodeId, NodeInstance, SerializedGraph};
+use crate::graph::port::PortValue;
+use crate::node::descriptor::ParamWidget;
 use crate::node::registry::NodeRegistry;
 use crate::node::{NodeCtx, PortMap};
 use crate::progress::{ProgressEvent, ProgressSink};
+
+/// Coerce a connected port value into the JSON shape a param widget expects.
+/// This is what lets any parameter be driven by an upstream node ("convert to input").
+fn coerce_param(value: &PortValue, widget: &ParamWidget) -> Value {
+    match widget {
+        ParamWidget::Number { .. } | ParamWidget::Slider { .. } => match value {
+            PortValue::Number(n) => json!(n),
+            PortValue::Bool(b) => json!(if *b { 1.0 } else { 0.0 }),
+            PortValue::Text(t) => t.trim().parse::<f64>().map(|n| json!(n)).unwrap_or(Value::Null),
+            _ => Value::Null,
+        },
+        ParamWidget::Toggle => match value {
+            PortValue::Bool(b) => json!(b),
+            PortValue::Number(n) => json!(*n != 0.0),
+            PortValue::Text(t) => json!(matches!(
+                t.trim().to_ascii_lowercase().as_str(),
+                "true" | "1" | "yes" | "on" | "是"
+            )),
+            _ => Value::Null,
+        },
+        // Text / Select / File → string
+        _ => match value {
+            PortValue::Text(t) => json!(t),
+            PortValue::Number(n) => {
+                if n.fract() == 0.0 && n.abs() < 1e15 {
+                    json!((*n as i64).to_string())
+                } else {
+                    json!(n.to_string())
+                }
+            }
+            PortValue::Bool(b) => json!(b.to_string()),
+            PortValue::StringList(v) => json!(v.join("\n")),
+            _ => json!(""),
+        },
+    }
+}
 
 /// Per-node output maps produced by a graph run.
 pub type GraphOutputs = HashMap<NodeId, PortMap>;
@@ -108,7 +146,8 @@ impl<'a> GraphExecutor<'a> {
             });
 
             let inputs = self.gather_inputs(&node_id, &outputs);
-            let key = cache_key(&inst.descriptor_id, &inst.params, &inputs);
+            let params = self.effective_params(&inst, &inputs);
+            let key = cache_key(&inst.descriptor_id, &params, &inputs);
 
             if let Some(cached) = cache.get(&key) {
                 outputs.insert(node_id.clone(), cached.clone());
@@ -116,7 +155,7 @@ impl<'a> GraphExecutor<'a> {
                 continue;
             }
 
-            match self.run_one(&inst, &inputs, sink, cancel) {
+            match self.run_one(&inst, &inputs, &params, sink, cancel) {
                 Ok(out) => {
                     if cache.len() >= 4096 {
                         cache.clear();
@@ -153,10 +192,38 @@ impl<'a> GraphExecutor<'a> {
         inputs
     }
 
+    /// Merge param-targeting input edges into a node's params. An edge whose target
+    /// port matches a *param* name (not a declared input port) overrides that param
+    /// with the connected, coerced value — this is "convert parameter to input".
+    fn effective_params(&self, inst: &NodeInstance, gathered: &PortMap) -> Value {
+        let mut params = inst.params.clone();
+        if !params.is_object() {
+            params = Value::Object(serde_json::Map::new());
+        }
+        let Some(entry) = self.registry.get(&inst.descriptor_id) else {
+            return params;
+        };
+        let desc = &entry.descriptor;
+        let obj = params.as_object_mut().expect("params ensured to be an object");
+        for spec in &desc.params {
+            // A declared input port with the same name wins over param injection.
+            if desc.inputs.iter().any(|p| p.name == spec.name) {
+                continue;
+            }
+            if let Some(val) = gathered.get(&spec.name) {
+                if !matches!(val, PortValue::None) {
+                    obj.insert(spec.name.clone(), coerce_param(val, &spec.widget));
+                }
+            }
+        }
+        params
+    }
+
     fn run_one(
         &self,
         inst: &NodeInstance,
         inputs: &PortMap,
+        params: &Value,
         sink: &dyn ProgressSink,
         cancel: &CancellationToken,
     ) -> Result<PortMap, CoreError> {
@@ -170,7 +237,7 @@ impl<'a> GraphExecutor<'a> {
             cancel,
             env: &self.env,
         };
-        node.run(inputs, &inst.params, &mut ctx)
+        node.run(inputs, params, &mut ctx)
     }
 
     /// Run a single node standalone (the "quick tool" path) with explicit inputs

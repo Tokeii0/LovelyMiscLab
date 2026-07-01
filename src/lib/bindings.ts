@@ -38,6 +38,22 @@ export interface ToolStatus {
   version: string;
 }
 
+export interface GeneratedNode {
+  key: string;
+  descriptorId: string;
+  params: Record<string, unknown>;
+  position: { x: number; y: number };
+}
+export interface GeneratedEdge {
+  from: { node: string; port: string };
+  to: { node: string; port: string };
+}
+export interface GeneratedGraph {
+  nodes: GeneratedNode[];
+  edges: GeneratedEdge[];
+  notes: string;
+}
+
 export const api = {
   ping: (name: string) => invoke<string>("ping", { name }),
   appInfo: () => invoke<AppInfo>("app_info"),
@@ -71,4 +87,8 @@ export const api = {
   setSettings: (settings: AppSettings) => invoke<void>("set_settings", { settings }),
   detectTool: (path: string, arg?: string) =>
     invoke<ToolStatus>("detect_tool", { path, arg }),
+
+  /** Ask the LLM to assemble a node graph from a natural-language task. */
+  generateWorkflow: (prompt: string) =>
+    invoke<GeneratedGraph>("generate_workflow", { prompt }),
 };

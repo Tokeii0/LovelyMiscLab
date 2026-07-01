@@ -6,30 +6,58 @@
 
 mod prelude;
 
+mod basex;
+mod xform;
+
+mod aes;
+mod affine;
 mod ai_judge;
 mod ai_vision;
 mod archive_extract;
+mod atbash;
+mod base32;
+mod base45;
+mod base58;
+mod base62;
 mod base64;
+mod base85;
+mod base92;
+mod binary;
+mod charset;
 mod compare;
 mod concat;
+mod decimal;
 mod file_import;
 mod file_output;
+mod filter_list;
+mod gate;
+mod hash;
 mod hex;
+mod iterate;
+mod join_list;
 mod length;
+mod logic;
 mod loop_decode;
 mod magic_decode;
+mod map;
 mod qr_decode;
 mod qr_encode;
+mod radix;
+mod range;
+mod rc4;
 mod regex_extract;
 mod replace;
 mod reverse;
 mod rot13;
+mod rot47;
 mod split;
 mod switch;
+mod switch_case;
 mod text_input;
 mod text_output;
 mod text_score;
 mod url;
+mod vigenere;
 mod xor;
 mod xor_bruteforce;
 mod zero_width;
@@ -44,7 +72,13 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     file_import::register(reg);
     file_output::register(reg);
     // encoding / crypto
+    base32::register(reg);
+    base45::register(reg);
+    base58::register(reg);
+    base62::register(reg);
     base64::register(reg);
+    base85::register(reg);
+    base92::register(reg);
     hex::register(reg);
     url::register(reg);
     rot13::register(reg);
@@ -66,9 +100,32 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     archive_extract::register(reg);
     // steganography
     zero_width::register(reg);
+    // hashes / MACs
+    hash::register(reg);
+    // radix / number bases
+    radix::register(reg);
+    binary::register(reg);
+    decimal::register(reg);
+    // character sets
+    charset::register(reg);
+    // ciphers
+    aes::register(reg);
+    rc4::register(reg);
+    vigenere::register(reg);
+    affine::register(reg);
+    atbash::register(reg);
+    rot47::register(reg);
     // control / logic
     switch::register(reg);
+    switch_case::register(reg);
     compare::register(reg);
+    logic::register(reg);
+    gate::register(reg);
+    range::register(reg);
+    map::register(reg);
+    filter_list::register(reg);
+    join_list::register(reg);
+    iterate::register(reg);
     // ai
     ai_judge::register(reg);
     ai_vision::register(reg);

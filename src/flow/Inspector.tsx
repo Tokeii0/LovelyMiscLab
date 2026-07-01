@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Link2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { PortValue } from "@/lib/types";
@@ -71,6 +71,9 @@ export function Inspector() {
   const selectedId = useGraphStore((s) => s.selectedId);
   const node = useGraphStore((s) => s.nodes.find((n) => n.id === selectedId));
   const setParam = useGraphStore((s) => s.setParam);
+  const edges = useGraphStore((s) => s.edges);
+  const toggleParamInput = useGraphStore((s) => s.toggleParamInput);
+  const renameNode = useGraphStore((s) => s.renameNode);
   const descriptor = useDescriptorStore((s) =>
     node ? s.byId[node.data.descriptorId] : undefined
   );
@@ -99,8 +102,14 @@ export function Inspector() {
           >
             <Icon className="h-4 w-4" />
           </span>
-          <span className="text-sm font-semibold">{descriptor.displayName}</span>
-          <div className="ml-auto">
+          <input
+            value={node.data.label || descriptor.displayName}
+            onChange={(e) => renameNode(node.id, e.target.value)}
+            placeholder={descriptor.displayName}
+            title="节点名称（可修改）"
+            className="min-w-0 flex-1 rounded border border-transparent bg-transparent text-sm font-semibold hover:border-border focus:border-input focus:bg-background focus:outline-none"
+          />
+          <div className="ml-auto shrink-0">
             <StatusBadge status={node.data.status} />
           </div>
         </div>
@@ -142,18 +151,50 @@ export function Inspector() {
             {descriptor.params.length === 0 ? (
               <div className="text-muted-foreground">该节点无可配置参数</div>
             ) : (
-              descriptor.params.map((p) => (
-                <label key={p.name} className="mb-3 block">
-                  <span className="mb-0.5 block text-[11px] text-muted-foreground">
-                    {p.label}
-                  </span>
-                  <WidgetRenderer
-                    spec={p}
-                    value={node.data.params[p.name]}
-                    onChange={(v) => setParam(node.id, p.name, v)}
-                  />
-                </label>
-              ))
+              descriptor.params.map((p) => {
+                const promoted = node.data.inputParams?.includes(p.name) ?? false;
+                const connected = edges.some(
+                  (e) => e.target === node.id && e.targetHandle === p.name
+                );
+                return (
+                  <div key={p.name} className="mb-3">
+                    <div className="mb-0.5 flex items-center justify-between">
+                      <span className="text-[11px] text-muted-foreground">{p.label}</span>
+                      <button
+                        onClick={() => toggleParamInput(node.id, p.name)}
+                        title={promoted ? "转回参数" : "转为输入（可连接节点驱动）"}
+                        className={cn(
+                          "flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] transition-colors",
+                          promoted
+                            ? "bg-primary/15 text-primary"
+                            : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                        )}
+                      >
+                        <Link2 className="h-2.5 w-2.5" />
+                        {promoted ? "输入" : "转输入"}
+                      </button>
+                    </div>
+                    {promoted && connected ? (
+                      <div className="rounded border border-dashed border-primary/40 bg-primary/5 px-2 py-1 text-[10px] text-primary">
+                        由上游连接提供
+                      </div>
+                    ) : (
+                      <>
+                        <WidgetRenderer
+                          spec={p}
+                          value={node.data.params[p.name]}
+                          onChange={(v) => setParam(node.id, p.name, v)}
+                        />
+                        {promoted && (
+                          <div className="mt-0.5 text-[9px] text-muted-foreground">
+                            已开放为输入（未连接时用此值）
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })
             )}
           </>
         )}

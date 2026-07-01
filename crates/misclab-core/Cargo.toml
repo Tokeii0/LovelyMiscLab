@@ -25,3 +25,20 @@ sevenz-rust = "0.6"
 flate2 = "1"
 tar = "0.4"
 unrar = "0.5"
+# hashes / MACs
+digest = "0.10"
+md-5 = "0.10"
+md4 = "0.10"
+sha1 = "0.10"
+sha2 = "0.10"
+sha3 = "0.10"
+ripemd = "0.1"
+hmac = "0.12"
+crc32fast = "1"
+# symmetric ciphers
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+ctr = "0.9"
+ecb = { version = "0.1", features = ["alloc"] }
+# character-set conversion
+encoding_rs = "0.8"

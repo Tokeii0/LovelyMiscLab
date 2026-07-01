@@ -61,6 +61,7 @@ pub fn run() {
             commands::settings::get_settings,
             commands::settings::set_settings,
             commands::settings::detect_tool,
+            commands::ai_workflow::generate_workflow,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

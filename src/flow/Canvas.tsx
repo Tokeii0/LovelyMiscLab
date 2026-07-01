@@ -19,7 +19,7 @@ import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { GenericNode } from "./GenericNode";
 import { LabeledEdge } from "./LabeledEdge";
 import { NodeSearchMenu } from "./NodeSearchMenu";
-import { canConnect } from "./portColors";
+import { canConnect, paramPortType } from "./portColors";
 import { executeGraph } from "./runner";
 
 const nodeTypes = { generic: GenericNode };
@@ -76,7 +76,14 @@ export function Canvas() {
       const d = useDescriptorStore.getState().byId[n.data.descriptorId];
       if (!d) return undefined;
       const list = dir === "in" ? d.inputs : d.outputs;
-      return list.find((p) => p.name === port)?.type;
+      const found = list.find((p) => p.name === port)?.type;
+      if (found) return found;
+      // A promoted parameter accepts a connection of its widget-derived type.
+      if (dir === "in") {
+        const param = d.params.find((p) => p.name === port);
+        if (param) return paramPortType(param.widget);
+      }
+      return undefined;
     },
     []
   );
@@ -176,6 +183,7 @@ export function Canvas() {
           setMenu({ x: e.clientX, y: e.clientY, kind: "edge", id: edge.id });
         }}
         onlyRenderVisibleElements
+        deleteKeyCode={null}
         fitView
         zoomOnDoubleClick={false}
         colorMode={theme}

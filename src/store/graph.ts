@@ -31,6 +31,8 @@ export interface FlowNodeData {
   error?: string;
   disabled?: boolean;
   logs?: NodeLog[];
+  /** Param names promoted to input ports (driven by upstream connections). */
+  inputParams?: string[];
   // Index signature required by React Flow's Node<Data> constraint.
   [key: string]: unknown;
 }
@@ -39,6 +41,25 @@ export type FlowNode = Node<FlowNodeData>;
 
 let counter = 0;
 const nextId = (prefix: string) => `${prefix}_${counter++}`;
+
+export interface ClipboardNode {
+  oldId: string;
+  descriptorId: string;
+  label: string;
+  color: string;
+  params: Record<string, unknown>;
+  inputParams: string[];
+  position: { x: number; y: number };
+}
+export interface Clipboard {
+  nodes: ClipboardNode[];
+  edges: {
+    source: string;
+    sourceHandle?: string | null;
+    target: string;
+    targetHandle?: string | null;
+  }[];
+}
 
 interface GraphState {
   nodes: FlowNode[];
@@ -61,6 +82,10 @@ interface GraphState {
   selectAll: () => void;
   setDisabled: (id: string, disabled: boolean) => void;
   appendLog: (id: string, log: NodeLog) => void;
+  toggleParamInput: (nodeId: string, name: string) => void;
+  renameNode: (id: string, label: string) => void;
+  deselectAll: () => void;
+  paste: (clip: Clipboard, dx: number, dy: number) => void;
 }
 
 export const useGraphStore = create<GraphState>((set, get) => ({
@@ -90,6 +115,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
         progress: 0,
         disabled: false,
         logs: [],
+        inputParams: [],
       },
     };
     set({ nodes: [...get().nodes, node], selectedId: node.id });
@@ -154,6 +180,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       data: {
         ...n.data,
         params: { ...n.data.params },
+        inputParams: [...(n.data.inputParams ?? [])],
         status: "idle",
         progress: 0,
         outputs: undefined,
@@ -180,4 +207,87 @@ export const useGraphStore = create<GraphState>((set, get) => ({
           : n
       ),
     }),
+
+  toggleParamInput: (nodeId, name) => {
+    const node = get().nodes.find((n) => n.id === nodeId);
+    const removing = node?.data.inputParams?.includes(name) ?? false;
+    set({
+      nodes: get().nodes.map((n) =>
+        n.id === nodeId
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                inputParams: removing
+                  ? (n.data.inputParams ?? []).filter((x) => x !== name)
+                  : [...(n.data.inputParams ?? []), name],
+              },
+            }
+          : n
+      ),
+      // Un-promoting drops any edge that was feeding this param.
+      edges: removing
+        ? get().edges.filter((e) => !(e.target === nodeId && e.targetHandle === name))
+        : get().edges,
+    });
+  },
+
+  renameNode: (id, label) =>
+    set({
+      nodes: get().nodes.map((n) =>
+        n.id === id ? { ...n, data: { ...n.data, label } } : n
+      ),
+    }),
+
+  deselectAll: () =>
+    set({
+      nodes: get().nodes.map((n) => (n.selected ? { ...n, selected: false } : n)),
+      selectedId: null,
+    }),
+
+  paste: (clip, dx, dy) => {
+    const idMap: Record<string, string> = {};
+    const newNodes: FlowNode[] = clip.nodes.map((cn) => {
+      const id = nextId(cn.descriptorId);
+      idMap[cn.oldId] = id;
+      return {
+        id,
+        type: "generic",
+        position: { x: cn.position.x + dx, y: cn.position.y + dy },
+        selected: true,
+        data: {
+          descriptorId: cn.descriptorId,
+          label: cn.label,
+          color: cn.color,
+          params: { ...cn.params },
+          status: "idle",
+          progress: 0,
+          disabled: false,
+          logs: [],
+          inputParams: [...cn.inputParams],
+        },
+      };
+    });
+    let edges = get().edges;
+    for (const e of clip.edges) {
+      const source = idMap[e.source];
+      const target = idMap[e.target];
+      if (source && target) {
+        edges = addEdge(
+          {
+            source,
+            sourceHandle: e.sourceHandle ?? null,
+            target,
+            targetHandle: e.targetHandle ?? null,
+          },
+          edges
+        );
+      }
+    }
+    set({
+      nodes: [...get().nodes.map((n) => ({ ...n, selected: false })), ...newNodes],
+      edges,
+      selectedId: newNodes[0]?.id ?? get().selectedId,
+    });
+  },
 }));

@@ -23,6 +23,10 @@ pub const TXT: &str = "文本处理";
 pub const CTL: &str = "控制/逻辑";
 pub const ARC: &str = "压缩包";
 pub const STEG: &str = "隐写术";
+pub const HASH: &str = "哈希/摘要";
+pub const RADIX: &str = "进制转换";
+pub const CRYPTO: &str = "加密解密";
+pub const CHARSET: &str = "字符编码";
 pub const AI: &str = "AI";
 
 // Node header colors.
@@ -34,6 +38,8 @@ pub const TEAL: &str = "#14b8a6";
 pub const AMBER: &str = "#f59e0b";
 pub const EMERALD: &str = "#10b981";
 pub const INDIGO: &str = "#6366f1";
+pub const CYAN: &str = "#06b6d4";
+pub const ROSE: &str = "#f43f5e";
 
 /// Read a required Text input by port name.
 pub fn in_text<'a>(inputs: &'a PortMap, name: &str) -> Result<&'a str, CoreError> {
@@ -41,6 +47,46 @@ pub fn in_text<'a>(inputs: &'a PortMap, name: &str) -> Result<&'a str, CoreError
         .get(name)
         .ok_or_else(|| CoreError::MissingInput(name.to_string()))?
         .as_text()
+}
+
+/// Read an input as raw bytes: Bytes as-is, Text as its UTF-8 bytes.
+pub fn in_bytes(inputs: &PortMap, name: &str) -> Result<Vec<u8>, CoreError> {
+    match inputs.get(name) {
+        Some(PortValue::Bytes(b)) => Ok(b.to_vec()),
+        Some(PortValue::Text(s)) => Ok(s.as_bytes().to_vec()),
+        Some(PortValue::None) | None => Err(CoreError::MissingInput(name.to_string())),
+        Some(other) => Err(CoreError::Type(format!(
+            "expected Bytes or Text, got {:?}",
+            other.port_type()
+        ))),
+    }
+}
+
+/// Parse a key/IV string given a format: `UTF8` (raw bytes), `Hex`, or `Base64`.
+pub fn parse_bytes(text: &str, format: &str) -> Result<Vec<u8>, CoreError> {
+    match format {
+        "Hex" => hex::decode(text.trim().replace([' ', '\n'], ""))
+            .map_err(|e| CoreError::Parse(format!("Hex 无效: {e}"))),
+        "Base64" => {
+            use base64::Engine as _;
+            base64::engine::general_purpose::STANDARD
+                .decode(text.trim())
+                .map_err(|e| CoreError::Parse(format!("Base64 无效: {e}")))
+        }
+        _ => Ok(text.as_bytes().to_vec()),
+    }
+}
+
+/// Render bytes as a string in the given format: `Hex`, `Base64`, or `UTF8` (lossy).
+pub fn format_bytes(data: &[u8], format: &str) -> String {
+    match format {
+        "Hex" => hex::encode(data),
+        "Base64" => {
+            use base64::Engine as _;
+            base64::engine::general_purpose::STANDARD.encode(data)
+        }
+        _ => String::from_utf8_lossy(data).into_owned(),
+    }
 }
 
 /// A single-entry output map.
@@ -61,6 +107,25 @@ pub fn pstr<'a>(p: &'a serde_json::Value, name: &str, default: &'a str) -> &'a s
 
 pub fn pbool(p: &serde_json::Value, name: &str, default: bool) -> bool {
     p.get(name).and_then(|v| v.as_bool()).unwrap_or(default)
+}
+
+pub fn pnum(p: &serde_json::Value, name: &str, default: f64) -> f64 {
+    p.get(name).and_then(|v| v.as_f64()).unwrap_or(default)
+}
+
+/// Read an input as a list of strings: StringList / Candidates (their text) /
+/// Text (split into lines). The currency of the list-processing control nodes.
+pub fn in_list(inputs: &PortMap, name: &str) -> Result<Vec<String>, CoreError> {
+    match inputs.get(name) {
+        Some(PortValue::StringList(v)) => Ok(v.clone()),
+        Some(PortValue::Candidates(c)) => Ok(c.iter().map(|s| s.text.clone()).collect()),
+        Some(PortValue::Text(t)) => Ok(t.lines().map(|l| l.to_string()).collect()),
+        Some(PortValue::None) | None => Err(CoreError::MissingInput(name.to_string())),
+        Some(other) => Err(CoreError::Type(format!(
+            "expected StringList, got {:?}",
+            other.port_type()
+        ))),
+    }
 }
 
 pub fn desc(

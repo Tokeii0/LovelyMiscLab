@@ -12,6 +12,7 @@ import {
   Redo2,
   Search,
   Settings,
+  Sparkles,
   Square,
   Sun,
   Trash2,
@@ -22,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { inTauri } from "@/lib/devMocks";
 import { pauseRun, stopRun } from "@/flow/runner";
+import { useAiStore } from "@/store/ai";
 import { useGraphStore } from "@/store/graph";
 import { useRunStore } from "@/store/run";
 import { useThemeStore } from "@/store/theme";
@@ -136,6 +138,15 @@ export function TitleBar() {
           <Trash2 className="h-3.5 w-3.5" /> 清空
         </button>
       </div>
+
+      {/* AI generate */}
+      <button
+        onClick={() => useAiStore.getState().setOpen(true)}
+        className="flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
+        title="AI 一键生成流程"
+      >
+        <Sparkles className="h-3.5 w-3.5" /> AI 生成
+      </button>
 
       {/* command search */}
       <div className="flex h-7 w-56 items-center gap-2 rounded-md border border-border bg-background px-2 text-xs text-muted-foreground">

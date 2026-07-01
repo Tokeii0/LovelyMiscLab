@@ -1,4 +1,4 @@
-import type { PortType } from "@/lib/types";
+import type { ParamWidget, PortType } from "@/lib/types";
 
 /** Color per port type — shared visual language for handles + edges. */
 export function portColor(t: PortType): string {
@@ -32,4 +32,17 @@ export function portColor(t: PortType): string {
 /** Mirrors `PortType::accepts` in Rust: `any` matches anything, else exact. */
 export function canConnect(source: PortType, target: PortType): boolean {
   return target === "any" || source === "any" || source === target;
+}
+
+/** The port type a param exposes when "converted to input" (driven by a node). */
+export function paramPortType(widget: ParamWidget): PortType {
+  switch (widget.kind) {
+    case "number":
+    case "slider":
+      return "number";
+    case "toggle":
+      return "bool";
+    default:
+      return "text"; // text / select / file
+  }
 }

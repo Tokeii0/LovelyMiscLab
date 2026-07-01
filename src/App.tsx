@@ -6,6 +6,8 @@ import { inTauri, mockDescriptors, seedDemo } from "@/lib/devMocks";
 import { useDescriptorStore } from "@/store/descriptors";
 import { usePaletteDrag } from "@/store/paletteDrag";
 import { useViewStore } from "@/store/view";
+import { AiGenerateDialog } from "@/app/AiGenerateDialog";
+import { KeyboardShortcuts } from "@/app/KeyboardShortcuts";
 import { LeftRail } from "@/app/LeftRail";
 import { LiveRunner } from "@/app/LiveRunner";
 import { TitleBar } from "@/app/TitleBar";
@@ -102,6 +104,8 @@ function App() {
         <WindowResizeHandles />
         <DragGhost />
         <LiveRunner />
+        <KeyboardShortcuts />
+        <AiGenerateDialog />
       </div>
     </ReactFlowProvider>
   );
