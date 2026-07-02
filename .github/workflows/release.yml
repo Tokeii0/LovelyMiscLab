@@ -6,13 +6,13 @@ on:
       - "v*"
   workflow_dispatch:
 
-# tauri-action creates the GitHub Release + uploads the installers.
+# Needed to create the GitHub Release and upload the portable exe.
 permissions:
   contents: write
 
 jobs:
   release:
-    name: Build Windows installers
+    name: Build portable exe (Windows)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,15 +37,35 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      # Runs `pnpm build` (beforeBuildCommand) + `tauri build`, then publishes the
-      # NSIS/MSI installers to a draft GitHub Release.
-      - name: Build & release
-        uses: tauri-apps/tauri-action@v0
+      # Builds the frontend (beforeBuildCommand) and the release binary.
+      # tauri.conf.json has `bundle.targets: []`, so no installer is produced —
+      # only the standalone target/release/misclab-app.exe (relies on the
+      # system WebView2 runtime, which ships with Windows 10/11).
+      - name: Build app
+        run: pnpm tauri build
+
+      # Rename to a user-friendly, versioned name for the release asset.
+      - name: Prepare portable exe
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          if ([string]::IsNullOrEmpty($version)) { $version = "dev" }
+          $src = "target/release/misclab-app.exe"
+          $dst = "LovelyMiscLab-$version-windows-x64.exe"
+          Copy-Item $src $dst
+          "ASSET=$dst" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "LovelyMiscLab ${{ github.ref_name }}"
+          body: |
+            单文件绿色版，免安装。下载后双击 `${{ env.ASSET }}` 即可运行。
+
+            > 依赖系统自带的 WebView2 运行时（Windows 10/11 已内置）。
+          draft: true
+          prerelease: false
+          files: ${{ env.ASSET }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "LovelyMiscLab ${{ github.ref_name }}"
-          releaseBody: "下载下方的安装包即可安装。"
-          releaseDraft: true
-          prerelease: false
