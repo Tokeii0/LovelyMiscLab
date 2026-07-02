@@ -168,6 +168,8 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   stegcloak_reveal: KeyRound,
   whitespace_encode: Wind,
   whitespace_decode: AlignJustify,
+  imagein_extract: ImageDown,
+  imagein_embed: FileUp,
   hash: Fingerprint,
   hmac: KeyRound,
   radix_convert: ArrowRightLeft,

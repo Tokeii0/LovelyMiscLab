@@ -5,6 +5,7 @@ import {
   FileArchive,
   Fingerprint,
   Hash,
+  ImageDown,
   type LucideIcon,
   Network,
   QrCode,
@@ -369,6 +370,27 @@ export const TEMPLATES: Template[] = [
     edges: [
       { from: { node: "file", port: "bytes" }, to: { node: "ax", port: "archive" } },
       { from: { node: "ax", port: "text" }, to: { node: "out", port: "text" } },
+    ],
+  },
+  {
+    id: "imagein-extract",
+    name: "imageIN 图片取文件",
+    description:
+      "把 imageIN（图影）隐写图片里的文件还原出来：导入图片 → imageIN 文件提取（自动识别深度与排布、GBK 文件名）→ 一路识别文件类型、一路导出文件，并显示深度/文件名/大小。真实文件名见提取节点的『文件名』输出。",
+    category: "取证/文件",
+    icon: ImageDown,
+    nodes: [
+      { key: "file", descriptorId: "file_import", position: { x: 40, y: 250 } },
+      { key: "ex", descriptorId: "imagein_extract", position: { x: 320, y: 250 } },
+      { key: "ft", descriptorId: "detect_file_type", position: { x: 640, y: 90 } },
+      { key: "save", descriptorId: "file_output", position: { x: 640, y: 250 }, params: { filename: "提取文件.bin" } },
+      { key: "info", descriptorId: "text_output", position: { x: 640, y: 410 } },
+    ],
+    edges: [
+      { from: { node: "file", port: "bytes" }, to: { node: "ex", port: "data" } },
+      { from: { node: "ex", port: "bytes" }, to: { node: "ft", port: "data" } },
+      { from: { node: "ex", port: "bytes" }, to: { node: "save", port: "data" } },
+      { from: { node: "ex", port: "report" }, to: { node: "info", port: "text" } },
     ],
   },
   {
