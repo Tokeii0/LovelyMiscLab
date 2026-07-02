@@ -201,3 +201,109 @@ fn psimage_roundtrip() {
     );
     assert!(text_of(&trimmed, "text").starts_with("IEX(New-Object"));
 }
+
+// ===================================================================== stegpy
+#[test]
+fn stegpy_text_roundtrip() {
+    let secret = b"flag{stegpy_\x00_text}";
+    for bits in ["1", "2", "4"] {
+        let emb = run(
+            "stegpy_embed",
+            &[("data", img_bytes(&cover(64, 64))), ("file", raw(secret))],
+            json!({ "bits": bits }),
+        );
+        let stego = bytes_of(&emb, "bytes");
+        let out = run("stegpy_extract", &[("data", raw(&stego))], json!({}));
+        assert_eq!(bytes_of(&out, "bytes"), secret, "bits={bits}");
+        assert_eq!(text_of(&out, "filename"), ""); // text mode
+    }
+}
+
+#[test]
+fn stegpy_file_roundtrip() {
+    let payload = b"PK\x03\x04 stegpy file \xff\x00".to_vec();
+    let emb = run(
+        "stegpy_embed",
+        &[("data", img_bytes(&cover(72, 72))), ("file", raw(&payload))],
+        json!({ "filename": "secret.zip", "bits": "4" }),
+    );
+    let stego = bytes_of(&emb, "bytes");
+    let out = run("stegpy_extract", &[("data", raw(&stego))], json!({}));
+    assert_eq!(text_of(&out, "filename"), "secret.zip");
+    assert_eq!(bytes_of(&out, "bytes"), payload);
+}
+
+// ================================================================= BrainTools
+fn rgb_png(img: &RgbImage) -> Vec<u8> {
+    let mut b = Vec::new();
+    img.write_to(&mut Cursor::new(&mut b), ImageFormat::Png)
+        .unwrap();
+    b
+}
+
+#[test]
+fn braintools_braincopter_decode_and_run() {
+    // BF that prints 'H' (72): ++++++++[>+++++++++<-]>.  → each cmd as pixel (0,0,cmd).
+    let bf = "++++++++[>+++++++++<-]>.";
+    let cmd = |c: u8| -> u8 {
+        match c {
+            b'>' => 0,
+            b'<' => 1,
+            b'+' => 2,
+            b'-' => 3,
+            b'.' => 4,
+            b',' => 5,
+            b'[' => 6,
+            b']' => 7,
+            _ => 10,
+        }
+    };
+    let cmds: Vec<u8> = bf.bytes().map(cmd).collect();
+    let img = RgbImage::from_fn(cmds.len() as u32, 1, |x, _| Rgb([0, 0, cmds[x as usize]]));
+    let out = run(
+        "braintools_decode",
+        &[("data", raw(&rgb_png(&img)))],
+        json!({ "mode": "Braincopter", "run": true }),
+    );
+    assert_eq!(text_of(&out, "text"), bf);
+    assert_eq!(text_of(&out, "output"), "H");
+}
+
+#[test]
+fn braintools_brainloller_decode() {
+    // "+." → green then blue.
+    let img = RgbImage::from_fn(2, 1, |x, _| {
+        if x == 0 {
+            Rgb([0, 255, 0])
+        } else {
+            Rgb([0, 0, 255])
+        }
+    });
+    let out = run(
+        "braintools_decode",
+        &[("data", raw(&rgb_png(&img)))],
+        json!({ "mode": "Brainloller", "run": false }),
+    );
+    assert_eq!(text_of(&out, "text"), "+.");
+}
+
+// ================================================================ PixelJihad
+#[test]
+fn pixeljihad_roundtrip_no_password() {
+    let secret = "flag{pixel_jihad_测试}";
+    let emb = run(
+        "pixeljihad_embed",
+        &[("data", img_bytes(&cover(96, 96)))],
+        json!({ "message": secret }),
+    );
+    let stego = bytes_of(&emb, "bytes");
+    let out = run("pixeljihad_extract", &[("data", raw(&stego))], json!({}));
+    assert_eq!(text_of(&out, "text"), secret);
+    // A wrong password reads different locations → no valid JSON → error.
+    assert!(try_run(
+        "pixeljihad_extract",
+        &[("data", raw(&stego))],
+        json!({ "password": "x" })
+    )
+    .is_err());
+}
