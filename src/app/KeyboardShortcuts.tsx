@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 
+import { newFlow, openFlow, saveFlow } from "@/lib/project";
 import { useGraphStore, type Clipboard } from "@/store/graph";
 
 // Module-level clipboard (persists across renders; not reactive).
@@ -37,6 +38,17 @@ function buildClip(): Clipboard | null {
 export function KeyboardShortcuts() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // File shortcuts work everywhere (even while a field is focused).
+      const fileMod = e.ctrlKey || e.metaKey;
+      const fileKey = e.key.toLowerCase();
+      if (fileMod && (fileKey === "s" || fileKey === "o" || fileKey === "n")) {
+        e.preventDefault();
+        if (fileKey === "s") void saveFlow();
+        else if (fileKey === "o") void openFlow();
+        else newFlow();
+        return;
+      }
+
       // Don't hijack typing in inputs/textareas/selects (node inline fields, inspector).
       const t = e.target as HTMLElement | null;
       if (

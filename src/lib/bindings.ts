@@ -3,10 +3,12 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 
 import type {
+  CompositeModule,
   GraphOutputs,
   NodeDescriptor,
   PortValue,
   ProgressMsg,
+  ScriptModule,
   SerializedGraph,
 } from "./types";
 
@@ -91,4 +93,23 @@ export const api = {
   /** Ask the LLM to assemble a node graph from a natural-language task. */
   generateWorkflow: (prompt: string) =>
     invoke<GeneratedGraph>("generate_workflow", { prompt }),
+
+  // User-defined composite (sub-graph) modules.
+  listCompositeModules: () => invoke<CompositeModule[]>("list_composite_modules"),
+  saveCompositeModule: (module: CompositeModule) =>
+    invoke<void>("save_composite_module", { module }),
+  deleteCompositeModule: (id: string) =>
+    invoke<void>("delete_composite_module", { id }),
+
+  // User-defined script/program nodes.
+  listScriptModules: () => invoke<ScriptModule[]>("list_script_modules"),
+  saveScriptModule: (module: ScriptModule) =>
+    invoke<void>("save_script_module", { module }),
+  deleteScriptModule: (id: string) =>
+    invoke<void>("delete_script_module", { id }),
+
+  // Flow project files.
+  saveProject: (path: string, contents: string) =>
+    invoke<void>("save_project", { path, contents }),
+  loadProject: (path: string) => invoke<string>("load_project", { path }),
 };

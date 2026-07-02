@@ -11,6 +11,7 @@ import {
 import { create } from "zustand";
 
 import type { NodeDescriptor, PortValue } from "@/lib/types";
+import type { SavedEdge, SavedNode } from "@/lib/project";
 
 export type NodeStatus = "idle" | "running" | "done" | "error";
 
@@ -86,6 +87,7 @@ interface GraphState {
   renameNode: (id: string, label: string) => void;
   deselectAll: () => void;
   paste: (clip: Clipboard, dx: number, dy: number) => void;
+  loadFlow: (nodes: SavedNode[], edges: SavedEdge[]) => void;
 }
 
 export const useGraphStore = create<GraphState>((set, get) => ({
@@ -289,5 +291,40 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       edges,
       selectedId: newNodes[0]?.id ?? get().selectedId,
     });
+  },
+
+  loadFlow: (savedNodes, savedEdges) => {
+    const flowNodes: FlowNode[] = savedNodes.map((n) => ({
+      id: n.id,
+      type: "generic",
+      position: { x: n.position.x, y: n.position.y },
+      data: {
+        descriptorId: n.descriptorId,
+        label: n.label,
+        color: n.color,
+        params: { ...n.params },
+        status: "idle",
+        progress: 0,
+        disabled: n.disabled ?? false,
+        logs: [],
+        inputParams: [...(n.inputParams ?? [])],
+      },
+    }));
+    const flowEdges: Edge[] = savedEdges.map((e) => ({
+      id: e.id,
+      source: e.source,
+      sourceHandle: e.sourceHandle ?? null,
+      target: e.target,
+      targetHandle: e.targetHandle ?? null,
+      ...(e.type ? { type: e.type } : {}),
+    }));
+    // Bump the id counter past loaded numeric suffixes to avoid future collisions.
+    let max = counter;
+    for (const n of savedNodes) {
+      const m = /_(\d+)$/.exec(n.id);
+      if (m) max = Math.max(max, Number(m[1]) + 1);
+    }
+    counter = max;
+    set({ nodes: flowNodes, edges: flowEdges, selectedId: null });
   },
 }));

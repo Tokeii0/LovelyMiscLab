@@ -7,6 +7,8 @@ import { useDescriptorStore } from "@/store/descriptors";
 import { usePaletteDrag } from "@/store/paletteDrag";
 import { useViewStore } from "@/store/view";
 import { AiGenerateDialog } from "@/app/AiGenerateDialog";
+import { CreateModuleDialog } from "@/app/CreateModuleDialog";
+import { CreateScriptNodeDialog } from "@/app/CreateScriptNodeDialog";
 import { KeyboardShortcuts } from "@/app/KeyboardShortcuts";
 import { LeftRail } from "@/app/LeftRail";
 import { LiveRunner } from "@/app/LiveRunner";
@@ -106,6 +108,8 @@ function App() {
         <LiveRunner />
         <KeyboardShortcuts />
         <AiGenerateDialog />
+        <CreateModuleDialog />
+        <CreateScriptNodeDialog />
       </div>
     </ReactFlowProvider>
   );

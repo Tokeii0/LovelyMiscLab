@@ -28,6 +28,7 @@ pub const RADIX: &str = "进制转换";
 pub const CRYPTO: &str = "加密解密";
 pub const CHARSET: &str = "字符编码";
 pub const UTIL: &str = "工具/分析";
+pub const IMG: &str = "图像处理";
 pub const AI: &str = "AI";
 
 // Node header colors.
@@ -41,6 +42,7 @@ pub const EMERALD: &str = "#10b981";
 pub const INDIGO: &str = "#6366f1";
 pub const CYAN: &str = "#06b6d4";
 pub const ROSE: &str = "#f43f5e";
+pub const FUCHSIA: &str = "#d946ef";
 
 /// Read a required Text input by port name.
 pub fn in_text<'a>(inputs: &'a PortMap, name: &str) -> Result<&'a str, CoreError> {

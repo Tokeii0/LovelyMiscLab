@@ -6,14 +6,29 @@ use tauri::ipc::Channel;
 use tauri::State;
 
 use misclab_core::cancel::CancellationToken;
+use misclab_core::graph::composite::registry_with;
 use misclab_core::graph::executor::{GraphExecutor, GraphOutputs};
 use misclab_core::graph::model::SerializedGraph;
 use misclab_core::node::descriptor::NodeDescriptor;
+use misclab_core::node::registry::NodeRegistry;
 use misclab_core::node::PortMap;
 use misclab_core::progress::{LogLevel, NullSink, ProgressEvent, ProgressSink};
 
 use crate::error::AppError;
 use crate::state::AppState;
+
+/// The effective registry = built-ins + the user's composite modules + script
+/// nodes, merged on demand. Cheap (clones an Arc-valued map) and keeps built-ins
+/// immutable.
+fn combined_registry(state: &AppState) -> NodeRegistry {
+    let comps = state.composites.lock().expect("composites mutex poisoned");
+    let mut reg = registry_with(state.registry.as_ref(), &comps);
+    let scripts = state.scripts.lock().expect("scripts mutex poisoned");
+    for sm in scripts.iter() {
+        reg.register(sm.descriptor(), sm.factory());
+    }
+    reg
+}
 
 /// Progress messages streamed to the frontend over a Channel, keyed by node id.
 #[derive(Clone, Serialize)]
@@ -75,7 +90,7 @@ impl ProgressSink for ChannelSink {
 /// All node descriptors, for the palette and generic node rendering.
 #[tauri::command]
 pub fn list_node_descriptors(state: State<'_, AppState>) -> Vec<NodeDescriptor> {
-    state.registry.descriptors()
+    combined_registry(&state).descriptors()
 }
 
 /// Run a single node standalone (the "quick tool" path).
@@ -86,12 +101,12 @@ pub async fn run_node(
     inputs: PortMap,
     params: serde_json::Value,
 ) -> Result<PortMap, AppError> {
-    let registry = state.registry.clone();
+    let registry = combined_registry(&state);
     let env = state.settings.lock().expect("settings mutex poisoned").clone();
     let cancel = CancellationToken::new();
     let out = tauri::async_runtime::spawn_blocking(move || {
         GraphExecutor::run_node_with_env(
-            registry.as_ref(),
+            &registry,
             &descriptor_id,
             &inputs,
             &params,
@@ -112,7 +127,7 @@ pub async fn run_graph(
     graph: SerializedGraph,
     on_event: Channel<ProgressMsg>,
 ) -> Result<GraphOutputs, AppError> {
-    let registry = state.registry.clone();
+    let registry = combined_registry(&state);
     let cache = state.cache.clone();
     let env = state.settings.lock().expect("settings mutex poisoned").clone();
     let cancel = CancellationToken::new();
@@ -123,7 +138,7 @@ pub async fn run_graph(
         channel: on_event.clone(),
     };
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let exec = GraphExecutor::new(registry.as_ref(), &graph)?.with_env(env);
+        let exec = GraphExecutor::new(&registry, &graph)?.with_env(env);
         let mut cache = cache.lock().expect("cache mutex poisoned");
         exec.run_with_cache(&sink, &cancel, &mut cache)
     })

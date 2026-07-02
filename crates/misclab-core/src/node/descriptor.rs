@@ -50,6 +50,9 @@ pub enum ParamWidget {
     Toggle,
     /// A file picker; the param value is the chosen path.
     File,
+    /// An image picker; the param value is a `data:image/…;base64,…` data URL,
+    /// shown as a live thumbnail on the node.
+    Image,
 }
 
 /// One configurable parameter (rendered in the node body and properties panel).
@@ -112,6 +115,16 @@ impl ParamSpec {
             name: name.into(),
             label: label.into(),
             widget: ParamWidget::File,
+            default: serde_json::Value::String(String::new()),
+            description: String::new(),
+        }
+    }
+
+    pub fn image(name: &str, label: &str) -> Self {
+        Self {
+            name: name.into(),
+            label: label.into(),
+            widget: ParamWidget::Image,
             default: serde_json::Value::String(String::new()),
             description: String::new(),
         }

@@ -59,13 +59,12 @@ num-traits = "0.2"
 # extra hashes / KDF
 sm3 = "0.4"                 # digest 0.10-compatible (0.5 needs digest 0.11)
 bcrypt = "0.16"
-# extra decompression (pure Rust, decompress-only)
-bzip2-rs = "0.1"
-lzma-rs = "0.3"
 # image metadata
 kamadak-exif = "0.6"
 # OpenPGP (rPGP) — message decryption
 pgp = "0.20"
+rustfft = "6.4.1"
+imageproc = "0.27.0"
 
 [dev-dependencies]
 rand = "0.8"  # matches rPGP; only used by in-crate PGP fixture-generation test

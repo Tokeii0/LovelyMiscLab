@@ -301,6 +301,28 @@ export function ModuleRunDialog({
           </div>
         );
       }
+      case "image": {
+        const url = typeof value === "string" ? value : "";
+        return (
+          <div className="space-y-2">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                const r = new FileReader();
+                r.onload = () => setP(p.name, r.result as string);
+                r.readAsDataURL(f);
+              }}
+              className="text-xs"
+            />
+            {url && (
+              <img src={url} alt="" className="max-h-48 w-full rounded border border-border bg-white object-contain" />
+            )}
+          </div>
+        );
+      }
       default:
         return w.multiline ? (
           <textarea

@@ -87,6 +87,11 @@ pub struct GraphExecutor<'a> {
     compute: ComputeGraph,
     nodes: HashMap<NodeId, NodeInstance>,
     env: crate::node::NodeEnv,
+    /// Externally-seeded inputs keyed by (node id, port). Used to feed a composite
+    /// module's boundary inputs into the dangling ports of its inner sub-graph.
+    seed_inputs: HashMap<(NodeId, String), PortValue>,
+    /// Nesting depth (0 at the top level), incremented for each nested sub-graph.
+    depth: usize,
 }
 
 impl<'a> GraphExecutor<'a> {
@@ -102,12 +107,26 @@ impl<'a> GraphExecutor<'a> {
             compute,
             nodes,
             env: crate::node::NodeEnv::default(),
+            seed_inputs: HashMap::new(),
+            depth: 0,
         })
     }
 
     /// Attach the runtime environment (AI config, default output dir).
     pub fn with_env(mut self, env: crate::node::NodeEnv) -> Self {
         self.env = env;
+        self
+    }
+
+    /// Pre-seed inputs on specific `(node, port)` slots (composite boundary inputs).
+    pub fn with_seed_inputs(mut self, seed: HashMap<(NodeId, String), PortValue>) -> Self {
+        self.seed_inputs = seed;
+        self
+    }
+
+    /// Set the sub-graph nesting depth (composite recursion guard).
+    pub fn with_depth(mut self, depth: usize) -> Self {
+        self.depth = depth;
         self
     }
 
@@ -177,6 +196,7 @@ impl<'a> GraphExecutor<'a> {
     }
 
     /// Collect a node's inputs by reading upstream outputs along incoming edges.
+    /// Ports left dangling by edges fall back to any externally-seeded value.
     fn gather_inputs(&self, node_id: &NodeId, outputs: &GraphOutputs) -> PortMap {
         let mut inputs = PortMap::new();
         for edge in &self.compute.edges {
@@ -187,6 +207,12 @@ impl<'a> GraphExecutor<'a> {
                 if let Some(value) = upstream.get(&edge.from.port) {
                     inputs.insert(edge.to.port.clone(), value.clone());
                 }
+            }
+        }
+        // Edges win; seeded inputs only fill ports no edge provided.
+        for ((n, port), val) in &self.seed_inputs {
+            if n == node_id {
+                inputs.entry(port.clone()).or_insert_with(|| val.clone());
             }
         }
         inputs
@@ -236,6 +262,8 @@ impl<'a> GraphExecutor<'a> {
             sink,
             cancel,
             env: &self.env,
+            registry: self.registry,
+            depth: self.depth,
         };
         node.run(inputs, params, &mut ctx)
     }
@@ -272,6 +300,8 @@ impl<'a> GraphExecutor<'a> {
             sink,
             cancel,
             env,
+            registry,
+            depth: 0,
         };
         node.run(inputs, params, &mut ctx)
     }

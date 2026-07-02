@@ -103,6 +103,7 @@ fn param_str(p: &ParamSpec) -> String {
         ParamWidget::Toggle => format!("{}=toggle", p.name),
         ParamWidget::Number { .. } | ParamWidget::Slider { .. } => format!("{}=number", p.name),
         ParamWidget::File => format!("{}=file", p.name),
+        ParamWidget::Image => format!("{}=image", p.name),
         ParamWidget::Text { .. } => format!("{}=text", p.name),
     }
 }

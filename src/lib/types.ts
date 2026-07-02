@@ -47,7 +47,8 @@ export type ParamWidget =
   | { kind: "slider"; min: number; max: number; step: number }
   | { kind: "select"; options: string[] }
   | { kind: "toggle" }
-  | { kind: "file" };
+  | { kind: "file" }
+  | { kind: "image" };
 
 export interface ParamSpec {
   name: string;
@@ -90,6 +91,59 @@ export interface SerializedGraph {
 }
 
 export type GraphOutputs = Record<string, Record<string, PortValue>>;
+
+/** One externally-visible port of a composite module, bound to an inner port. */
+export interface BoundaryPort {
+  name: string;
+  label: string;
+  portType: PortType;
+  node: string;
+  port: string;
+}
+
+/** A user-defined composite (sub-graph) module. Mirrors the Rust CompositeModule. */
+export interface CompositeModule {
+  id: string;
+  name: string;
+  category: string;
+  color: string;
+  description: string;
+  graph: SerializedGraph;
+  inputs: BoundaryPort[];
+  outputs: BoundaryPort[];
+}
+
+export type InputDelivery = "stdin" | "arg" | "file";
+export type OutputDelivery = "stdoutJson" | "file";
+
+export interface ScriptInputPort {
+  name: string;
+  label: string;
+  portType: PortType;
+  delivery: InputDelivery;
+}
+export interface ScriptOutputPort {
+  name: string;
+  label: string;
+  portType: PortType;
+  delivery: OutputDelivery;
+}
+
+/** A user-defined external script/program node. Mirrors the Rust ScriptModule. */
+export interface ScriptModule {
+  id: string;
+  name: string;
+  category: string;
+  color: string;
+  description: string;
+  command: string;
+  argsTemplate: string;
+  workingDir: string | null;
+  timeoutSecs: number;
+  inputs: ScriptInputPort[];
+  params: ParamSpec[];
+  outputs: ScriptOutputPort[];
+}
 
 export type ProgressMsg =
   | { kind: "jobStarted"; job: string }

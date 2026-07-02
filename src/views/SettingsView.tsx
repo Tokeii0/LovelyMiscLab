@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { api, type AppSettings, type ModelConfig, type ToolStatus } from "@/lib/bindings";
 import { inTauri } from "@/lib/devMocks";
+import { TOOLS } from "@/lib/tools";
 
 const EMPTY: AppSettings = {
   ai: {
@@ -23,15 +24,6 @@ const EMPTY: AppSettings = {
   outputDir: "",
   tools: {},
 };
-
-const TOOLS: { key: string; label: string; arg: string; hint: string }[] = [
-  { key: "python", label: "Python", arg: "--version", hint: "python.exe" },
-  { key: "pip", label: "pip", arg: "--version", hint: "pip.exe" },
-  { key: "tshark", label: "TShark", arg: "--version", hint: "Wireshark 命令行" },
-  { key: "sevenzip", label: "7-Zip", arg: "i", hint: "7z.exe" },
-  { key: "exiftool", label: "ExifTool", arg: "-ver", hint: "exiftool.exe" },
-  { key: "java", label: "Java", arg: "-version", hint: "java.exe" },
-];
 
 function Field({
   label,

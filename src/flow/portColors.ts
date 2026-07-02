@@ -42,6 +42,8 @@ export function paramPortType(widget: ParamWidget): PortType {
       return "number";
     case "toggle":
       return "bool";
+    case "image":
+      return "image";
     default:
       return "text"; // text / select / file
   }

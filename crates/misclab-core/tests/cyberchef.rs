@@ -210,18 +210,19 @@ fn blake2b_and_whirlpool() {
 }
 
 #[test]
-fn deflate_roundtrip() {
+fn gzip_roundtrip() {
+    // compress (Gzip) → archive_extract (gz) — both kept after decompress was removed.
     let reg = default_registry();
     let mut i = HashMap::new();
     i.insert("data".to_string(), PortValue::Text("hello world hello world".to_string()));
-    let comp = GraphExecutor::run_node(&reg, "compress", &i, &json!({ "format": "Zlib" }), &NullSink, &CancellationToken::new()).unwrap();
+    let comp = GraphExecutor::run_node(&reg, "compress", &i, &json!({ "format": "Gzip" }), &NullSink, &CancellationToken::new()).unwrap();
     let bytes = match comp.get("bytes") {
         Some(PortValue::Bytes(b)) => b.clone(),
         o => panic!("expected Bytes, got {o:?}"),
     };
     let mut i2 = HashMap::new();
-    i2.insert("data".to_string(), PortValue::Bytes(bytes));
-    let dec = GraphExecutor::run_node(&reg, "decompress", &i2, &json!({ "format": "自动" }), &NullSink, &CancellationToken::new()).unwrap();
+    i2.insert("archive".to_string(), PortValue::Bytes(bytes));
+    let dec = GraphExecutor::run_node(&reg, "archive_extract", &i2, &json!({}), &NullSink, &CancellationToken::new()).unwrap();
     assert_eq!(text_of(&dec, "text"), "hello world hello world");
 }
 
@@ -332,15 +333,6 @@ fn adfgvx_roundtrip() {
     let enc = t("adfgvx", "ATTACKAT1200AM", json!({ "operation": "加密", "keyword": "PRIVACY" }));
     let dec = t("adfgvx", &enc, json!({ "operation": "解密", "keyword": "PRIVACY" }));
     assert_eq!(dec, "ATTACKAT1200AM");
-}
-
-#[test]
-fn bzip2_xz_decompress() {
-    // fixtures produced by Python bz2 / lzma; auto-detected by magic
-    let bz = hx("425a68393141592653591f4e70ba0000031980400010001664d09020003100d0014c034696a185d1dc8f13a0f0bb9229c28480fa7385d0");
-    assert_eq!(text_of(&run_bytes("decompress", "data", bz, json!({})), "text"), "hello bzip2 world");
-    let xz = hx("fd377a585a000004e6d6b4460200210116000000742fe5a301000d68656c6c6f20787a20776f726c64000000fb059862a564569e0001260e081be0041fb6f37d010000000004595a");
-    assert_eq!(text_of(&run_bytes("decompress", "data", xz, json!({})), "text"), "hello xz world");
 }
 
 #[test]

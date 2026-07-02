@@ -36,6 +36,12 @@ pub struct NodeCtx<'a> {
     pub sink: &'a dyn ProgressSink,
     pub cancel: &'a CancellationToken,
     pub env: &'a NodeEnv,
+    /// The active registry, so a composite/sub-graph node can run its inner graph
+    /// with the same node set (including other composites).
+    pub registry: &'a registry::NodeRegistry,
+    /// Nesting depth of sub-graph execution; guards against self-referential
+    /// composite modules recursing forever.
+    pub depth: usize,
 }
 
 impl NodeCtx<'_> {

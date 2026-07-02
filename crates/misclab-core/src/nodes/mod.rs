@@ -41,6 +41,18 @@ mod filter_list;
 mod gate;
 mod hash;
 mod hex;
+mod image_advanced;
+mod image_blend;
+mod image_channels;
+mod image_colorspace;
+mod image_diff;
+mod image_filters;
+mod image_freq;
+mod image_geometry;
+mod image_gif;
+mod image_input;
+mod image_meta;
+mod image_util;
 mod iterate;
 mod join_list;
 mod json_format;
@@ -117,6 +129,7 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     text_output::register(reg);
     file_import::register(reg);
     file_output::register(reg);
+    image_input::register(reg);
     // encoding / crypto
     base32::register(reg);
     base45::register(reg);
@@ -218,6 +231,17 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     extract::register(reg);
     rotate_bytes::register(reg);
     exif_meta::register(reg);
+    // image processing
+    image_channels::register(reg);
+    image_blend::register(reg);
+    image_filters::register(reg);
+    image_geometry::register(reg);
+    image_meta::register(reg);
+    image_colorspace::register(reg);
+    image_diff::register(reg);
+    image_freq::register(reg);
+    image_gif::register(reg);
+    image_advanced::register(reg);
     // ai
     ai_judge::register(reg);
     ai_vision::register(reg);

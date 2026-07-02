@@ -1,3 +1,4 @@
+import { type ChangeEvent, useRef } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 
 import type { ParamSpec } from "@/lib/types";
@@ -38,6 +39,49 @@ function FileField({
       <span className="truncate text-[10px] text-muted-foreground" title={path}>
         {name}
       </span>
+    </div>
+  );
+}
+
+function ImageField({
+  value,
+  onChange,
+}: {
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  const url = typeof value === "string" ? value : "";
+  const ref = useRef<HTMLInputElement>(null);
+  const onFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => onChange(reader.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = ""; // allow re-picking the same file
+  };
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => ref.current?.click()}
+          className="nodrag shrink-0 rounded border border-input bg-background px-1.5 py-0.5 text-[10px] hover:bg-accent"
+        >
+          选择图片
+        </button>
+        {url && (
+          <button
+            onClick={() => onChange("")}
+            className="nodrag shrink-0 rounded border border-input px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent"
+          >
+            清除
+          </button>
+        )}
+        <input ref={ref} type="file" accept="image/*" className="hidden" onChange={onFile} />
+      </div>
+      {url && (
+        <img src={url} alt="" className="max-h-40 w-full rounded border border-border bg-white object-contain" />
+      )}
     </div>
   );
 }
@@ -109,5 +153,7 @@ export function WidgetRenderer({ spec, value, onChange }: Props) {
       );
     case "file":
       return <FileField value={value} onChange={onChange} />;
+    case "image":
+      return <ImageField value={value} onChange={onChange} />;
   }
 }

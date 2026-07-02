@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
+  Boxes,
   Circle,
   Copy,
+  FileCode2,
+  FilePlus,
+  FolderOpen,
   HelpCircle,
   Minus,
   Moon,
@@ -10,7 +14,7 @@ import {
   Pencil,
   Play,
   Redo2,
-  Search,
+  Save,
   Settings,
   Sparkles,
   Square,
@@ -20,11 +24,16 @@ import {
   X,
 } from "lucide-react";
 
+import logo from "@/assets/logo.svg";
 import { cn } from "@/lib/utils";
 import { inTauri } from "@/lib/devMocks";
+import { newFlow, openFlow, saveFlow } from "@/lib/project";
 import { pauseRun, stopRun } from "@/flow/runner";
 import { useAiStore } from "@/store/ai";
+import { useProjectStore } from "@/store/project";
 import { useGraphStore } from "@/store/graph";
+import { useModuleDialogStore } from "@/store/moduleDialog";
+import { useScriptDialogStore } from "@/store/scriptDialog";
 import { useRunStore } from "@/store/run";
 import { useThemeStore } from "@/store/theme";
 import { useViewStore } from "@/store/view";
@@ -60,7 +69,13 @@ export function TitleBar() {
   const mode = useRunStore((s) => s.mode);
   const setMode = useRunStore((s) => s.setMode);
   const clear = useGraphStore((s) => s.clear);
+  const selectedCount = useGraphStore((s) => s.nodes.reduce((a, n) => a + (n.selected ? 1 : 0), 0));
   const setView = useViewStore((s) => s.setView);
+  const projectName = useProjectStore((s) => s.name);
+  const renameProject = () => {
+    const next = window.prompt("流程名称", projectName);
+    if (next && next.trim()) useProjectStore.getState().setName(next.trim());
+  };
 
   const [maximized, setMaximized] = useState(false);
   useEffect(() => {
@@ -87,16 +102,41 @@ export function TitleBar() {
 
   return (
     <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border bg-card pl-3 pr-1">
-      {/* brand + workflow */}
+      {/* brand + file actions */}
       <div className="flex items-center gap-2">
-        <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-[13px] font-bold text-primary-foreground">
-          K
-        </div>
+        <img src={logo} alt="LovelyMiscLab" className="h-6 w-6 rounded-md" />
         <span className="text-sm font-semibold">LovelyMiscLab</span>
       </div>
       <div className="mx-1 h-4 w-px bg-border" />
-      <button className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent">
-        未命名流程 <Pencil className="h-3 w-3" />
+      <div className="flex items-center gap-0.5">
+        <button
+          onClick={newFlow}
+          title="新建 (Ctrl+N)"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <FilePlus className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={() => void openFlow()}
+          title="打开 (Ctrl+O)"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <FolderOpen className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={() => void saveFlow()}
+          title="保存 (Ctrl+S)"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <Save className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <button
+        onClick={renameProject}
+        title="重命名流程"
+        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+      >
+        {projectName} <Pencil className="h-3 w-3" />
       </button>
       <span
         className="flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]"
@@ -139,6 +179,25 @@ export function TitleBar() {
         </button>
       </div>
 
+      {/* encapsulate selection into a reusable module */}
+      <button
+        onClick={() => useModuleDialogStore.getState().setOpen(true)}
+        disabled={selectedCount === 0}
+        className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+        title={selectedCount === 0 ? "先在画布上选择节点" : `把选中的 ${selectedCount} 个节点封装为模块`}
+      >
+        <Boxes className="h-3.5 w-3.5" /> 封装
+      </button>
+
+      {/* create external-script node */}
+      <button
+        onClick={() => useScriptDialogStore.getState().setOpen(true)}
+        className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        title="把外部脚本/程序接入为节点"
+      >
+        <FileCode2 className="h-3.5 w-3.5" /> 脚本节点
+      </button>
+
       {/* AI generate */}
       <button
         onClick={() => useAiStore.getState().setOpen(true)}
@@ -147,13 +206,6 @@ export function TitleBar() {
       >
         <Sparkles className="h-3.5 w-3.5" /> AI 生成
       </button>
-
-      {/* command search */}
-      <div className="flex h-7 w-56 items-center gap-2 rounded-md border border-border bg-background px-2 text-xs text-muted-foreground">
-        <Search className="h-3.5 w-3.5" />
-        <span className="flex-1">搜索命令…</span>
-        <kbd className="rounded border border-border px-1 text-[10px]">Ctrl K</kbd>
-      </div>
 
       {/* right utilities */}
       <div className="ml-1 flex items-center gap-0.5">

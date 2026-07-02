@@ -38,6 +38,20 @@ export const mockDescriptors: NodeDescriptor[] = [
     cost: "cheap",
   },
   {
+    id: "image_input",
+    category: "输入输出",
+    displayName: "图片输入",
+    color: "#64748b",
+    inputs: [],
+    outputs: [
+      { name: "bytes", label: "字节", type: "bytes", required: true },
+      { name: "image", label: "图片", type: "image", required: false },
+      { name: "dataUrl", label: "数据URL", type: "text", required: false },
+    ],
+    params: [{ name: "image", label: "图片", widget: { kind: "image" }, default: "" }],
+    cost: "cheap",
+  },
+  {
     id: "base64_decode",
     category: "编码/加密",
     displayName: "Base64 解码",
@@ -184,7 +198,7 @@ export const mockDescriptors: NodeDescriptor[] = [
   {
     id: "archive_extract",
     category: "压缩包",
-    displayName: "解压缩",
+    displayName: "解压",
     color: "#f59e0b",
     inputs: [{ name: "archive", label: "压缩包字节", type: "bytes", required: true }],
     outputs: [
@@ -514,7 +528,6 @@ t2t("defang", "工具/分析", "Defang/Refang", AMBER, [sel("operation", "操作
 pushDesc("jwt_decode", "工具/分析", "JWT 解码", CYAN, textIn(), [p("text", "载荷", "text"), p("payload", "payload", "text", false), p("header", "header", "text", false)], []);
 
 pushDesc("compress", "压缩包", "压缩", AMBER, anyIn(), [p("hex", "hex", "text"), p("bytes", "字节", "bytes", false)], [sel("format", "格式", ["Gzip", "Zlib", "Raw Deflate"], "Gzip")]);
-pushDesc("decompress", "压缩包", "解压缩", AMBER, anyIn(), decOut(), [sel("format", "格式", ["自动", "Gzip", "Zlib", "Raw Deflate", "Bzip2", "XZ", "LZMA"], "自动")]);
 t2t("json_format", "工具/分析", "JSON 格式化", CYAN, [sel("operation", "操作", ["美化", "压缩"], "美化")]);
 t2t("substitution", "加密解密", "替换密码", ROSE, [txt("from", "明文字母表", "ABCDEFGHIJKLMNOPQRSTUVWXYZ"), txt("to", "密文字母表", "")]);
 t2t("braille_encode", "编码/加密", "盲文编码", BLUE, []);
@@ -543,6 +556,39 @@ pushDesc("lsb_extract", "隐写术", "LSB 提取", "#a855f7", anyIn(), [p("text"
 pushDesc("pgp_dearmor", "加密解密", "PGP 解甲(Dearmor)", ROSE, textIn(), [p("bytes", "字节", "bytes"), p("hex", "hex", "text", false), p("type", "块类型", "text", false), p("crcOk", "CRC 校验", "bool", false)], []);
 pushDesc("pgp_enarmor", "加密解密", "PGP 装甲(Enarmor)", ROSE, anyIn(), textOut(), [sel("blockType", "块类型", ["MESSAGE", "PUBLIC KEY BLOCK", "PRIVATE KEY BLOCK", "SIGNATURE"], "MESSAGE")]);
 pushDesc("pgp_decrypt", "加密解密", "PGP 解密", ROSE, [p("text", "PGP 消息", "text"), p("key", "私钥(armored)", "text")], [p("text", "明文", "text"), p("bytes", "字节", "bytes", false), p("hex", "hex", "text", false)], [txt("passphrase", "口令(可空)", "")]);
+
+// 图像处理
+const IMGF = "#d946ef", IMGI = "#6366f1", IMGT = "#14b8a6";
+const iin = () => [p("data", "图片", "any")];
+const iout = () => [p("image", "图片", "image"), p("bytes", "字节", "bytes", false)];
+pushDesc("image_blend", "图像处理", "图像混合", IMGF, [p("a", "图片 A", "any"), p("b", "图片 B", "any")], iout(), [sel("mode", "模式", ["异或", "相加", "相减", "差值", "相乘", "变亮", "变暗", "叠加(alpha混合)", "屏幕", "溶解"], "异或"), num("alpha", "alpha", 0, 1, 0.05, 0.5), sel("align", "尺寸对齐", ["裁剪到较小", "缩放B到A"], "裁剪到较小")]);
+pushDesc("image_concat", "图像处理", "图像拼接", IMGF, [p("a", "图片 A", "any"), p("b", "图片 B", "any")], iout(), [sel("direction", "方向", ["水平", "垂直"], "水平")]);
+pushDesc("channel_merge", "图像处理", "通道合并", IMGF, [p("r", "R", "any"), p("g", "G", "any"), p("b", "B", "any"), p("a", "A", "any", false)], iout(), []);
+pushDesc("channel_extract", "图像处理", "通道提取", IMGF, iin(), iout(), [sel("channel", "通道", ["R", "G", "B", "A", "灰度"], "R"), sel("output", "输出", ["灰度图", "仅该通道"], "灰度图")]);
+pushDesc("channel_split", "图像处理", "通道分离", IMGF, iin(), [p("r", "R", "image"), p("g", "G", "image"), p("b", "B", "image"), p("a", "A", "image", false)], []);
+pushDesc("channel_swap", "图像处理", "通道交换", IMGF, iin(), iout(), [sel("order", "顺序", ["RGB", "RBG", "GRB", "GBR", "BRG", "BGR"], "BGR")]);
+pushDesc("bit_plane", "图像处理", "位平面提取", IMGF, iin(), iout(), [sel("channel", "通道", ["R", "G", "B", "A", "灰度"], "R"), num("bit", "位", 0, 7, 1, 0)]);
+pushDesc("grayscale", "图像处理", "灰度化", IMGI, iin(), iout(), []);
+pushDesc("image_invert", "图像处理", "反色", IMGI, iin(), iout(), []);
+pushDesc("threshold", "图像处理", "二值化", IMGI, iin(), iout(), [num("threshold", "阈值", 0, 255, 1, 128), tog("auto", "自动(Otsu)", false), tog("invert", "反转", false)]);
+pushDesc("brightness_contrast", "图像处理", "亮度对比度", IMGI, iin(), iout(), [num("brightness", "亮度", -255, 255, 1, 0), num("contrast", "对比度", -100, 100, 1, 0)]);
+pushDesc("gamma", "图像处理", "伽马校正", IMGI, iin(), iout(), [num("gamma", "γ", 0.1, 5, 0.1, 1)]);
+pushDesc("hist_equalize", "图像处理", "直方图均衡", IMGI, iin(), iout(), []);
+pushDesc("edge_detect", "图像处理", "边缘检测", IMGI, iin(), iout(), []);
+pushDesc("image_xor", "图像处理", "常数异或", IMGI, iin(), iout(), [txt("key", "密钥", "ff"), sel("keyFormat", "格式", ["Hex", "整数"], "Hex")]);
+pushDesc("image_transform", "图像处理", "旋转翻转", IMGT, iin(), iout(), [sel("op", "操作", ["旋转90°", "旋转180°", "旋转270°", "水平翻转", "垂直翻转"], "旋转90°")]);
+pushDesc("image_crop", "图像处理", "裁剪", IMGT, iin(), iout(), [num("x", "X", 0, 100000, 1, 0), num("y", "Y", 0, 100000, 1, 0), num("width", "宽", 1, 100000, 1, 100), num("height", "高", 1, 100000, 1, 100)]);
+pushDesc("image_resize", "图像处理", "缩放", IMGT, iin(), iout(), [num("width", "宽", 1, 10000, 1, 256), num("height", "高", 1, 10000, 1, 256), tog("keepAspect", "保持宽高比", false)]);
+pushDesc("image_info", "图像处理", "图像信息", IMGT, iin(), [p("text", "信息", "text"), p("width", "宽", "number", false), p("height", "高", "number", false)], []);
+pushDesc("image_convert", "图像处理", "格式转换", IMGT, iin(), iout(), [sel("format", "格式", ["PNG", "JPEG", "BMP", "GIF"], "PNG")]);
+pushDesc("colorspace_extract", "图像处理", "色彩空间分量", IMGF, iin(), iout(), [sel("space", "色彩空间", ["HSV", "YCbCr"], "HSV"), sel("component", "分量", ["分量1(H/Y)", "分量2(S/Cb)", "分量3(V/Cr)"], "分量1(H/Y)")]);
+pushDesc("image_diff", "图像处理", "图像差异", IMGF, [p("a", "图片 A", "any"), p("b", "图片 B", "any")], [p("image", "差异图", "image"), p("bytes", "字节", "bytes", false), p("count", "差异像素数", "number", false)], [num("threshold", "阈值", 0, 255, 1, 16)]);
+pushDesc("gif_frame", "图像处理", "GIF 取帧", IMGF, [p("data", "GIF", "any")], [p("image", "图片", "image"), p("bytes", "字节", "bytes", false), p("count", "帧数", "number", false)], [num("index", "帧序号", 0, 100000, 1, 0)]);
+pushDesc("gif_sprite", "图像处理", "GIF 拼帧", IMGF, [p("data", "GIF", "any")], [p("image", "图片", "image"), p("bytes", "字节", "bytes", false), p("count", "帧数", "number", false)], [num("columns", "每行帧数", 1, 64, 1, 8)]);
+pushDesc("dft_spectrum", "图像处理", "频谱 (DFT)", IMGI, iin(), [p("image", "频谱图", "image"), p("bytes", "字节", "bytes", false)], []);
+pushDesc("connected_components", "图像处理", "连通域标记", IMGF, iin(), [p("image", "标记图", "image"), p("bytes", "字节", "bytes", false), p("count", "区域数", "number", false)], [num("threshold", "二值阈值", 0, 255, 1, 128)]);
+pushDesc("morphology", "图像处理", "形态学", IMGI, iin(), iout(), [sel("op", "运算", ["膨胀", "腐蚀", "开运算", "闭运算"], "膨胀"), num("size", "核半径", 0, 50, 1, 1), num("threshold", "二值阈值", 0, 255, 1, 128)]);
+pushDesc("template_match", "图像处理", "模板匹配", IMGT, [p("image", "图片", "any"), p("template", "模板", "any")], [p("image", "标记图", "image"), p("text", "结果", "text", false), p("x", "X", "number", false), p("y", "Y", "number", false)], []);
 
 const DEMO_IMAGE =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='100%25' height='100%25' fill='%23000'/%3E%3Crect x='16' y='16' width='88' height='88' fill='%23fff'/%3E%3Ctext x='60' y='66' font-size='18' text-anchor='middle'%3EQR%3C/text%3E%3C/svg%3E";

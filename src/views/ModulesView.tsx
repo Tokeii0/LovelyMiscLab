@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
-import { Play, Plus } from "lucide-react";
+import { Play, Plus, Trash2 } from "lucide-react";
 
+import { api } from "@/lib/bindings";
+import { inTauri } from "@/lib/devMocks";
 import { cn } from "@/lib/utils";
 import type { NodeDescriptor, PortSpec } from "@/lib/types";
 import { useDescriptorStore } from "@/store/descriptors";
@@ -29,6 +31,7 @@ function Ports({ ports }: { ports: PortSpec[] }) {
 
 export function ModulesView() {
   const list = useDescriptorStore((s) => s.list);
+  const setDescriptors = useDescriptorStore((s) => s.setDescriptors);
   const addNode = useGraphStore((s) => s.addNode);
   const setView = useViewStore((s) => s.setView);
   const [q, setQ] = useState("");
@@ -53,6 +56,17 @@ export function ModulesView() {
   const addToCanvas = (d: NodeDescriptor) => {
     addNode(d, { x: 220 + Math.random() * 120, y: 140 + Math.random() * 120 });
     setView("canvas");
+  };
+
+  const removeModule = async (d: NodeDescriptor) => {
+    if (inTauri) {
+      // Script nodes (id `script_…`) and composite modules (`mod_…`) have separate stores.
+      if (d.id.startsWith("script_")) await api.deleteScriptModule(d.id);
+      else await api.deleteCompositeModule(d.id);
+      setDescriptors(await api.listNodeDescriptors());
+    } else {
+      setDescriptors(useDescriptorStore.getState().list.filter((x) => x.id !== d.id));
+    }
   };
 
   return (
@@ -130,6 +144,15 @@ export function ModulesView() {
                   >
                     <Play className="h-3 w-3" /> 单独调用
                   </button>
+                  {d.category === "自定义" && (
+                    <button
+                      onClick={() => void removeModule(d)}
+                      title="删除自定义模块"
+                      className="flex items-center justify-center rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               </div>
             );

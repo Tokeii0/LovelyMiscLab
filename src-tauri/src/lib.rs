@@ -6,6 +6,7 @@ mod commands;
 mod db;
 mod error;
 mod jobs;
+mod modules;
 mod settings;
 mod state;
 
@@ -38,10 +39,18 @@ pub fn run() {
 
             let registry = Arc::new(misclab_core::nodes::default_registry());
             let app_settings = settings::load(&data_dir);
+            let mut composites: Vec<misclab_core::graph::composite::CompositeModule> =
+                modules::load_all(&data_dir, "modules");
+            composites.sort_by(|a, b| a.name.cmp(&b.name));
+            let mut scripts: Vec<misclab_core::graph::script_node::ScriptModule> =
+                modules::load_all(&data_dir, "script_modules");
+            scripts.sort_by(|a, b| a.name.cmp(&b.name));
 
             app.manage(AppState {
                 db,
                 registry,
+                composites: Arc::new(Mutex::new(composites)),
+                scripts: Arc::new(Mutex::new(scripts)),
                 jobs: jobs::JobManager::default(),
                 cache: Arc::new(Mutex::new(Default::default())),
                 settings: Arc::new(Mutex::new(app_settings)),
@@ -62,6 +71,14 @@ pub fn run() {
             commands::settings::set_settings,
             commands::settings::detect_tool,
             commands::ai_workflow::generate_workflow,
+            commands::modules::list_composite_modules,
+            commands::modules::save_composite_module,
+            commands::modules::delete_composite_module,
+            commands::script_modules::list_script_modules,
+            commands::script_modules::save_script_module,
+            commands::script_modules::delete_script_module,
+            commands::project::save_project,
+            commands::project::load_project,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
