@@ -157,4 +157,4 @@ cargo test -p misclab-core
 
 ## 许可
 
-[MIT](./Cargo.toml)
+GPL v3 license
