@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 
 import { executeGraph } from "@/flow/runner";
 import { useGraphStore } from "@/store/graph";
@@ -11,23 +11,13 @@ import { useRunStore } from "@/store/run";
  */
 export function LiveRunner() {
   const mode = useRunStore((s) => s.mode);
-  const nodes = useGraphStore((s) => s.nodes);
-  const edges = useGraphStore((s) => s.edges);
-
-  const signature = useMemo(
-    () =>
-      JSON.stringify([
-        nodes.map((n) => [n.id, n.data.descriptorId, n.data.params]),
-        edges.map((e) => [e.source, e.sourceHandle, e.target, e.targetHandle]),
-      ]),
-    [nodes, edges]
-  );
+  const runRevision = useGraphStore((s) => s.runRevision);
 
   useEffect(() => {
     if (mode !== "live") return;
     const t = setTimeout(() => void executeGraph(), 120);
     return () => clearTimeout(t);
-  }, [signature, mode]);
+  }, [runRevision, mode]);
 
   return null;
 }

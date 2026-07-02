@@ -19,7 +19,7 @@ fn build_square(input: &str, size: usize) -> Vec<u8> {
         (b'A'..=b'Z').filter(|&c| c != b'J').collect()
     };
     let mut sq: Vec<u8> = Vec::with_capacity(size * size);
-    let mut push = |raw: u8, sq: &mut Vec<u8>| {
+    let push = |raw: u8, sq: &mut Vec<u8>| {
         let mut c = raw.to_ascii_uppercase();
         if size == 5 && c == b'J' {
             c = b'I';

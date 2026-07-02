@@ -47,4 +47,16 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom", "react-router-dom", "zustand", "@tanstack/react-query"],
+          flow: ["@xyflow/react"],
+          tauri: ["@tauri-apps/api", "@tauri-apps/plugin-dialog", "@tauri-apps/plugin-opener"],
+          icons: ["lucide-react"],
+        },
+      },
+    },
+  },
 }));

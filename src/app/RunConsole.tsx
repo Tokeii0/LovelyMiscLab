@@ -20,6 +20,8 @@ export function RunConsole() {
   const byId = useDescriptorStore((s) => s.byId);
   const mode = useRunStore((s) => s.mode);
   const elapsed = useRunStore((s) => s.elapsed);
+  const lastError = useRunStore((s) => s.lastError);
+  const historyCount = useRunStore((s) => s.history.length);
 
   const errors = nodes.filter((n) => n.data.status === "error").length;
   const selected = nodes.find((n) => n.id === selectedId);
@@ -48,6 +50,12 @@ export function RunConsole() {
       />
       <Stat label="模式" value={modeText} />
       <Stat label="耗时" value={`${(elapsed / 1000).toFixed(2)}s`} />
+      <Stat label="历史" value={historyCount} />
+      {lastError && (
+        <span className="max-w-[360px] truncate text-destructive" title={lastError}>
+          {lastError}
+        </span>
+      )}
 
       <div className="flex-1" />
 

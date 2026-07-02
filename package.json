@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "check:utf8": "node scripts/check-utf8.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },

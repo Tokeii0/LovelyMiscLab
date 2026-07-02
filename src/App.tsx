@@ -8,6 +8,9 @@ import { useDescriptorStore } from "@/store/descriptors";
 import { usePaletteDrag } from "@/store/paletteDrag";
 import { useViewStore } from "@/store/view";
 import { AiGenerateDialog } from "@/app/AiGenerateDialog";
+import { AutoSave } from "@/app/AutoSave";
+import { CommandPalette } from "@/app/CommandPalette";
+import { HelpDialog } from "@/app/HelpDialog";
 import { CreateModuleDialog } from "@/app/CreateModuleDialog";
 import { CreateScriptNodeDialog } from "@/app/CreateScriptNodeDialog";
 import { KeyboardShortcuts } from "@/app/KeyboardShortcuts";
@@ -109,10 +112,13 @@ function App() {
           </div>
         </div>
         <WindowResizeHandles />
+        <AutoSave />
         <DragGhost />
         <LiveRunner />
         <KeyboardShortcuts />
         <AiGenerateDialog />
+        <HelpDialog />
+        <CommandPalette />
         <CreateModuleDialog />
         <CreateScriptNodeDialog />
       </div>

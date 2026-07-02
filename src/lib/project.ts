@@ -9,6 +9,7 @@ import { inTauri } from "@/lib/devMocks";
 import { useGraphStore } from "@/store/graph";
 import { useProjectStore } from "@/store/project";
 import { useViewStore } from "@/store/view";
+import { addRecentProject } from "@/store/workspace";
 
 export interface SavedNode {
   id: string;
@@ -36,6 +37,7 @@ export interface FlowProject {
 }
 
 const FILTERS = [{ name: "LovelyMiscLab 流程", extensions: ["lml", "json"] }];
+export const AUTOSAVE_KEY = "misclab-autosave-v1";
 
 function nameFromPath(path: string): string {
   return path.split(/[\\/]/).pop()?.replace(/\.(lml|json)$/i, "") ?? "未命名流程";
@@ -67,7 +69,7 @@ export function graphToSaved(): { nodes: SavedNode[]; edges: SavedEdge[] } {
   };
 }
 
-function buildProject(): FlowProject {
+export function buildProject(): FlowProject {
   return {
     version: 1,
     name: useProjectStore.getState().name,
@@ -75,12 +77,13 @@ function buildProject(): FlowProject {
   };
 }
 
-function applyProject(json: string, path: string | null) {
+export function applyProject(json: string, path: string | null) {
   const project = JSON.parse(json) as FlowProject;
   if (!Array.isArray(project.nodes)) throw new Error("不是有效的流程文件");
   useGraphStore.getState().loadFlow(project.nodes, project.edges ?? []);
   useProjectStore.getState().setPath(path);
   useProjectStore.getState().setName(project.name || (path ? nameFromPath(path) : "未命名流程"));
+  if (path) addRecentProject(path, project.name || nameFromPath(path));
   useViewStore.getState().setView("canvas");
 }
 
@@ -107,6 +110,7 @@ export async function saveFlow() {
   await api.saveProject(path, json);
   useProjectStore.getState().setPath(path);
   useProjectStore.getState().setName(nameFromPath(path));
+  addRecentProject(path, nameFromPath(path));
 }
 
 export async function openFlow() {
@@ -117,6 +121,46 @@ export async function openFlow() {
   const chosen = await open({ filters: FILTERS, multiple: false, directory: false });
   if (typeof chosen !== "string") return;
   applyProject(await api.loadProject(chosen), chosen);
+}
+
+export async function openFlowPath(path: string) {
+  if (!inTauri) return;
+  applyProject(await api.loadProject(path), path);
+}
+
+export interface AutoSaveDraft {
+  savedAt: string;
+  project: FlowProject;
+}
+
+export function saveAutoDraft() {
+  try {
+    const draft: AutoSaveDraft = {
+      savedAt: new Date().toISOString(),
+      project: buildProject(),
+    };
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(draft));
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
+export function readAutoDraft(): AutoSaveDraft | null {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as AutoSaveDraft;
+    return draft?.project && Array.isArray(draft.project.nodes) ? draft : null;
+  } catch {
+    return null;
+  }
+}
+
+export function restoreAutoDraft() {
+  const draft = readAutoDraft();
+  if (!draft) return false;
+  applyProject(JSON.stringify(draft.project), null);
+  return true;
 }
 
 // ---- browser fallbacks (no Tauri fs/dialog) ----

@@ -52,6 +52,11 @@ pub struct GeneratedGraph {
     notes: String,
 }
 
+#[derive(Serialize)]
+pub struct AiTextResult {
+    text: String,
+}
+
 // ---- what we parse back from the LLM ---------------------------------------
 
 #[derive(Deserialize)]
@@ -297,6 +302,32 @@ pub(crate) fn generate(registry: &NodeRegistry, cfg: &ModelConfig, prompt: &str)
     Ok(GeneratedGraph { nodes, edges, notes })
 }
 
+fn graph_summary(registry: &NodeRegistry, graph: &misclab_core::graph::model::SerializedGraph) -> String {
+    let descriptors = registry.descriptors();
+    let by_id: HashMap<&str, &NodeDescriptor> =
+        descriptors.iter().map(|d| (d.id.as_str(), d)).collect();
+    let mut out = String::new();
+    out.push_str("节点:\n");
+    for n in &graph.nodes {
+        let name = by_id
+            .get(n.descriptor_id.as_str())
+            .map(|d| d.display_name.as_str())
+            .unwrap_or(n.descriptor_id.as_str());
+        out.push_str(&format!(
+            "- {}: {} ({}) params={}\n",
+            n.id, name, n.descriptor_id, n.params
+        ));
+    }
+    out.push_str("连线:\n");
+    for e in &graph.edges {
+        out.push_str(&format!(
+            "- {}.{} -> {}.{}\n",
+            e.from.node, e.from.port, e.to.node, e.to.port
+        ));
+    }
+    out
+}
+
 #[tauri::command]
 pub async fn generate_workflow(
     state: State<'_, AppState>,
@@ -310,4 +341,30 @@ pub async fn generate_workflow(
     tauri::async_runtime::spawn_blocking(move || generate(&registry, &cfg, &prompt))
         .await
         .map_err(|e| AppError::new("join", e.to_string()))?
+}
+
+#[tauri::command]
+pub async fn explain_workflow(
+    state: State<'_, AppState>,
+    graph: misclab_core::graph::model::SerializedGraph,
+    prompt: String,
+) -> Result<AiTextResult, AppError> {
+    if graph.nodes.is_empty() {
+        return Err(AppError::new("ai_input", "当前画布为空，无法解释流程。"));
+    }
+    let cfg = state.settings.lock().expect("settings mutex").ai.llm.clone();
+    let registry = state.registry.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let summary = graph_summary(&registry, &graph);
+        let system = "你是 LovelyMiscLab 的工作流讲解助手。请用中文解释节点图的数据流、关键参数、可能的失败点和下一步优化建议。回答要具体、简洁、可执行。";
+        let user = if prompt.trim().is_empty() {
+            format!("请解释这个工作流:\n{summary}")
+        } else {
+            format!("用户关注点: {}\n\n工作流:\n{summary}", prompt.trim())
+        };
+        let text = ai::chat(&cfg, system, &user)?;
+        Ok(AiTextResult { text })
+    })
+    .await
+    .map_err(|e| AppError::new("join", e.to_string()))?
 }

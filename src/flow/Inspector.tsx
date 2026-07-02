@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Copy, Link2 } from "lucide-react";
+import { Check, Copy, Link2, Play, StepForward } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { PortValue } from "@/lib/types";
@@ -8,6 +8,7 @@ import { useGraphStore, type FlowNode } from "@/store/graph";
 import { useInspectorStore, type InspectorTab as Tab } from "@/store/inspector";
 
 import { nodeIcon } from "./nodeIcons";
+import { executeToNode, runSingleNode } from "./runner";
 import { WidgetRenderer } from "./WidgetRenderer";
 
 function valueText(v: PortValue): string {
@@ -116,6 +117,22 @@ export function Inspector() {
         <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted-foreground">
           <span className="rounded bg-secondary px-1.5 py-0.5">{descriptor.category}</span>
           <span className="font-mono">{node.id}</span>
+        </div>
+        <div className="mt-2 flex gap-1">
+          <button
+            onClick={() => void runSingleNode(node.id)}
+            className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <Play className="h-3 w-3" />
+            单独执行
+          </button>
+          <button
+            onClick={() => void executeToNode(node.id)}
+            className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <StepForward className="h-3 w-3" />
+            运行到此处
+          </button>
         </div>
       </div>
 

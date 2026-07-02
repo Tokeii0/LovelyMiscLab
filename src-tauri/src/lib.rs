@@ -102,6 +102,7 @@ pub fn run() {
             commands::script_modules::delete_script_module,
             commands::project::save_project,
             commands::project::load_project,
+            commands::ai_workflow::explain_workflow,
             #[cfg(feature = "mcp")]
             commands::mcp::mcp_start,
             #[cfg(feature = "mcp")]

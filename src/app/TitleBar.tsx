@@ -30,6 +30,7 @@ import { inTauri } from "@/lib/devMocks";
 import { newFlow, openFlow, saveFlow } from "@/lib/project";
 import { pauseRun, stopRun } from "@/flow/runner";
 import { useAiStore } from "@/store/ai";
+import { useHelpStore } from "@/store/help";
 import { useProjectStore } from "@/store/project";
 import { useGraphStore } from "@/store/graph";
 import { useModuleDialogStore } from "@/store/moduleDialog";
@@ -69,6 +70,10 @@ export function TitleBar() {
   const mode = useRunStore((s) => s.mode);
   const setMode = useRunStore((s) => s.setMode);
   const clear = useGraphStore((s) => s.clear);
+  const undo = useGraphStore((s) => s.undo);
+  const redo = useGraphStore((s) => s.redo);
+  const canUndo = useGraphStore((s) => s.past.length > 0);
+  const canRedo = useGraphStore((s) => s.future.length > 0);
   const selectedCount = useGraphStore((s) => s.nodes.reduce((a, n) => a + (n.selected ? 1 : 0), 0));
   const setView = useViewStore((s) => s.setView);
   const projectName = useProjectStore((s) => s.name);
@@ -209,17 +214,25 @@ export function TitleBar() {
 
       {/* right utilities */}
       <div className="ml-1 flex items-center gap-0.5">
-        <IconButton title="撤销">
+        <IconButton
+          title={canUndo ? "撤销 (Ctrl+Z)" : "暂无可撤销操作"}
+          onClick={undo}
+          className={!canUndo ? "opacity-40" : undefined}
+        >
           <Undo2 className="h-4 w-4" />
         </IconButton>
-        <IconButton title="重做">
+        <IconButton
+          title={canRedo ? "重做 (Ctrl+Shift+Z)" : "暂无可重做操作"}
+          onClick={redo}
+          className={!canRedo ? "opacity-40" : undefined}
+        >
           <Redo2 className="h-4 w-4" />
         </IconButton>
         <div className="mx-1 h-4 w-px bg-border" />
         <IconButton title="切换主题" onClick={toggleTheme}>
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </IconButton>
-        <IconButton title="帮助">
+        <IconButton title="帮助" onClick={() => useHelpStore.getState().openForNode()}>
           <HelpCircle className="h-4 w-4" />
         </IconButton>
         <IconButton title="设置" onClick={() => setView("settings")}>

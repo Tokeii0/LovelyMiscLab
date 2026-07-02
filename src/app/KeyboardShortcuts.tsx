@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 
 import { newFlow, openFlow, saveFlow } from "@/lib/project";
+import { useCommandPaletteStore } from "@/store/commandPalette";
 import { useGraphStore, type Clipboard } from "@/store/graph";
 
 // Module-level clipboard (persists across renders; not reactive).
@@ -41,6 +42,11 @@ export function KeyboardShortcuts() {
       // File shortcuts work everywhere (even while a field is focused).
       const fileMod = e.ctrlKey || e.metaKey;
       const fileKey = e.key.toLowerCase();
+      if (fileMod && fileKey === "k") {
+        e.preventDefault();
+        useCommandPaletteStore.getState().toggle();
+        return;
+      }
       if (fileMod && (fileKey === "s" || fileKey === "o" || fileKey === "n")) {
         e.preventDefault();
         if (fileKey === "s") void saveFlow();
@@ -72,6 +78,13 @@ export function KeyboardShortcuts() {
           pasteOffset = 0;
           e.preventDefault();
         }
+      } else if (mod && key === "z") {
+        if (e.shiftKey) g.redo();
+        else g.undo();
+        e.preventDefault();
+      } else if (mod && key === "y") {
+        g.redo();
+        e.preventDefault();
       } else if (mod && key === "v") {
         if (clipboard) {
           pasteOffset += 32;
