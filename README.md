@@ -2,7 +2,7 @@
 
 <br />
 
-<img src="assets/banner.svg" alt="LovelyMiscLab" width="880" />
+<img src="assets/banner.svg" alt="LovelyMiscLab" width="800" />
 
 <br />
 <br />
@@ -30,7 +30,7 @@
 
 ## 这是什么
 
-LovelyMiscLab 是一个桌面应用，核心是一个**类型化的节点图引擎（typed node-graph engine）**，专为 CTF misc、取证、编码解密等场景打造。
+LovelyMiscLab 是一个桌面应用，核心是一个**类型化的节点图引擎（typed node-graph engine）**，专为编码解密、隐写取证、图像分析、密码学等场景打造。
 
 设计上**做的是类似 ComfyUI 的节点式工作流**——你在画布上拖拽「节点」（Base64 解码、XOR、LSB 隐写提取、二维码解码、AES 解密、图像滤镜……），用连线把它们组成一条数据流 DAG，后端按拓扑序执行，并把每个节点的结果实时回显到画布上。同样是数据驱动、可视化编排、节点自由扩展，只是把「生成图像」换成了「Misc 分析」。
 
