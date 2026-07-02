@@ -91,6 +91,10 @@ mod zero_width;
 mod a1z26;
 mod bacon;
 mod bifid;
+mod bits_image;
+mod blind_watermark;
+mod pixel_image;
+mod png_fix;
 mod blowfish;
 mod braille;
 mod caesar;
@@ -246,6 +250,10 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     image_freq::register(reg);
     image_gif::register(reg);
     image_advanced::register(reg);
+    png_fix::register(reg);
+    blind_watermark::register(reg);
+    bits_image::register(reg);
+    pixel_image::register(reg);
     // ai
     ai_judge::register(reg);
     ai_vision::register(reg);

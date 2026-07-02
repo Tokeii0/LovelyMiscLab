@@ -36,6 +36,18 @@ fn run_raw(id: &str, port: &str, bytes: Vec<u8>, params: serde_json::Value) -> P
     m.insert(port.to_string(), PortValue::Bytes(Arc::from(bytes.into_boxed_slice())));
     GraphExecutor::run_node(&reg, id, &m, &params, &NullSink, &CancellationToken::new()).unwrap()
 }
+fn run_text(id: &str, text: &str, params: serde_json::Value) -> PortMap {
+    let reg = default_registry();
+    let mut m = HashMap::new();
+    m.insert("text".to_string(), PortValue::Text(text.to_string()));
+    GraphExecutor::run_node(&reg, id, &m, &params, &NullSink, &CancellationToken::new()).unwrap()
+}
+fn text_of(m: &PortMap, port: &str) -> String {
+    match m.get(port) {
+        Some(PortValue::Text(s)) => s.clone(),
+        other => panic!("expected Text at '{port}', got {other:?}"),
+    }
+}
 fn decoded(m: &PortMap) -> RgbaImage {
     if let Some(PortValue::Bytes(b)) = m.get("bytes") {
         return image::load_from_memory(b).unwrap().to_rgba8();
@@ -199,4 +211,66 @@ fn gif_frame_count() {
     let m = run_raw("gif_frame", "data", buf, json!({ "index": 0 }));
     assert!(matches!(m.get("count"), Some(PortValue::Number(n)) if *n == 1.0));
     assert_eq!(decoded(&m).dimensions(), (4, 4));
+}
+
+// ---- new: png repair / blind watermark / bits / pixels ----
+
+#[test]
+fn png_fix_recovers_height_via_crc() {
+    // Encode 7×5, then corrupt the stored IHDR height (bytes 20..24) to 1 while
+    // leaving the CRC intact — the classic "cropped" PNG.
+    let mut bytes = png(&solid(7, 5, [10, 20, 30, 255]));
+    bytes[20..24].copy_from_slice(&1u32.to_be_bytes());
+    let m = run_raw("png_fix", "data", bytes, json!({ "mode": "CRC 爆破", "max": 64 }));
+    assert_eq!(decoded(&m).dimensions(), (7, 5));
+    assert!(text_of(&m, "report").contains("7×5"));
+}
+
+#[test]
+fn png_fix_manual_dims() {
+    let m = run_raw("png_fix", "data", png(&solid(4, 4, [0, 0, 0, 255])), json!({ "mode": "手动", "width": 4, "height": 4 }));
+    assert_eq!(decoded(&m).dimensions(), (4, 4));
+}
+
+#[test]
+fn blind_watermark_dims() {
+    for mode in ["Java-BlindWatermark", "FFT(Normalization)", "FFT(fftshiftMultiplier)"] {
+        let m = run("blind_watermark", &[("data", &solid(8, 8, [100, 100, 100, 255]))], json!({ "mode": mode }));
+        assert_eq!(decoded(&m).dimensions(), (8, 8), "mode {mode}");
+    }
+}
+
+#[test]
+fn bits_image_roundtrip() {
+    // 2×2 checker: black,white / white,black  →  "10\n01"
+    let mut img = RgbaImage::new(2, 2);
+    img.put_pixel(0, 0, Rgba([0, 0, 0, 255]));
+    img.put_pixel(1, 0, Rgba([255, 255, 255, 255]));
+    img.put_pixel(0, 1, Rgba([255, 255, 255, 255]));
+    img.put_pixel(1, 1, Rgba([0, 0, 0, 255]));
+    let bits = text_of(&run("image_to_bits", &[("data", &img)], json!({})), "text");
+    assert_eq!(bits, "10\n01\n");
+    let back = decoded(&run_text("bits_to_image", &bits, json!({})));
+    assert_eq!(back.dimensions(), (2, 2));
+    assert_eq!(back.get_pixel(0, 0).0, [0, 0, 0, 255]); // '1' → black
+    assert_eq!(back.get_pixel(1, 0).0, [255, 255, 255, 255]); // '0' → white
+}
+
+#[test]
+fn pixel_values_roundtrip() {
+    let mut img = RgbaImage::new(2, 1);
+    img.put_pixel(0, 0, Rgba([10, 20, 30, 255]));
+    img.put_pixel(1, 0, Rgba([40, 50, 60, 255]));
+    let text = text_of(&run("pixel_extract", &[("data", &img)], json!({ "channel": "RGBA" })), "text");
+    let back = decoded(&run_text("values_to_image", &text, json!({ "channels": "RGBA(4)", "width": 2 })));
+    assert_eq!(back.dimensions(), (2, 1));
+    assert_eq!(back.get_pixel(0, 0).0, [10, 20, 30, 255]);
+    assert_eq!(back.get_pixel(1, 0).0, [40, 50, 60, 255]);
+}
+
+#[test]
+fn pixel_extract_hex_gray() {
+    let m = run("pixel_extract", &[("data", &solid(2, 1, [10, 20, 30, 255]))], json!({ "channel": "灰度", "base": "十六进制" }));
+    // luma(10,20,30)=18=0x12
+    assert_eq!(text_of(&m, "text"), "12 12");
 }
