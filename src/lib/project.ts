@@ -41,11 +41,11 @@ function nameFromPath(path: string): string {
   return path.split(/[\\/]/).pop()?.replace(/\.(lml|json)$/i, "") ?? "未命名流程";
 }
 
-function buildProject(): FlowProject {
+/** The current canvas as `SavedNode[]`/`SavedEdge[]` (all nodes, incl. disabled).
+ *  Shared by project save and the MCP canvas sync so both agree on the shape. */
+export function graphToSaved(): { nodes: SavedNode[]; edges: SavedEdge[] } {
   const g = useGraphStore.getState();
   return {
-    version: 1,
-    name: useProjectStore.getState().name,
     nodes: g.nodes.map((n) => ({
       id: n.id,
       descriptorId: n.data.descriptorId,
@@ -64,6 +64,14 @@ function buildProject(): FlowProject {
       targetHandle: e.targetHandle ?? null,
       type: e.type,
     })),
+  };
+}
+
+function buildProject(): FlowProject {
+  return {
+    version: 1,
+    name: useProjectStore.getState().name,
+    ...graphToSaved(),
   };
 }
 

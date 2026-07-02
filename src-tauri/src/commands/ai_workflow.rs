@@ -219,7 +219,7 @@ fn layout(keys: &[String], edges: &[(String, String)]) -> HashMap<String, Pos> {
     pos
 }
 
-fn generate(registry: &NodeRegistry, cfg: &ModelConfig, prompt: &str) -> Result<GeneratedGraph, AppError> {
+pub(crate) fn generate(registry: &NodeRegistry, cfg: &ModelConfig, prompt: &str) -> Result<GeneratedGraph, AppError> {
     let descriptors = registry.descriptors();
     let catalog = build_catalog(&descriptors);
 

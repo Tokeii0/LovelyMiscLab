@@ -40,6 +40,20 @@ export interface ToolStatus {
   version: string;
 }
 
+export interface McpStatus {
+  running: boolean;
+  port: number;
+  bindAll: boolean;
+  endpoint: string;
+}
+
+export interface McpSettings {
+  enabled: boolean;
+  port: number;
+  token: string | null;
+  bindAll: boolean;
+}
+
 export interface GeneratedNode {
   key: string;
   descriptorId: string;
@@ -112,4 +126,12 @@ export const api = {
   saveProject: (path: string, contents: string) =>
     invoke<void>("save_project", { path, contents }),
   loadProject: (path: string) => invoke<string>("load_project", { path }),
+
+  // Embedded MCP server (only present when the app is built with `--features mcp`).
+  syncCanvas: (snapshot: unknown) => invoke<void>("sync_canvas", { snapshot }),
+  mcpStatus: () => invoke<McpStatus>("mcp_status"),
+  mcpStart: () => invoke<McpStatus>("mcp_start"),
+  mcpStop: () => invoke<McpStatus>("mcp_stop"),
+  mcpGetConfig: () => invoke<McpSettings>("mcp_get_config"),
+  mcpSetConfig: (config: McpSettings) => invoke<void>("mcp_set_config", { config }),
 };

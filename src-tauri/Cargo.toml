@@ -35,3 +35,26 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 # NOTE: tauri-specta / specta 2.x auto-binding is deferred to M2 (pin a coherent
 # specta 2.0-rc trio then; the data model gains `specta::Type` derives at the
 # same time). For M0 the ping round-trip uses a hand-written typed wrapper.
+
+# --- MCP (Model Context Protocol) embedded server, behind the `mcp` feature ---
+# Isolated so the heavy async/HTTP stack (rmcp + axum + tokio) is only pulled in
+# when building with `--features mcp`, and so we can fall back to a hand-rolled
+# JSON-RPC transport without touching the rest of the app if rmcp's brand-new
+# 2.0 API bites us. `transport-streamable-http-server` transitively enables
+# `transport-streamable-http-server-session` + `server-side-http`; the default
+# `server` feature already brings in `schemars`.
+rmcp = { version = "2", optional = true, features = ["transport-streamable-http-server"] }
+axum = { version = "0.8", optional = true }
+tokio = { version = "1", optional = true, features = ["rt-multi-thread", "net", "sync", "macros", "signal"] }
+tokio-util = { version = "0.7", optional = true }
+tower = { version = "0.5", optional = true }
+schemars = { version = "1", optional = true }
+base64 = { version = "0.22", optional = true }
+uuid = { version = "1", optional = true, features = ["v4"] }
+
+[features]
+# MCP is on by default so the Settings panel is always present; the *server*
+# itself stays off until the user enables it. Build with `--no-default-features`
+# to compile the app without the MCP stack.
+default = ["mcp"]
+mcp = ["dep:rmcp", "dep:axum", "dep:tokio", "dep:tokio-util", "dep:tower", "dep:schemars", "dep:base64", "dep:uuid"]

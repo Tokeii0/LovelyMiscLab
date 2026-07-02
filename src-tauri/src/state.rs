@@ -3,7 +3,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use misclab_core::graph::composite::CompositeModule;
+use misclab_core::graph::composite::{registry_with, CompositeModule};
 use misclab_core::graph::executor::NodeCache;
 use misclab_core::graph::script_node::ScriptModule;
 use misclab_core::node::registry::NodeRegistry;
@@ -11,6 +11,21 @@ use misclab_core::node::NodeEnv;
 
 use crate::db::Db;
 use crate::jobs::JobManager;
+
+/// The effective registry = built-ins + the user's composite modules + script
+/// nodes, merged on demand. Shared by the graph commands and the MCP server so
+/// node-registration logic lives in one place. Cheap (clones an Arc-valued map).
+pub fn combined_registry_from(
+    registry: &NodeRegistry,
+    composites: &[CompositeModule],
+    scripts: &[ScriptModule],
+) -> NodeRegistry {
+    let mut reg = registry_with(registry, composites);
+    for sm in scripts {
+        reg.register(sm.descriptor(), sm.factory());
+    }
+    reg
+}
 
 pub struct AppState {
     pub db: Db,
@@ -28,4 +43,11 @@ pub struct AppState {
     pub cache: Arc<Mutex<NodeCache>>,
     /// App settings (AI config + default output dir), persisted to settings.json.
     pub settings: Arc<Mutex<NodeEnv>>,
+    /// The live canvas mirror, kept in sync with the frontend React Flow store so
+    /// the embedded MCP server can read and modify what the user sees.
+    #[cfg(feature = "mcp")]
+    pub canvas: Arc<Mutex<crate::mcp::state::CanvasSnapshot>>,
+    /// Handle to the running embedded MCP server, if started.
+    #[cfg(feature = "mcp")]
+    pub mcp: Arc<Mutex<Option<crate::mcp::McpServerHandle>>>,
 }

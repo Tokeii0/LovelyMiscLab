@@ -6,7 +6,6 @@ use tauri::ipc::Channel;
 use tauri::State;
 
 use misclab_core::cancel::CancellationToken;
-use misclab_core::graph::composite::registry_with;
 use misclab_core::graph::executor::{GraphExecutor, GraphOutputs};
 use misclab_core::graph::model::SerializedGraph;
 use misclab_core::node::descriptor::NodeDescriptor;
@@ -15,19 +14,16 @@ use misclab_core::node::PortMap;
 use misclab_core::progress::{LogLevel, NullSink, ProgressEvent, ProgressSink};
 
 use crate::error::AppError;
-use crate::state::AppState;
+use crate::state::{combined_registry_from, AppState};
 
 /// The effective registry = built-ins + the user's composite modules + script
 /// nodes, merged on demand. Cheap (clones an Arc-valued map) and keeps built-ins
-/// immutable.
+/// immutable. Delegates to the shared [`combined_registry_from`] so the MCP
+/// server and these commands stay in lock-step.
 fn combined_registry(state: &AppState) -> NodeRegistry {
     let comps = state.composites.lock().expect("composites mutex poisoned");
-    let mut reg = registry_with(state.registry.as_ref(), &comps);
     let scripts = state.scripts.lock().expect("scripts mutex poisoned");
-    for sm in scripts.iter() {
-        reg.register(sm.descriptor(), sm.factory());
-    }
-    reg
+    combined_registry_from(state.registry.as_ref(), &comps, &scripts)
 }
 
 /// Progress messages streamed to the frontend over a Channel, keyed by node id.

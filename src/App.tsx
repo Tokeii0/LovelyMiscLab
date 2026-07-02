@@ -3,6 +3,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 
 import { api } from "@/lib/bindings";
 import { inTauri, mockDescriptors, seedDemo } from "@/lib/devMocks";
+import { startCanvasSync } from "@/flow/canvasSync";
 import { useDescriptorStore } from "@/store/descriptors";
 import { usePaletteDrag } from "@/store/paletteDrag";
 import { useViewStore } from "@/store/view";
@@ -51,6 +52,10 @@ function App() {
     setDescriptors(mockDescriptors);
     seedDemo();
   }, [setDescriptors]);
+
+  // Keep the backend canvas mirror in sync so the embedded MCP server can read
+  // and modify the live canvas.
+  useEffect(() => startCanvasSync(), []);
 
   // Suppress the native webview context menu (except in text fields) so our
   // canvas right-click menu is the only one shown.

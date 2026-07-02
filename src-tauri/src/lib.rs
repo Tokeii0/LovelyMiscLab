@@ -6,6 +6,8 @@ mod commands;
 mod db;
 mod error;
 mod jobs;
+#[cfg(feature = "mcp")]
+mod mcp;
 mod modules;
 mod settings;
 mod state;
@@ -54,7 +56,28 @@ pub fn run() {
                 jobs: jobs::JobManager::default(),
                 cache: Arc::new(Mutex::new(Default::default())),
                 settings: Arc::new(Mutex::new(app_settings)),
+                #[cfg(feature = "mcp")]
+                canvas: Arc::new(Mutex::new(Default::default())),
+                #[cfg(feature = "mcp")]
+                mcp: Arc::new(Mutex::new(None)),
             });
+
+            // Auto-start the embedded MCP server if the user enabled it.
+            #[cfg(feature = "mcp")]
+            {
+                let cfg = mcp::state::load_config(&data_dir);
+                if cfg.enabled {
+                    let st = app.state::<AppState>();
+                    let mcp_state =
+                        mcp::McpState::from_app(st.inner(), app.handle().clone(), cfg.token.clone());
+                    let host = if cfg.bind_all { [0, 0, 0, 0] } else { [127, 0, 0, 1] };
+                    let addr = std::net::SocketAddr::from((host, cfg.port));
+                    match mcp::start(mcp_state, addr) {
+                        Ok(h) => *st.mcp.lock().expect("mcp mutex poisoned") = Some(h),
+                        Err(e) => eprintln!("[mcp] auto-start failed: {e}"),
+                    }
+                }
+            }
 
             Ok(())
         })
@@ -79,7 +102,30 @@ pub fn run() {
             commands::script_modules::delete_script_module,
             commands::project::save_project,
             commands::project::load_project,
+            #[cfg(feature = "mcp")]
+            commands::mcp::mcp_start,
+            #[cfg(feature = "mcp")]
+            commands::mcp::mcp_stop,
+            #[cfg(feature = "mcp")]
+            commands::mcp::mcp_status,
+            #[cfg(feature = "mcp")]
+            commands::mcp::mcp_get_config,
+            #[cfg(feature = "mcp")]
+            commands::mcp::mcp_set_config,
+            #[cfg(feature = "mcp")]
+            commands::mcp::sync_canvas,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, _event| {
+            // Gracefully stop the embedded MCP server on app exit.
+            #[cfg(feature = "mcp")]
+            if let tauri::RunEvent::Exit = _event {
+                if let Some(state) = _app_handle.try_state::<AppState>() {
+                    if let Some(handle) = state.mcp.lock().expect("mcp mutex poisoned").take() {
+                        handle.stop();
+                    }
+                }
+            }
+        });
 }
