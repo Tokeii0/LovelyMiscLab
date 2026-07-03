@@ -34,6 +34,10 @@ import {
   Wind,
   Wrench,
   Asterisk,
+  AudioLines,
+  AudioWaveform,
+  Music,
+  Phone,
   Aperture,
   Blend,
   Bomb,
@@ -292,6 +296,7 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   morphology: SquareStack,
   template_match: Crosshair,
   png_fix: Wrench,
+  jpg_fix: Ruler,
   blind_watermark: Waves,
   bits_to_image: Grid2x2,
   image_to_bits: Binary,
@@ -313,6 +318,11 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   pgp_decrypt: ShieldCheck,
   ai_judge: Bot,
   ai_vision: Eye,
+  audio_info: Music,
+  audio_spectrogram: AudioLines,
+  wav_lsb: Binary,
+  dtmf_decode: Phone,
+  deepsound_extract: KeyRound,
 };
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
@@ -328,6 +338,7 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   字符编码: Languages,
   "工具/分析": Wrench,
   图像处理: Image,
+  音频处理: AudioWaveform,
   AI: Sparkles,
   自定义: Boxes,
 };

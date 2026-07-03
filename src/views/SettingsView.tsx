@@ -3,11 +3,14 @@ import { open } from "@tauri-apps/plugin-dialog";
 import {
   Bot,
   Check,
+  Download,
   Eye,
   FolderOpen,
   Loader2,
+  RefreshCw,
   Save,
   Server,
+  Sparkles,
   Wrench,
   X,
 } from "lucide-react";
@@ -16,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { api, type AppSettings, type ModelConfig, type ToolStatus } from "@/lib/bindings";
 import { inTauri } from "@/lib/devMocks";
 import { TOOLS } from "@/lib/tools";
+import { useUpdate } from "@/store/update";
 import { McpPanel } from "@/views/McpPanel";
 
 const EMPTY: AppSettings = {
@@ -118,11 +122,75 @@ function ToolStatusBadge({ status }: { status: ToolStatus | "checking" | undefin
   );
 }
 
+function UpdatePanel() {
+  const [ver, setVer] = useState("");
+  const status = useUpdate((s) => s.status);
+  const info = useUpdate((s) => s.info);
+  const error = useUpdate((s) => s.error);
+  const check = useUpdate((s) => s.check);
+
+  useEffect(() => {
+    if (inTauri) api.appInfo().then((a) => setVer(a.version)).catch(() => {});
+  }, []);
+
+  const current = info?.current || ver;
+  return (
+    <section>
+      <div className="mb-2 flex items-center gap-2">
+        <Download className="h-4 w-4 text-muted-foreground" />
+        <h2 className="text-sm font-semibold">软件更新</h2>
+      </div>
+      <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs text-muted-foreground">当前版本</div>
+            <div className="text-sm font-medium">v{current || "?"}</div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void check()}
+            disabled={status === "checking" || !inTauri}
+          >
+            {status === "checking" ? (
+              <>
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> 检查中
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-1 h-3.5 w-3.5" /> 检查更新
+              </>
+            )}
+          </Button>
+        </div>
+        {status === "uptodate" && (
+          <div className="flex items-center gap-1.5 text-xs text-green-600">
+            <Check className="h-3.5 w-3.5" /> 已是最新版本
+          </div>
+        )}
+        {status === "available" && info && (
+          <div className="flex items-center gap-1.5 text-xs text-primary">
+            <Sparkles className="h-3.5 w-3.5" /> 发现新版本 v{info.latest} —— 已弹出更新窗口
+          </div>
+        )}
+        {status === "error" && <div className="text-xs text-destructive">{error}</div>}
+        <p className="text-[11px] text-muted-foreground">
+          从 GitHub 最新 Release 拉取。启动时自动检查一次；确认后自动下载、替换并重启。
+        </p>
+        {!inTauri && (
+          <p className="text-[11px] text-muted-foreground">浏览器预览下不可用，请在应用内使用。</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 const TABS = [
   { id: "ai" as const, label: "AI 模型", icon: Bot },
   { id: "output" as const, label: "输出目录", icon: FolderOpen },
   { id: "tools" as const, label: "外部工具", icon: Wrench },
   { id: "mcp" as const, label: "MCP 服务", icon: Server },
+  { id: "update" as const, label: "软件更新", icon: Download },
 ];
 type Tab = (typeof TABS)[number]["id"];
 
@@ -181,7 +249,7 @@ export function SettingsView() {
           <h1 className="text-lg font-semibold">设置</h1>
           <p className="text-xs text-muted-foreground">配置 AI 模型、输出目录、外部工具与 MCP 服务。</p>
         </div>
-        {tab !== "mcp" && (
+        {tab !== "mcp" && tab !== "update" && (
           <Button size="sm" onClick={save}>
             {saved ? (
               <>
@@ -313,7 +381,9 @@ export function SettingsView() {
 
           {tab === "mcp" && <McpPanel />}
 
-          {tab !== "mcp" && !inTauri && (
+          {tab === "update" && <UpdatePanel />}
+
+          {tab !== "mcp" && tab !== "update" && !inTauri && (
             <p className="text-[11px] text-muted-foreground">
               浏览器预览下设置不会保存，请在应用内配置。
             </p>

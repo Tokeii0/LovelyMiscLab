@@ -9,3 +9,4 @@ pub mod project;
 pub mod script_modules;
 pub mod settings;
 pub mod system;
+pub mod update;

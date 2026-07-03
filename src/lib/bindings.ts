@@ -18,6 +18,16 @@ export interface AppInfo {
   coreVersion: string;
 }
 
+export interface UpdateInfo {
+  current: string;
+  latest: string;
+  available: boolean;
+  notes: string;
+  releaseUrl: string;
+  downloadUrl: string;
+  assetName: string;
+}
+
 export interface ModelConfig {
   model: string;
   apiKey: string;
@@ -77,6 +87,10 @@ export const api = {
   ping: (name: string) => invoke<string>("ping", { name }),
   appInfo: () => invoke<AppInfo>("app_info"),
   dbHealth: () => invoke<number>("db_health"),
+
+  // Self-update (portable exe): check GitHub Releases, then download + swap.
+  checkUpdate: () => invoke<UpdateInfo>("check_update"),
+  installUpdate: (downloadUrl: string) => invoke<void>("install_update", { downloadUrl }),
 
   listNodeDescriptors: () =>
     invoke<NodeDescriptor[]>("list_node_descriptors"),

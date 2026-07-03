@@ -18,6 +18,8 @@ import { KeyboardShortcuts } from "@/app/KeyboardShortcuts";
 import { LeftRail } from "@/app/LeftRail";
 import { LiveRunner } from "@/app/LiveRunner";
 import { TitleBar } from "@/app/TitleBar";
+import { UpdateDialog } from "@/app/UpdateDialog";
+import { useUpdate } from "@/store/update";
 import { WindowResizeHandles } from "@/app/WindowResizeHandles";
 import { CanvasView } from "@/views/CanvasView";
 import { ResourcesView, RunsView } from "@/views/EmptyState";
@@ -50,7 +52,10 @@ function App() {
         .listNodeDescriptors()
         .then(setDescriptors)
         .catch((e) => console.error("listNodeDescriptors failed", e));
-      return;
+      // Auto-check for a newer release shortly after launch (opens the update
+      // dialog only when one is available; silent otherwise).
+      const t = setTimeout(() => void useUpdate.getState().check({ silent: true }), 3000);
+      return () => clearTimeout(t);
     }
     // Browser dev preview (no Tauri IPC): seed mocks + a demo graph.
     setDescriptors(mockDescriptors);
@@ -123,6 +128,7 @@ function App() {
         <CreateModuleDialog />
         <CreateScriptNodeDialog />
         <ImageViewerModal />
+        <UpdateDialog />
       </div>
     </ReactFlowProvider>
   );

@@ -17,6 +17,13 @@ mod ai_vision;
 mod archive_extract;
 mod archive_list;
 mod atbash;
+// audio-stego nodes (share audio_util)
+mod audio_info;
+mod audio_spectrogram;
+mod audio_util;
+mod deepsound_extract;
+mod dtmf_decode;
+mod wav_lsb;
 mod base32;
 mod base45;
 mod base58;
@@ -124,6 +131,7 @@ mod pgp_decrypt;
 mod pixel_image;
 mod pixeljihad;
 mod psimage;
+mod jpg_fix;
 mod playfair;
 mod png_fix;
 mod quoted_printable;
@@ -210,6 +218,12 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     affine::register(reg);
     atbash::register(reg);
     rot47::register(reg);
+    // audio-stego nodes
+    audio_info::register(reg);
+    audio_spectrogram::register(reg);
+    wav_lsb::register(reg);
+    dtmf_decode::register(reg);
+    deepsound_extract::register(reg);
     des::register(reg);
     blowfish::register(reg);
     chacha::register(reg);
@@ -279,6 +293,7 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     image_gif::register(reg);
     image_advanced::register(reg);
     png_fix::register(reg);
+    jpg_fix::register(reg);
     blind_watermark::register(reg);
     bits_image::register(reg);
     pixel_image::register(reg);

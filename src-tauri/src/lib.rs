@@ -29,6 +29,9 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_log::Builder::default().build())
         .setup(|app| {
+            // Remove any leftover files from a previous self-update.
+            commands::update::cleanup_leftovers();
+
             // App data dir holds the SQLite DB, artifact dirs, dictionaries, etc.
             let data_dir = app
                 .path()
@@ -103,6 +106,8 @@ pub fn run() {
             commands::project::save_project,
             commands::project::load_project,
             commands::ai_workflow::explain_workflow,
+            commands::update::check_update,
+            commands::update::install_update,
             #[cfg(feature = "mcp")]
             commands::mcp::mcp_start,
             #[cfg(feature = "mcp")]

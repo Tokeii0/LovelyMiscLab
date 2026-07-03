@@ -65,17 +65,33 @@ jobs:
           $after = (Get-Item "${{ env.ASSET }}").Length
           "UPX: {0:N0} -> {1:N0} bytes ({2:P1})" -f $before, $after, ($after / $before)
 
+      # Assemble the release body: download note + the latest CHANGELOG section.
+      - name: Build release notes
+        shell: pwsh
+        run: |
+          $section = ""
+          if (Test-Path CHANGELOG.md) {
+            $raw = Get-Content CHANGELOG.md -Raw
+            $m = [regex]::Match($raw, '(?ms)^##\s.*?(?=\r?\n##\s|\z)')
+            if ($m.Success) { $section = $m.Value.Trim() }
+          }
+          $lines = @(
+            "单文件绿色版，免安装（已用 UPX --lzma --best 压缩）。下载后双击 ``${{ env.ASSET }}`` 即可运行。",
+            "",
+            "> 依赖系统自带的 WebView2 运行时（Windows 10/11 已内置）。",
+            "",
+            "---",
+            "",
+            $section
+          )
+          Set-Content -Path RELEASE_NOTES.md -Value ($lines -join "`n") -Encoding UTF8
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: "LovelyMiscLab ${{ github.ref_name }}"
-          body: |
-            单文件绿色版，免安装（已用 UPX --lzma --best 压缩）。下载后双击 `${{ env.ASSET }}` 即可运行。
-
-            > 依赖系统自带的 WebView2 运行时（Windows 10/11 已内置）。
-
-            ---
+          body_path: RELEASE_NOTES.md
           append_body: true
           generate_release_notes: true
           draft: true

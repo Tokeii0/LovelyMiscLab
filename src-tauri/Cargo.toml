@@ -32,6 +32,9 @@ misclab-core = { path = "../crates/misclab-core" }
 # 0.32 bundles SQLite ~3.46 and has the same API for our usage. Revisit when
 # cfg_select stabilizes.
 rusqlite = { version = "0.32", features = ["bundled"] }
+# Self-updater: query GitHub Releases + download the new exe (blocking, no tokio
+# dependency — safe to call from a spawn_blocking task). TLS via ureq defaults.
+ureq = { version = "2", features = ["json"] }
 # NOTE: tauri-specta / specta 2.x auto-binding is deferred to M2 (pin a coherent
 # specta 2.0-rc trio then; the data model gains `specta::Type` derives at the
 # same time). For M0 the ping round-trip uses a hand-written typed wrapper.

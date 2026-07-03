@@ -29,6 +29,7 @@ pub const CRYPTO: &str = "加密解密";
 pub const CHARSET: &str = "字符编码";
 pub const UTIL: &str = "工具/分析";
 pub const IMG: &str = "图像处理";
+pub const AUD: &str = "音频处理";
 pub const AI: &str = "AI";
 
 // Node header colors.
