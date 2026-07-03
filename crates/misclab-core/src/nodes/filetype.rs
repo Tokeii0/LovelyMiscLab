@@ -2,7 +2,7 @@
 use super::prelude::*;
 
 // (magic bytes, human name, canonical extension without the dot).
-const MAGICS: &[(&[u8], &str, &str)] = &[
+pub(crate) const MAGICS: &[(&[u8], &str, &str)] = &[
     (&[0x89, 0x50, 0x4E, 0x47], "PNG 图片", "png"),
     (&[0xFF, 0xD8, 0xFF], "JPEG 图片", "jpg"),
     (&[0x47, 0x49, 0x46, 0x38], "GIF 图片", "gif"),
@@ -35,7 +35,7 @@ const MAGICS: &[(&[u8], &str, &str)] = &[
 
 /// Returns (human name, canonical extension). The extension has no leading dot
 /// and is empty when the type is unknown or has no meaningful suffix.
-fn detect(data: &[u8]) -> (String, &'static str) {
+pub(crate) fn detect(data: &[u8]) -> (String, &'static str) {
     if data.len() >= 12 && &data[0..4] == b"RIFF" {
         let (name, ext): (&str, &str) = match &data[8..12] {
             b"WEBP" => ("WEBP 图片", "webp"),

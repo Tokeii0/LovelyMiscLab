@@ -6,7 +6,7 @@ use aes::cipher::{
 
 use super::prelude::*;
 
-fn cbc(enc: bool, key: &[u8], iv: &[u8], data: &[u8]) -> Result<Vec<u8>, CoreError> {
+pub(crate) fn cbc(enc: bool, key: &[u8], iv: &[u8], data: &[u8]) -> Result<Vec<u8>, CoreError> {
     if iv.len() != 16 {
         return Err(CoreError::Parse("CBC 需要 16 字节 IV".into()));
     }

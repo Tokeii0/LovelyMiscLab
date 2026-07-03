@@ -155,6 +155,9 @@ mod whitespace_stego;
 // 补全节点（压缩包 / 密码 / 图像 / 编码）
 mod bmp_fix;
 mod brainfuck;
+mod cryptojs_aes;
+mod file_carve;
+mod gif_timing;
 mod jwt_crack;
 mod zip_repair;
 
@@ -315,6 +318,9 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     bmp_fix::register(reg);
     brainfuck::register(reg);
     jwt_crack::register(reg);
+    cryptojs_aes::register(reg);
+    file_carve::register(reg);
+    gif_timing::register(reg);
     // ai
     ai_judge::register(reg);
     ai_vision::register(reg);
