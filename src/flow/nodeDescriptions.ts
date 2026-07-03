@@ -110,6 +110,7 @@ export const NODE_DESCRIPTIONS: Record<string, string> = {
   // 压缩包
   compress: "Gzip / Zlib / Raw Deflate 压缩。",
   archive_extract: "解压 zip/7z/rar/gz/tar（支持密码）。",
+  archive_list: "不解压列出压缩包条目：名称、大小、压缩方式、是否加密、CRC。",
 
   // 隐写术
   zero_width_encode: "把秘密藏进不可见的零宽字符。",
@@ -201,6 +202,7 @@ export const NODE_DESCRIPTIONS: Record<string, string> = {
   filter_list: "按正则过滤列表。",
   join_list: "把列表合并成文本。",
   iterate: "反复应用操作直到命中正则（while）。",
+  string_match: "判断文本 包含/等于/开头是/结尾是/正则… 输出布尔，配合条件门用。",
 
   // 工具/分析
   entropy: "计算香农熵，判断是否加密/压缩。",
@@ -213,6 +215,7 @@ export const NODE_DESCRIPTIONS: Record<string, string> = {
   detect_file_type: "按魔数识别真实文件类型。",
   extract: "提取 IP/邮箱/URL/MAC/flag 等。",
   exif_extract: "读取图片 EXIF 元数据。",
+  http_request: "发起 HTTP 请求（GET/POST/…，HTTP 1.1/2.0，可设 UA/Cookie/请求头/体）。",
 
   // AI
   ai_judge: "让 AI 判断/评估内容。",

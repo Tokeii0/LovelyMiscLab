@@ -538,6 +538,7 @@ pushDesc("logic", "控制/逻辑", "逻辑运算", AMBER, [p("a", "A", "bool"), 
 pushDesc("switch_case", "控制/逻辑", "多路分支", AMBER, [p("selector", "选择器", "any"), p("case0", "分支0", "any", false), p("case1", "分支1", "any", false), p("case2", "分支2", "any", false), p("case3", "分支3", "any", false), p("default", "默认", "any", false)], [p("output", "输出", "any")], []);
 pushDesc("selector", "控制/逻辑", "选择器", AMBER, [], [p("value", "值", "text")], [txt("value", "值", "")]);
 pushDesc("gate", "控制/逻辑", "条件门", AMBER, [p("value", "值", "any"), p("condition", "条件", "bool")], [p("output", "输出", "any"), p("passed", "已通过", "bool", false)], []);
+pushDesc("string_match", "控制/逻辑", "字符串匹配", AMBER, [p("text", "输入", "text")], [p("result", "匹配", "bool"), p("text", "原文", "text", false)], [sel("operation", "判断", ["包含", "不包含", "等于", "不等于", "开头是", "结尾是", "正则匹配", "正则不匹配"], "包含"), txt("value", "匹配值 / 正则", ""), tog("ignoreCase", "忽略大小写", false)]);
 pushDesc("range", "控制/逻辑", "数值范围", AMBER, [], [p("list", "序列", "stringList"), p("count", "数量", "number", false)], [num("start", "起始", -1000000, 1000000, 1, 0), num("end", "结束(不含)", -1000000, 1000000, 1, 10), num("step", "步长", -1000000, 1000000, 1, 1)]);
 pushDesc("map", "控制/逻辑", "逐项映射", AMBER, [p("list", "列表", "stringList")], [p("list", "结果", "stringList")], [sel("op", "操作", XFORMS, "大写")]);
 pushDesc("filter_list", "控制/逻辑", "列表过滤", AMBER, [p("list", "列表", "stringList")], [p("list", "结果", "stringList"), p("count", "数量", "number", false)], [txt("pattern", "正则", "."), sel("mode", "模式", ["保留匹配", "排除匹配"], "保留匹配")]);
@@ -597,11 +598,13 @@ pushDesc("from_octal", "进制转换", "八进制转文本", SLATE, textIn(), de
 
 pushDesc("entropy", "工具/分析", "香农熵", AMBER, anyIn(), [p("entropy", "熵", "number"), p("text", "说明", "text", false)], []);
 pushDesc("password_crack", "工具/分析", "通用口令爆破", AMBER, [p("data", "目标输入", "any"), p("wordlist", "字典", "any")], [p("password", "命中口令", "text"), p("text", "解出文本", "text", false), p("bytes", "解出字节", "bytes", false), p("found", "命中", "bool", false), p("report", "信息", "text", false)], [txt("node", "目标节点 id", "cloacked_pixel_extract"), txt("passwordParam", "口令参数名", "password"), sel("success", "成功判据", ["无报错(能解出)", "正则命中", "可打印文本"], "无报错(能解出)"), txt("pattern", "正则(正则命中判据)", "flag\\{"), txt("checkPort", "检查的输出端口(留空自动)", ""), txt("inputPort", "目标输入端口(留空自动)", ""), txt("extraParams", "目标额外参数(JSON)", "")]);
+pushDesc("http_request", "工具/分析", "HTTP 请求", "#6366f1", [p("body", "请求体(可选)", "any", false)], [p("text", "响应体", "text"), p("bytes", "响应字节", "bytes", false), p("status", "状态码", "number", false), p("headers", "响应头", "text", false), p("report", "信息", "text", false)], [sel("method", "方法", ["GET", "POST", "HEAD", "PUT", "DELETE", "PATCH", "OPTIONS"], "GET"), txt("url", "URL", "https://httpbin.org/get"), sel("httpVersion", "HTTP 版本", ["自动", "1.1", "2.0"], "自动"), txt("userAgent", "User-Agent", "Mozilla/5.0 … Chrome/120"), txt("cookies", "Cookie", ""), txt("headers", "请求头(每行 K: V)", ""), txt("contentType", "Content-Type", ""), txt("body", "请求体(无输入时用)", ""), num("timeout", "超时(秒)", 1, 300, 1, 15), tog("followRedirects", "跟随重定向", true), tog("insecure", "忽略证书错误", false)]);
 t2t("char_frequency", "工具/分析", "字符频率", AMBER, []);
 t2t("defang", "工具/分析", "Defang/Refang", AMBER, [sel("operation", "操作", ["defang", "refang"], "defang")]);
 pushDesc("jwt_decode", "工具/分析", "JWT 解码", CYAN, textIn(), [p("text", "载荷", "text"), p("payload", "payload", "text", false), p("header", "header", "text", false)], []);
 
 pushDesc("compress", "压缩包", "压缩", AMBER, anyIn(), [p("hex", "hex", "text"), p("bytes", "字节", "bytes", false)], [sel("format", "格式", ["Gzip", "Zlib", "Raw Deflate"], "Gzip")]);
+pushDesc("archive_list", "压缩包", "压缩包文件列表", AMBER, [p("archive", "压缩包字节", "any")], [p("text", "列表", "text"), p("files", "文件名", "stringList", false), p("count", "条目数", "number", false), p("encrypted", "含加密", "bool", false)], []);
 t2t("json_format", "工具/分析", "JSON 格式化", CYAN, [sel("operation", "操作", ["美化", "压缩"], "美化")]);
 t2t("substitution", "加密解密", "替换密码", ROSE, [txt("from", "明文字母表", "ABCDEFGHIJKLMNOPQRSTUVWXYZ"), txt("to", "密文字母表", "")]);
 t2t("braille_encode", "编码/加密", "盲文编码", BLUE, []);

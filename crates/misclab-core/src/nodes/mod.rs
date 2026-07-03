@@ -15,6 +15,7 @@ mod affine;
 mod ai_judge;
 mod ai_vision;
 mod archive_extract;
+mod archive_list;
 mod atbash;
 mod base32;
 mod base45;
@@ -43,6 +44,7 @@ mod gate;
 mod hash;
 mod hash_crack;
 mod hex;
+mod http_request;
 mod image_advanced;
 mod image_blend;
 mod image_channels;
@@ -131,6 +133,7 @@ mod remove_whitespace;
 mod rotate_bytes;
 mod salsa;
 mod sort_lines;
+mod string_match;
 mod substitution;
 mod substring;
 mod unicode_escape;
@@ -174,6 +177,7 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     replace::register(reg);
     // archives
     archive_extract::register(reg);
+    archive_list::register(reg);
     // steganography
     zero_width::register(reg);
     lsb_stego::register(reg);
@@ -224,6 +228,7 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     compare::register(reg);
     logic::register(reg);
     gate::register(reg);
+    string_match::register(reg);
     range::register(reg);
     map::register(reg);
     filter_list::register(reg);
@@ -259,6 +264,7 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     filetype::register(reg);
     extract::register(reg);
     password_crack::register(reg);
+    http_request::register(reg);
     rotate_bytes::register(reg);
     exif_meta::register(reg);
     // image processing

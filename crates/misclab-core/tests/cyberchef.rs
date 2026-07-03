@@ -411,3 +411,22 @@ fn hash_crack_dictionary() {
     let salted = crack(&target, vec!["x", "secret"], json!({ "algorithm": "MD5", "salt": "s4lt", "saltMode": "前缀" }));
     assert_eq!(text_of(&salted, "text"), "secret");
 }
+
+#[test]
+fn string_match_ops() {
+    let b = |op: &str, text: &str, value: &str, ic: bool| {
+        match run("string_match", "text", text, json!({ "operation": op, "value": value, "ignoreCase": ic })).get("result") {
+            Some(PortValue::Bool(x)) => *x,
+            o => panic!("expected Bool result, got {o:?}"),
+        }
+    };
+    assert!(b("包含", "hello world", "world", false));
+    assert!(!b("包含", "hello", "world", false));
+    assert!(b("不包含", "abc", "z", false));
+    assert!(b("等于", "FLAG", "flag", true));
+    assert!(!b("等于", "FLAG", "flag", false));
+    assert!(b("开头是", "flag{x}", "flag{", false));
+    assert!(b("结尾是", "flag{x}", "}", false));
+    assert!(b("正则匹配", "id=1234", r"\d+", false));
+    assert!(b("正则不匹配", "abc", r"\d+", false));
+}
