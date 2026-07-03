@@ -57,7 +57,8 @@ fn decode(img: &image::RgbaImage, braincopter: bool) -> String {
 }
 
 /// 极简 Brainfuck 解释器（30000 环形单元、字节回绕），带步数上限。
-fn run_bf(src: &str, input: &[u8], max_steps: usize) -> Result<Vec<u8>, String> {
+/// `pub(crate)` 供 `brainfuck` 节点复用同一份解释器。
+pub(crate) fn run_bf(src: &str, input: &[u8], max_steps: usize) -> Result<Vec<u8>, String> {
     let code: Vec<u8> = src.bytes().filter(|c| OPS.contains(c)).collect();
     // 预匹配括号。
     let mut jumps = vec![0usize; code.len()];

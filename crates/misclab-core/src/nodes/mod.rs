@@ -152,6 +152,12 @@ mod unicode_escape;
 mod unique_lines;
 mod whitespace_stego;
 
+// 补全节点（压缩包 / 密码 / 图像 / 编码）
+mod bmp_fix;
+mod brainfuck;
+mod jwt_crack;
+mod zip_repair;
+
 use crate::node::registry::NodeRegistry;
 
 /// Register every built-in node.
@@ -304,6 +310,11 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     blind_watermark_bwm::register(reg);
     bits_image::register(reg);
     pixel_image::register(reg);
+    // 补全节点
+    zip_repair::register(reg);
+    bmp_fix::register(reg);
+    brainfuck::register(reg);
+    jwt_crack::register(reg);
     // ai
     ai_judge::register(reg);
     ai_vision::register(reg);
