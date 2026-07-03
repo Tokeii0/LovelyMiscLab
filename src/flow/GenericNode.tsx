@@ -6,6 +6,7 @@ import type { PortValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useDescriptorStore } from "@/store/descriptors";
 import { useGraphStore, type FlowNodeData } from "@/store/graph";
+import { useImageViewer } from "@/store/imageViewer";
 import { useInspectorStore } from "@/store/inspector";
 
 import { nodeIcon } from "./nodeIcons";
@@ -276,7 +277,17 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
               <img
                 src={firstOut[1].value}
                 alt=""
-                className="max-h-32 w-full rounded object-contain"
+                title="点击查看大图 / 调整"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  useImageViewer
+                    .getState()
+                    .show(
+                      (firstOut[1] as Extract<PortValue, { type: "image" }>).value,
+                      data.label?.trim() || descriptor.displayName
+                    );
+                }}
+                className="nodrag max-h-32 w-full cursor-zoom-in rounded object-contain"
               />
             </div>
           ) : (

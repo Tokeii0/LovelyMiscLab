@@ -13,6 +13,7 @@ import { CommandPalette } from "@/app/CommandPalette";
 import { HelpDialog } from "@/app/HelpDialog";
 import { CreateModuleDialog } from "@/app/CreateModuleDialog";
 import { CreateScriptNodeDialog } from "@/app/CreateScriptNodeDialog";
+import { ImageViewerModal } from "@/flow/ImageViewerModal";
 import { KeyboardShortcuts } from "@/app/KeyboardShortcuts";
 import { LeftRail } from "@/app/LeftRail";
 import { LiveRunner } from "@/app/LiveRunner";
@@ -121,6 +122,7 @@ function App() {
         <CommandPalette />
         <CreateModuleDialog />
         <CreateScriptNodeDialog />
+        <ImageViewerModal />
       </div>
     </ReactFlowProvider>
   );

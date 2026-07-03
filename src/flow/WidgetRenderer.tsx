@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 
 import type { ParamSpec } from "@/lib/types";
 import { inTauri } from "@/lib/devMocks";
+import { useImageViewer } from "@/store/imageViewer";
 
 interface Props {
   spec: ParamSpec;
@@ -80,7 +81,13 @@ function ImageField({
         <input ref={ref} type="file" accept="image/*" className="hidden" onChange={onFile} />
       </div>
       {url && (
-        <img src={url} alt="" className="max-h-40 w-full rounded border border-border bg-white object-contain" />
+        <img
+          src={url}
+          alt=""
+          title="点击查看大图 / 调整"
+          onClick={() => useImageViewer.getState().show(url)}
+          className="nodrag max-h-40 w-full cursor-zoom-in rounded border border-border bg-white object-contain"
+        />
       )}
     </div>
   );

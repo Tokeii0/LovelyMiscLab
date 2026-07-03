@@ -1,4 +1,5 @@
 import type { PortValue } from "@/lib/types";
+import { useImageViewer } from "@/store/imageViewer";
 
 /** A PortValue rendered as plain text (for copy / non-visual types). */
 export function valueText(v: PortValue): string {
@@ -49,7 +50,9 @@ export function OutputValue({ value }: { value: PortValue }) {
       <img
         src={value.value}
         alt="output"
-        className="max-h-56 max-w-full rounded border border-border bg-white object-contain"
+        title="点击查看大图 / 调整"
+        onClick={() => useImageViewer.getState().show(value.value)}
+        className="max-h-56 max-w-full cursor-zoom-in rounded border border-border bg-white object-contain"
       />
     );
   }

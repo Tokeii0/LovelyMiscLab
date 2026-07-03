@@ -167,7 +167,7 @@ export const NODE_DESCRIPTIONS: Record<string, string> = {
   connected_components: "连通域标记。",
   morphology: "形态学：膨胀/腐蚀/开闭运算。",
   template_match: "在图中匹配模板位置。",
-  png_fix: "CRC 爆破修复被改的 PNG 宽高。",
+  png_fix: "修复被篡改的 PNG 宽高：自动解压数据流推断真实尺寸（含 CRC 已被改写的暴力爆破情况），也支持 CRC 爆破 / 手动。",
   blind_watermark: "FFT 频域盲水印显现。",
   bits_to_image: "0/1 文本渲染成黑白图。",
   image_to_bits: "图像二值化为 0/1 文本。",
