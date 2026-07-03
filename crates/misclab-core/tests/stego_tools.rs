@@ -109,10 +109,12 @@ fn password_crack_drives_cloacked_pixel() {
     assert_eq!(text_of(&out, "password"), "swordfish");
     assert_eq!(bytes_of(&out, "bytes"), payload); // 顺带解出了载荷
 
-    // 可打印文本判据也能命中（正确口令 → 可读文本；错口令 → 乱码）。
+    // 可打印文本判据也能命中：正确口令解出的是可读文本。正确口令排在前面，
+    // 因为 cloacked 用随机 IV + 弱填充校验，错口令的乱码偶尔也会“看起来可打印”，
+    // 放在前面会造成偶发误命中（正则判据无此问题，见上）。
     let printable = run(
         "password_crack",
-        &[("data", raw(&stego)), ("wordlist", wl(&["a", "swordfish"]))],
+        &[("data", raw(&stego)), ("wordlist", wl(&["swordfish", "a"]))],
         json!({ "node": "cloacked_pixel_extract", "success": "可打印文本" }),
     );
     assert_eq!(text_of(&printable, "password"), "swordfish");
