@@ -16,6 +16,7 @@
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Rust](https://img.shields.io/badge/Rust-2021-000000?logo=rust&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-rmcp_2.0-000000?logo=anthropic&logoColor=white)
+![QQ群](https://img.shields.io/badge/QQ群-668600249-0099ff?logo=qq&logoColor=white)
 ![License](https://img.shields.io/badge/License-GPLv3-blue)
 
 <br />
