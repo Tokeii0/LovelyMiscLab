@@ -159,7 +159,9 @@ mod cryptojs_aes;
 mod file_carve;
 mod gif_timing;
 mod jwt_crack;
+mod zip_crc_crack;
 mod zip_repair;
+mod zsteg_scan;
 
 use crate::node::registry::NodeRegistry;
 
@@ -321,6 +323,8 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     cryptojs_aes::register(reg);
     file_carve::register(reg);
     gif_timing::register(reg);
+    zip_crc_crack::register(reg);
+    zsteg_scan::register(reg);
     // ai
     ai_judge::register(reg);
     ai_vision::register(reg);
