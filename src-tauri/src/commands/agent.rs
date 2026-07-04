@@ -26,7 +26,10 @@ use crate::commands::ai_workflow::{build_catalog, generate, param_port_type, pt_
 use crate::error::AppError;
 use crate::state::AppState;
 
-const STEPS_MAX: u32 = 24;
+/// Max LLM turns (each turn may emit many tool calls). A generous backstop
+/// against runaway loops — real builds finish in a handful of turns; NODES_MAX
+/// and RUN_BUDGET bound the actual work.
+const STEPS_MAX: u32 = 48;
 const NODES_MAX: usize = 40;
 const RUN_BUDGET: u32 = 6;
 
@@ -170,11 +173,11 @@ fn tool_defs() -> Vec<ToolDef> {
 
 fn system_prompt(catalog: &str) -> String {
     format!(
-        "你是 LovelyMiscLab 的画布搭建 Agent。用户会描述一个 CTF misc 任务，你要像**解题**一样、**一个节点一个节点地**在画布上搭出数据流图(DAG)来完成它。\n\n\
+        "你是 LovelyMiscLab 的画布搭建 Agent。用户会描述一个 CTF misc 任务，你要像**解题**一样把它拆成一步步，在画布上搭出数据流图(DAG)来完成它。\n\n\
 【可用节点】格式: id | 名称 | 输入端口 | 输出端口 | 参数\n{catalog}\n\
-【工作方式 —— 逐步推进，每步带巧思】\n\
-1. 一次只加**一个**节点(add_node)，随即把它连到已有的图上(connect)，再想下一个；不要先把所有节点加完再统一连线。\n\
-2. 每个 add_node 都必须带 reason：结合线索用一句话说明“为什么现在加这个节点”(像在解题, ≤20字)，例如“看着像套娃 Base64”。connect / set_param 也尽量带 reason。\n\
+【工作方式 —— 像解题一样推进，每步带巧思】\n\
+1. 想清楚整条解题链路，再把节点依次搭出来：每个 add_node 都必须带 reason（一句话巧思，说明为什么加它，像在解题, ≤20字，例如“看着像套娃 Base64”），并 connect 到上游；connect / set_param 也尽量带 reason。\n\
+2. 可以在一轮里连续加好几个节点和连线（应用会自动一个一个地动画呈现给用户），把该搭的一次搭到位，别把简单流程拖成很多轮。\n\
 3. 拿不准下一步(如反复解码到出现 flag、验证某步是否正确)时，用 run_partial 运行当前图看输出，再据结果决定下一步。\n\
 【硬性规则】\n\
 4. 只能使用上面出现过的节点 id。\n\
