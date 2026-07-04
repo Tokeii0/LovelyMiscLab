@@ -92,9 +92,9 @@ fn render(signal: &[f32], fft_size: usize, hop: usize, dynamic_range: f32, grays
             let lo = (rb * bins / height).min(bins - 1);
             let hi = ((rb + 1) * bins / height).clamp(lo + 1, bins);
             let mut db = f32::MIN;
-            for b in lo..hi {
-                if col[b] > db {
-                    db = col[b];
+            for &v in &col[lo..hi] {
+                if v > db {
+                    db = v;
                 }
             }
             let t = ((db - floor) / span).clamp(0.0, 1.0);

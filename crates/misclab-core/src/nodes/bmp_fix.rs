@@ -19,7 +19,7 @@ fn u32le(d: &[u8], o: usize) -> u32 {
 
 /// 每行字节数（补齐到 4 字节）。
 fn row_size(w: u32, bpp: u32) -> u64 {
-    ((bpp as u64 * w as u64 + 31) / 32) * 4
+    (bpp as u64 * w as u64).div_ceil(32) * 4
 }
 
 fn out(bytes: &[u8], report: &str) -> PortMap {
@@ -105,7 +105,7 @@ impl Node for N {
                 let h = h as u32;
                 let h_signed = if stored_h < 0 { -(h as i32) } else { h as i32 };
                 patch(&mut d, sw, h_signed);
-                let note = if avail % rs_w == 0 {
+                let note = if avail.is_multiple_of(rs_w) {
                     ""
                 } else {
                     "（像素区末尾有多余字节，按整数行取高）"
@@ -120,7 +120,7 @@ impl Node for N {
         if sh >= 1 {
             for w in 1..=MAX_DIM {
                 let rs = row_size(w, bpp);
-                if rs > 0 && avail % rs == 0 && (avail / rs) as u32 == sh && w != sw {
+                if rs > 0 && avail.is_multiple_of(rs) && (avail / rs) as u32 == sh && w != sw {
                     patch(&mut d, w, stored_h);
                     return Ok(out(
                         &d,
@@ -172,7 +172,7 @@ mod tests {
 
     /// 造一个 w×h、给定位深的未压缩 BMP（像素填 0，无调色板）。
     fn make_bmp(w: u32, h: u32, bpp: u32) -> Vec<u8> {
-        let rs = (((bpp * w + 31) / 32) * 4) as usize;
+        let rs = ((bpp * w).div_ceil(32) * 4) as usize;
         let off = 54usize; // 14 文件头 + 40 BITMAPINFOHEADER
         let size = off + rs * h as usize;
         let mut d = vec![0u8; size];

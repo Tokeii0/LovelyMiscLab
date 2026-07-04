@@ -144,9 +144,8 @@ fn cloacked_pixel_wrong_password() {
     // A wrong password never recovers the real payload: usually the padding check
     // errors; occasionally (weak 32-byte pad) it "succeeds" with garbage — but that
     // garbage is never the original. (Random IV makes an is_err()-only assert flaky.)
-    match try_run("cloacked_pixel_extract", &[("data", raw(&stego))], json!({ "password": "wrong" })) {
-        Ok(out) => assert_ne!(bytes_of(&out, "bytes"), payload.to_vec(), "wrong password must not recover the payload"),
-        Err(_) => {}
+    if let Ok(out) = try_run("cloacked_pixel_extract", &[("data", raw(&stego))], json!({ "password": "wrong" })) {
+        assert_ne!(bytes_of(&out, "bytes"), payload.to_vec(), "wrong password must not recover the payload");
     }
 }
 

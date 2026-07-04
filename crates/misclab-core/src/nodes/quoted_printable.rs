@@ -24,9 +24,7 @@ fn qp_encode(data: &[u8]) -> String {
         }
         let is_ws = b == b' ' || b == b'\t';
         let next_break = matches!(data.get(i + 1), Some(b'\r') | Some(b'\n') | None);
-        if (33..=126).contains(&b) && b != b'=' {
-            emit(&mut out, &(b as char).to_string(), &mut line);
-        } else if is_ws && !next_break {
+        if ((33..=126).contains(&b) && b != b'=') || (is_ws && !next_break) {
             emit(&mut out, &(b as char).to_string(), &mut line);
         } else {
             emit(&mut out, &format!("={b:02X}"), &mut line);

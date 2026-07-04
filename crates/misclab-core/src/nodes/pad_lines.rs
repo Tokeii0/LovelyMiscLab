@@ -14,7 +14,7 @@ impl Node for N {
                 if n >= width {
                     l.to_string()
                 } else {
-                    let padding: String = std::iter::repeat(pad).take(width - n).collect();
+                    let padding: String = std::iter::repeat_n(pad, width - n).collect();
                     if left {
                         format!("{padding}{l}")
                     } else {

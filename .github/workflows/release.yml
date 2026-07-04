@@ -6,16 +6,41 @@ on:
       - "v*"
   workflow_dispatch:
 
-# Needed to create the GitHub Release and upload the portable exe.
+# Needed to create the GitHub Release and upload the portable binaries.
 permissions:
   contents: write
 
 jobs:
-  release:
-    name: Build portable exe (Windows)
-    runs-on: windows-latest
+  # Build one portable artifact per OS in parallel, then hand them to the
+  # `release` job. tauri.conf.json has `bundle.targets: []`, so Windows/Linux
+  # produce a standalone binary (no installer); macOS overrides `--bundles dmg`
+  # since a GUI app there needs the .app bundle.
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x64
+          - os: ubuntu-22.04
+            name: linux-x64
+          - os: macos-latest
+            name: macos-universal
+            # `--target universal-apple-darwin` REQUIRES both targets installed below.
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
     steps:
       - uses: actions/checkout@v4
+
+      # Tauri's Linux runtime deps (WebKitGTK 4.1 + GTK/appindicator/rsvg).
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev \
+            libayatana-appindicator3-dev libxdo-dev patchelf
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -30,61 +55,111 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.name }}
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      # Builds the frontend (beforeBuildCommand) and the release binary.
-      # tauri.conf.json has `bundle.targets: []`, so no installer is produced —
-      # only the standalone target/release/misclab-app.exe (relies on the
-      # system WebView2 runtime, which ships with Windows 10/11).
-      - name: Build app
+      # Windows/Linux: standalone binary (no bundle) — the portable-green model.
+      - name: Build app (Windows / Linux)
+        if: runner.os != 'macOS'
         run: pnpm tauri build
 
-      # Rename to a user-friendly, versioned name for the release asset.
-      - name: Prepare portable exe
-        shell: pwsh
-        run: |
-          $version = "${{ github.ref_name }}" -replace '^v', ''
-          if ([string]::IsNullOrEmpty($version)) { $version = "dev" }
-          $src = "target/release/misclab-app.exe"
-          $dst = "LovelyMiscLab-$version-windows-x64.exe"
-          Copy-Item $src $dst
-          "ASSET=$dst" | Out-File -FilePath $env:GITHUB_ENV -Append
+      # macOS: a universal (Intel + Apple Silicon) .dmg.
+      - name: Build app (macOS universal .dmg)
+        if: runner.os == 'macOS'
+        run: pnpm tauri build --target universal-apple-darwin --bundles dmg
 
-      # Shrink the standalone exe with UPX before publishing.
-      - name: Compress with UPX
+      # Rename to a user-friendly, versioned asset name (bash works on all
+      # three runners — Git Bash on Windows).
+      - name: Package artifact
+        id: pkg
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"; [ -z "$VERSION" ] && VERSION="dev"
+          case "${{ runner.os }}" in
+            Windows)
+              ASSET="LovelyMiscLab-$VERSION-windows-x64.exe"
+              cp "target/release/misclab-app.exe" "$ASSET"
+              ;;
+            Linux)
+              ASSET="LovelyMiscLab-$VERSION-linux-x64"
+              cp "target/release/misclab-app" "$ASSET"
+              strip "$ASSET" || true
+              chmod +x "$ASSET"
+              ;;
+            macOS)
+              ASSET="LovelyMiscLab-$VERSION-macos-universal.dmg"
+              DMG_DIR="target/universal-apple-darwin/release/bundle/dmg"
+              COUNT="$(find "$DMG_DIR" -name '*.dmg' | wc -l | tr -d ' ')"
+              if [ "$COUNT" != "1" ]; then
+                echo "::error::expected exactly 1 .dmg in $DMG_DIR, found $COUNT"; exit 1
+              fi
+              cp "$(find "$DMG_DIR" -name '*.dmg')" "$ASSET"
+              ;;
+          esac
+          echo "asset=$ASSET" >> "$GITHUB_OUTPUT"
+          echo "Packaged $ASSET"
+
+      # Shrink the standalone Windows exe before publishing (UPX on macOS breaks
+      # code signing / the loader, and adds little on Linux, so Windows only).
+      - name: Compress Windows exe with UPX
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           choco install upx -y --no-progress
-          $before = (Get-Item "${{ env.ASSET }}").Length
-          upx --lzma --best "${{ env.ASSET }}"
-          $after = (Get-Item "${{ env.ASSET }}").Length
+          if ($LASTEXITCODE -ne 0) { throw "choco install upx failed (exit $LASTEXITCODE)" }
+          $before = (Get-Item "${{ steps.pkg.outputs.asset }}").Length
+          upx --lzma --best "${{ steps.pkg.outputs.asset }}"
+          if ($LASTEXITCODE -ne 0) { throw "upx compression failed (exit $LASTEXITCODE)" }
+          $after = (Get-Item "${{ steps.pkg.outputs.asset }}").Length
           "UPX: {0:N0} -> {1:N0} bytes ({2:P1})" -f $before, $after, ($after / $before)
 
-      # Assemble the release body: download note + the latest CHANGELOG section.
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ steps.pkg.outputs.asset }}
+          if-no-files-found: error
+
+  # Collect all three artifacts and publish them to a single draft Release.
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      # Release body: per-platform run notes + the latest CHANGELOG section.
       - name: Build release notes
-        shell: pwsh
+        shell: bash
         run: |
-          $section = ""
-          if (Test-Path CHANGELOG.md) {
-            $raw = Get-Content CHANGELOG.md -Raw
-            $m = [regex]::Match($raw, '(?ms)^##\s.*?(?=\r?\n##\s|\z)')
-            if ($m.Success) { $section = $m.Value.Trim() }
-          }
-          $lines = @(
-            "单文件绿色版，免安装（已用 UPX --lzma --best 压缩）。下载后双击 ``${{ env.ASSET }}`` 即可运行。",
-            "",
-            "> 依赖系统自带的 WebView2 运行时（Windows 10/11 已内置）。",
-            "",
-            "---",
-            "",
-            $section
-          )
-          Set-Content -Path RELEASE_NOTES.md -Value ($lines -join "`n") -Encoding UTF8
+          {
+            echo "多平台绿色版，免安装。"
+            echo ""
+            echo "- **Windows** —— 下载 \`*-windows-x64.exe\`，双击运行（系统自带 WebView2，Win10/11 已内置；已用 UPX 压缩）。"
+            echo "- **Linux** —— 下载 \`*-linux-x64\`，\`chmod +x\` 后运行；需要 WebKitGTK 4.1（Debian/Ubuntu：\`sudo apt install libwebkit2gtk-4.1-0\`）。"
+            echo "- **macOS** —— 下载 \`*-macos-universal.dmg\`（Intel + Apple Silicon 通用），拖入「应用程序」。未签名，首次打开若被拦截：右键 → 打开，或终端执行 \`xattr -cr /Applications/LovelyMiscLab.app\`。"
+            echo ""
+            echo "---"
+            echo ""
+            if [ -f CHANGELOG.md ]; then
+              awk '/^## /{c++} c==1{print} c==2{exit}' CHANGELOG.md
+            fi
+          } > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -96,6 +171,6 @@ jobs:
           generate_release_notes: true
           draft: true
           prerelease: false
-          files: ${{ env.ASSET }}
+          files: artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

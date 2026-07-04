@@ -95,10 +95,10 @@ fn svd_top2(m: &[f32; 16]) -> (f64, f64) {
     for _ in 0..60 {
         // largest off-diagonal
         let (mut p, mut q, mut max) = (0, 1, 0.0f64);
-        for i in 0..4 {
-            for j in (i + 1)..4 {
-                if s[i][j].abs() > max {
-                    max = s[i][j].abs();
+        for (i, row) in s.iter().enumerate() {
+            for (j, &val) in row.iter().enumerate().skip(i + 1) {
+                if val.abs() > max {
+                    max = val.abs();
                     p = i;
                     q = j;
                 }
@@ -111,17 +111,18 @@ fn svd_top2(m: &[f32; 16]) -> (f64, f64) {
         let t = theta.signum() / (theta.abs() + (theta * theta + 1.0).sqrt());
         let c = 1.0 / (t * t + 1.0).sqrt();
         let sn = t * c;
-        for k in 0..4 {
-            let skp = s[k][p];
-            let skq = s[k][q];
-            s[k][p] = c * skp - sn * skq;
-            s[k][q] = sn * skp + c * skq;
+        for row in &mut s {
+            let skp = row[p];
+            let skq = row[q];
+            row[p] = c * skp - sn * skq;
+            row[q] = sn * skp + c * skq;
         }
-        for k in 0..4 {
-            let spk = s[p][k];
-            let sqk = s[q][k];
-            s[p][k] = c * spk - sn * sqk;
-            s[q][k] = sn * spk + c * sqk;
+        let [row_p, row_q] = s.get_disjoint_mut([p, q]).unwrap();
+        for (spk, sqk) in row_p.iter_mut().zip(row_q.iter_mut()) {
+            let old_spk = *spk;
+            let old_sqk = *sqk;
+            *spk = c * old_spk - sn * old_sqk;
+            *sqk = sn * old_spk + c * old_sqk;
         }
     }
     let mut eig = [s[0][0], s[1][1], s[2][2], s[3][3]];
@@ -196,10 +197,10 @@ fn extract_avg(img: &RgbaImage, pw_img: u32, wm_size: usize) -> Vec<f64> {
     let mut avg = vec![0.0f64; wm_size];
     for (i, a) in avg.iter_mut().enumerate() {
         let (mut sum, mut n) = (0.0, 0u32);
-        for c in 0..3 {
+        for chan in bits.iter().take(3) {
             let mut j = i;
             while j < block_num {
-                sum += bits[c][j];
+                sum += chan[j];
                 n += 1;
                 j += wm_size;
             }

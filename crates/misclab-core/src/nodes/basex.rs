@@ -141,9 +141,7 @@ pub fn radix_decode(
             carry >>= 8;
         }
     }
-    for _ in 0..zero_prefix {
-        result.push(0);
-    }
+    result.extend(std::iter::repeat_n(0, zero_prefix));
     result.reverse();
     Ok(result.iter().map(|&b| b as u8).collect())
 }

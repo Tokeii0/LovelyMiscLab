@@ -26,7 +26,7 @@ fn brute(
     let mut buf = vec![charset[0]; len];
     let mut count: u64 = 0;
     loop {
-        if count % 200_000 == 0 {
+        if count.is_multiple_of(200_000) {
             ctx.check_cancel()?;
         }
         count += 1;

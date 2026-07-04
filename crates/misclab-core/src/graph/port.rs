@@ -23,6 +23,8 @@ pub struct ScoredString {
 /// [`PortValue::Artifact`] (out-of-band handle) over inline [`PortValue::Bytes`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value", rename_all = "camelCase")]
+// Variants intentionally kept unboxed; PortValue is moved, not stored en masse.
+#[allow(clippy::large_enum_variant)]
 pub enum PortValue {
     None,
     Text(String),

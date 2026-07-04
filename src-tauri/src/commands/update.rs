@@ -1,12 +1,16 @@
-//! In-place self-update for the portable single-exe build.
+//! In-place self-update for the portable single-file build.
 //!
-//! The app ships as one standalone `LovelyMiscLab-<ver>-windows-x64.exe` (no
-//! installer), so the official Tauri updater (which expects signed installer
-//! bundles) doesn't apply. Instead we query the GitHub Releases API for the
-//! latest *published* release, compare versions, and — on the user's confirm —
-//! download the new exe and swap it in place. Windows lets you rename a running
-//! executable (just not delete/overwrite it), so we rename the current exe aside
-//! and move the download into its path, then relaunch.
+//! The app ships as one standalone executable per OS (no installer), so the
+//! official Tauri updater (which expects signed installer bundles) doesn't
+//! apply. Instead we query the GitHub Releases API for the latest *published*
+//! release, compare versions, and — on the user's confirm — download the new
+//! binary and swap it in place: rename the current executable aside and move the
+//! download into its path, then relaunch. Both Windows and Unix allow renaming a
+//! running executable, so the swap works on Windows and Linux.
+//!
+//! macOS is the exception: it ships a `.app` bundle inside a `.dmg`, which can't
+//! be replaced as a single file, so there [`PLATFORM.self_update`] is `false` and
+//! the UI falls back to opening the Release page for a manual download.
 
 use serde::Serialize;
 use std::io::Read as _;
@@ -16,6 +20,30 @@ use crate::error::{AppError, AppResult};
 
 const REPO: &str = "Tokeii0/LovelyMiscLab";
 const USER_AGENT: &str = "LovelyMiscLab-Updater";
+
+/// Per-platform release-asset selection + self-update capability, resolved at
+/// compile time. The published Release carries one artifact per OS whose file
+/// name contains `key` (e.g. `…-windows-x64.exe`, `…-linux-x64`,
+/// `…-macos-universal.dmg`).
+struct Platform {
+    /// Substring identifying this platform's asset (matched case-insensitively).
+    key: &'static str,
+    /// Leading magic bytes a valid downloaded executable must start with.
+    magic: &'static [u8],
+    /// Whether the running executable can be replaced in place (see module doc).
+    self_update: bool,
+}
+
+#[cfg(target_os = "windows")]
+const PLATFORM: Platform = Platform { key: "windows", magic: b"MZ", self_update: true };
+#[cfg(target_os = "linux")]
+const PLATFORM: Platform = Platform { key: "linux", magic: b"\x7fELF", self_update: true };
+// macOS ships a universal (FAT) `.dmg`, not a swappable single binary, so
+// `self_update` is false and `download()`/the magic check never run here — the
+// magic is left empty rather than pinning one arch (Intel `0xCF…`, ARM, or the
+// FAT `0xCAFEBABE` header a universal build actually produces).
+#[cfg(target_os = "macos")]
+const PLATFORM: Platform = Platform { key: "macos", magic: b"", self_update: false };
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,24 +100,29 @@ fn fetch_latest(current: &str) -> AppResult<UpdateInfo> {
     let notes = json["body"].as_str().unwrap_or("").to_string();
     let release_url = json["html_url"].as_str().unwrap_or("").to_string();
 
-    // Pick the Windows exe asset.
+    // Pick the asset that matches the current platform (by file-name substring).
     let asset = json["assets"].as_array().and_then(|arr| {
-        arr.iter()
-            .find(|a| {
-                a["name"]
-                    .as_str()
-                    .map(|n| n.to_lowercase().ends_with(".exe"))
-                    .unwrap_or(false)
-            })
-    });
-    let (download_url, asset_name) = asset
-        .map(|a| {
-            (
-                a["browser_download_url"].as_str().unwrap_or("").to_string(),
-                a["name"].as_str().unwrap_or("").to_string(),
-            )
+        arr.iter().find(|a| {
+            a["name"]
+                .as_str()
+                .map(|n| n.to_lowercase().contains(PLATFORM.key))
+                .unwrap_or(false)
         })
-        .unwrap_or_default();
+    });
+    let asset_name = asset
+        .and_then(|a| a["name"].as_str())
+        .unwrap_or("")
+        .to_string();
+    // Only offer an in-app download when we can actually self-install; otherwise
+    // the UI keeps the install button disabled and points at the Release page.
+    let download_url = if PLATFORM.self_update {
+        asset
+            .and_then(|a| a["browser_download_url"].as_str())
+            .unwrap_or("")
+            .to_string()
+    } else {
+        String::new()
+    };
 
     Ok(UpdateInfo {
         available: version_gt(&latest, current),
@@ -120,9 +153,9 @@ fn download(url: &str, dest: &Path) -> AppResult<()> {
         .read_to_end(&mut buf)
         .map_err(|e| err(e.to_string()))?;
     // Guard against redirects to an error page / truncated download.
-    if buf.len() < 512 * 1024 || buf.first() != Some(&b'M') || buf.get(1) != Some(&b'Z') {
+    if buf.len() < 512 * 1024 || !buf.starts_with(PLATFORM.magic) {
         return Err(err(format!(
-            "下载的文件无效（{} 字节，不是 Windows 可执行文件）。",
+            "下载的文件无效（{} 字节，非本平台可执行文件）。",
             buf.len()
         )));
     }
@@ -142,6 +175,17 @@ fn swap_in_place(download_url: &str) -> AppResult<()> {
 
     download(download_url, &new_path)?;
 
+    // Downloads land as 0644; restore the executable bit on Unix before the swap.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&new_path)
+            .map_err(|e| err(e.to_string()))?
+            .permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&new_path, perms).map_err(|e| err(e.to_string()))?;
+    }
+
     let _ = std::fs::remove_file(&old_path); // clear any stale leftover
     std::fs::rename(&exe, &old_path)
         .map_err(|e| err(format!("重命名当前程序失败（目录可能只读或无写入权限）：{e}")))?;
@@ -154,6 +198,9 @@ fn swap_in_place(download_url: &str) -> AppResult<()> {
 
 #[tauri::command]
 pub async fn install_update(app: tauri::AppHandle, download_url: String) -> AppResult<()> {
+    if !PLATFORM.self_update {
+        return Err(err("此平台不支持应用内自动更新，请到发布页下载新版本手动安装。"));
+    }
     if download_url.is_empty() {
         return Err(err("没有可用的下载地址。"));
     }
@@ -164,6 +211,17 @@ pub async fn install_update(app: tauri::AppHandle, download_url: String) -> AppR
     app.restart();
     #[allow(unreachable_code)]
     Ok(())
+}
+
+/// Remove leftover `.old` / `.new` files from a previous self-update. Best-effort.
+pub fn cleanup_leftovers() {
+    if let Ok(exe) = std::env::current_exe() {
+        for suffix in [".old", ".new"] {
+            if let Ok(p) = sibling(&exe, suffix) {
+                let _ = std::fs::remove_file(p);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -180,16 +238,5 @@ mod tests {
         assert!(!version_gt("0.2.2", "0.2.2"));
         assert!(!version_gt("0.2.1", "0.2.2"));
         assert!(!version_gt("0.2.9", "0.2.10"));
-    }
-}
-
-/// Remove leftover `.old` / `.new` files from a previous self-update. Best-effort.
-pub fn cleanup_leftovers() {
-    if let Ok(exe) = std::env::current_exe() {
-        for suffix in [".old", ".new"] {
-            if let Ok(p) = sibling(&exe, suffix) {
-                let _ = std::fs::remove_file(p);
-            }
-        }
     }
 }

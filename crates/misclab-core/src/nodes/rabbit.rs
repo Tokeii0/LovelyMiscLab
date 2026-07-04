@@ -65,8 +65,8 @@ impl Rabbit {
     fn next_state(&mut self) {
         // 计数器系统（带进位链）。
         let mut carry = self.carry;
-        for i in 0..8 {
-            let t = self.c[i] as u64 + A[i] as u64 + carry as u64;
+        for (i, &a) in A.iter().enumerate() {
+            let t = self.c[i] as u64 + a as u64 + carry as u64;
             self.c[i] = t as u32;
             carry = (t >> 32) as u32;
         }

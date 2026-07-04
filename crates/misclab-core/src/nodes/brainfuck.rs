@@ -19,7 +19,7 @@ fn ook_to_bf(src: &str) -> Result<String, String> {
     if toks.is_empty() {
         return Err("未找到任何 Ook! 记号。".into());
     }
-    if toks.len() % 2 != 0 {
+    if !toks.len().is_multiple_of(2) {
         return Err("Ook! 记号数为奇数，无法配对。".into());
     }
     let mut bf = String::with_capacity(toks.len() / 2);

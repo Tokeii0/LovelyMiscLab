@@ -228,12 +228,12 @@ impl Node for N {
 
         for use_int in order {
             let mut mt = if use_int {
-                match seed_int(&password) {
+                match seed_int(password) {
                     Some(m) => m,
                     None => continue,
                 }
             } else {
-                seed_str(&password)
+                seed_str(password)
             };
             if let Some(wm) = deobfuscate(&bits, &mut mt) {
                 let mut m = PortMap::new();
