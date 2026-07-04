@@ -6,7 +6,7 @@ resolver = "2"
 members = ["src-tauri", "crates/misclab-core"]
 
 [workspace.package]
-version = "0.2.5"
+version = "0.2.6"
 edition = "2021"
 authors = ["LovelyMiscLab"]
 license = "GPL-3.0-only"

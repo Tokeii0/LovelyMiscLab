@@ -2,6 +2,18 @@
 
 本项目所有值得注意的变更都会记录在此文件。版本遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.2.6] - 2026-07-04
+
+### 新增
+
+- **macOS / Linux 跨平台支持**：应用现已适配 macOS（Intel + Apple Silicon 通用包）与 Linux（需 WebKitGTK 4.1）。发布流程自动构建三平台绿色版 —— Windows `exe`（UPX 压缩）、Linux 单文件二进制、macOS 通用 `.dmg`；CI 在 Windows / Linux / macOS 三个系统上全量构建、测试并做 Clippy 零告警检查。
+- **跨平台自动更新**：自动更新器改为按平台挑选发布资源、校验对应平台可执行文件魔数；Windows / Linux 支持就地替换并自动重启，macOS 因 `.dmg` 内是 `.app` 包无法单文件替换，改为引导到发布页手动下载。
+
+### 改进
+
+- README 增加三平台下载与安装说明（各自的运行时依赖与 macOS Gatekeeper 处理）。
+- CI 新增 `cargo clippy --all-targets -- -D warnings` 零告警门禁，并清理了 misclab-core 既有的 Clippy 告警。
+
 ## [0.2.5] - 2026-07-03
 
 ### 修复
