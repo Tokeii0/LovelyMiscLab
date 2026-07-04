@@ -27,8 +27,11 @@ interface AgentState {
   error: string;
   /** Set by the AI dialog; consumed by Canvas (which owns the ReactFlow handle). */
   pendingPrompt: string | null;
+  /** Optional long input (e.g. ciphertext) the app injects into the source node
+   * directly, so the model never has to echo it. */
+  pendingData: string | null;
 
-  launch: (prompt: string) => void;
+  launch: (prompt: string, data?: string | null) => void;
   clearPending: () => void;
   start: () => void;
   setJob: (job: string) => void;
@@ -47,9 +50,10 @@ export const useAgentStore = create<AgentState>((set) => ({
   notes: "",
   error: "",
   pendingPrompt: null,
+  pendingData: null,
 
-  launch: (prompt) => set({ pendingPrompt: prompt }),
-  clearPending: () => set({ pendingPrompt: null }),
+  launch: (prompt, data) => set({ pendingPrompt: prompt, pendingData: data ?? null }),
+  clearPending: () => set({ pendingPrompt: null, pendingData: null }),
   start: () => set({ running: true, steps: [], notes: "", error: "", job: null }),
   setJob: (job) => set({ job }),
   pushStep: (s) => set((st) => ({ steps: [...st.steps, s] })),

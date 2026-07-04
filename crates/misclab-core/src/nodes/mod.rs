@@ -64,6 +64,7 @@ mod image_gif;
 mod image_input;
 mod image_meta;
 mod image_util;
+mod image_view;
 mod imagein;
 mod imagemask;
 mod iterate;
@@ -97,6 +98,7 @@ mod switch_case;
 mod text_input;
 mod text_output;
 mod text_score;
+mod text_view;
 mod timestamp;
 mod url;
 mod vigenere;
@@ -154,6 +156,7 @@ mod unique_lines;
 mod whitespace_stego;
 
 // 补全节点（压缩包 / 密码 / 图像 / 编码）
+mod bkcrack;
 mod bmp_fix;
 mod brainfuck;
 mod cryptojs_aes;
@@ -174,9 +177,11 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     // input / output
     text_input::register(reg);
     text_output::register(reg);
+    text_view::register(reg);
     file_import::register(reg);
     file_output::register(reg);
     image_input::register(reg);
+    image_view::register(reg);
     // encoding / crypto
     base32::register(reg);
     base45::register(reg);
@@ -322,6 +327,7 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     pixel_image::register(reg);
     // 补全节点
     zip_repair::register(reg);
+    bkcrack::register(reg);
     bmp_fix::register(reg);
     brainfuck::register(reg);
     jwt_crack::register(reg);

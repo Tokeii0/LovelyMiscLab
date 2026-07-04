@@ -302,7 +302,21 @@ export async function runSingleNode(nodeId: string) {
   const t0 = Date.now();
   try {
     const params = { ...node.data.params, ...paramOverrides };
-    const outputs = await api.runNode(node.data.descriptorId, inputs, params);
+    // Stream live progress/logs so long-running nodes (e.g. bkcrack) drive the
+    // node's progress bar; also captures the job id so the Stop control cancels it.
+    const outputs = await api.runNodeStreamed(
+      node.data.descriptorId,
+      nodeId,
+      inputs,
+      params,
+      (m) => {
+        const gs = useGraphStore.getState();
+        if (m.kind === "jobStarted") currentJob = m.job;
+        else if (m.kind === "nodeProgress") gs.updateRuntime(m.node, { progress: m.pct });
+        else if (m.kind === "log" && m.node)
+          gs.appendLog(m.node, { time: now(), level: m.level, message: m.message });
+      }
+    );
     g.updateRuntime(nodeId, { status: "done", progress: 1, outputs });
     g.appendLog(nodeId, { time: now(), level: "success", message: "执行成功" });
     useRunStore.getState().appendHistoryEvent(entryId, {
@@ -331,6 +345,8 @@ export async function runSingleNode(nodeId: string) {
       error: String(e),
       nodes: historyNodes().filter((n) => n.id === nodeId),
     });
+  } finally {
+    currentJob = null;
   }
 }
 

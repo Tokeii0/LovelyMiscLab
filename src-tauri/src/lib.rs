@@ -90,6 +90,7 @@ pub fn run() {
             commands::system::db_health,
             commands::graph::list_node_descriptors,
             commands::graph::run_node,
+            commands::graph::run_node_streamed,
             commands::graph::run_graph,
             commands::graph::cancel_job,
             commands::graph::reset_run,

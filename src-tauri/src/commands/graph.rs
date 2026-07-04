@@ -89,7 +89,8 @@ pub fn list_node_descriptors(state: State<'_, AppState>) -> Vec<NodeDescriptor> 
     combined_registry(&state).descriptors()
 }
 
-/// Run a single node standalone (the "quick tool" path).
+/// Run a single node standalone (the "quick tool" path). Silent — no progress
+/// stream. Used by the module-run dialog and other one-shot callers.
 #[tauri::command]
 pub async fn run_node(
     state: State<'_, AppState>,
@@ -114,6 +115,57 @@ pub async fn run_node(
     .await
     .map_err(|e| AppError::new("join", e.to_string()))??;
     Ok(out)
+}
+
+/// Run a single node while streaming per-node progress and logs over `on_event`
+/// (stamped with the canvas `node_id`) and registering a cancellable job. This
+/// gives a lone long-running node — e.g. the native bkcrack attack — a live
+/// progress bar, just like a whole-graph run. (`Channel` can't be wrapped in
+/// `Option`, so this is a separate command from the silent [`run_node`].)
+#[tauri::command]
+pub async fn run_node_streamed(
+    state: State<'_, AppState>,
+    descriptor_id: String,
+    node_id: String,
+    inputs: PortMap,
+    params: serde_json::Value,
+    on_event: Channel<ProgressMsg>,
+) -> Result<PortMap, AppError> {
+    let registry = combined_registry(&state);
+    let env = state.settings.lock().expect("settings mutex poisoned").clone();
+    let cancel = CancellationToken::new();
+    let job = state.jobs.start(cancel.clone());
+    let _ = on_event.send(ProgressMsg::JobStarted { job: job.clone() });
+    let _ = on_event.send(ProgressMsg::NodeEntered { node: node_id.clone() });
+
+    let sink = ChannelSink { channel: on_event.clone() };
+    let did = descriptor_id;
+    let nid = node_id.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        GraphExecutor::run_node_with_env_id(&registry, &did, &nid, &inputs, &params, &env, &sink, &cancel)
+    })
+    .await;
+    state.jobs.finish(&job);
+
+    match result {
+        Ok(Ok(out)) => {
+            let _ = on_event.send(ProgressMsg::NodeDone { node: node_id });
+            let _ = on_event.send(ProgressMsg::JobDone { job });
+            Ok(out)
+        }
+        Ok(Err(core_err)) => {
+            let _ = on_event.send(ProgressMsg::NodeFailed {
+                node: node_id,
+                error: core_err.to_string(),
+            });
+            let _ = on_event.send(ProgressMsg::JobFailed { job, error: core_err.to_string() });
+            Err(core_err.into())
+        }
+        Err(join_err) => {
+            let _ = on_event.send(ProgressMsg::JobFailed { job, error: join_err.to_string() });
+            Err(AppError::new("join", join_err.to_string()))
+        }
+    }
 }
 
 /// Run a whole graph, streaming per-node progress and returning all node outputs.

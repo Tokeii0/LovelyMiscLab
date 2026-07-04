@@ -129,9 +129,11 @@ import {
 // A distinct icon per module.
 const NODE_ICONS: Record<string, LucideIcon> = {
   text_input: Type,
+  text_view: ScanText,
   file_import: FileUp,
   file_output: FileDown,
   image_input: Image,
+  image_view: Eye,
   text_output: FileText,
   base64_encode: Code,
   base64_decode: Braces,
@@ -307,6 +309,7 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   file_carve: Scissors,
   gif_timing: Clock,
   zip_crc_crack: Bomb,
+  bkcrack: KeyRound,
   zsteg_scan: ScanEye,
   rabbit: KeyRound,
   blind_watermark: Waves,

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, Copy, Link2, Play, StepForward } from "lucide-react";
 
+import { ProgressBar } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import type { PortValue } from "@/lib/types";
 import { useDescriptorStore } from "@/store/descriptors";
@@ -113,6 +114,14 @@ export function Inspector() {
             运行到此处
           </button>
         </div>
+        {node.data.status === "running" && (
+          <div className="mt-2">
+            <ProgressBar
+              value={node.data.progress ?? 0}
+              status={logs[logs.length - 1]?.message}
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex border-b border-border text-xs">

@@ -244,7 +244,7 @@ pub(crate) fn generate(registry: &NodeRegistry, cfg: &ModelConfig, prompt: &str)
 【规则】\n\
 1. 只能使用上面出现过的节点 id。\n\
 2. 用连线把上游【输出端口】连到下游【输入端口】，类型要匹配(text↔text, bytes↔bytes；any 可接任何类型)。\n\
-3. 任务若从一段文本开始，用 text_input 作为源，并把该文本填进它的 text 参数。\n\
+3. 任务若从一段文本开始，用 text_input 作为源，并把该文本填进它的 text 参数；但若用户说明待处理数据已由程序单独填入，则 text_input 的 text 留空、不要重复那段数据。\n\
 4. 需要展示最终文本结果时末尾接 text_output。\n\
 5. select 参数只能取方括号里给出的选项之一。\n\
 6. 参数也能被连线驱动：把某上游输出连到目标节点的【参数名】即可。\n\

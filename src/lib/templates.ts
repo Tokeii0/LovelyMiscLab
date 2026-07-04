@@ -795,4 +795,28 @@ export const TEMPLATES: Template[] = [
       { from: { node: "crack", port: "text" }, to: { node: "content", port: "text" } },
     ],
   },
+  {
+    id: "bkcrack-known-plaintext",
+    name: "bkcrack 已知明文攻击",
+    description:
+      "对 ZipCrypto 传统加密的 ZIP 做已知明文攻击（Biham–Kocher，内置原生实现，无需外部程序）：导入加密 ZIP → bkcrack 选「PNG 图片」等明文模板（或自定义 Hex）求出三个内部密钥并解密目标条目 → 一路导出明文文件、一路显示密钥。至少需 12 字节连续已知明文（文件头模板适用于 Stored 条目）。",
+    category: "取证/文件",
+    icon: KeyRound,
+    nodes: [
+      { key: "file", descriptorId: "file_import", position: { x: 40, y: 150 } },
+      {
+        key: "bk",
+        descriptorId: "bkcrack",
+        position: { x: 340, y: 150 },
+        params: { template: "PNG 图片", decrypt: true },
+      },
+      { key: "save", descriptorId: "file_output", position: { x: 660, y: 60 }, params: { filename: "解密结果.bin" } },
+      { key: "keys", descriptorId: "text_output", position: { x: 660, y: 240 } },
+    ],
+    edges: [
+      { from: { node: "file", port: "bytes" }, to: { node: "bk", port: "archive" } },
+      { from: { node: "bk", port: "data" }, to: { node: "save", port: "data" } },
+      { from: { node: "bk", port: "keys" }, to: { node: "keys", port: "text" } },
+    ],
+  },
 ];

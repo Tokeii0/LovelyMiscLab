@@ -62,8 +62,9 @@ export function Canvas() {
   // instance the agent needs for camera-follow). Consume it once.
   useEffect(() => {
     if (!pendingPrompt) return;
+    const { pendingData } = useAgentStore.getState();
     useAgentStore.getState().clearPending();
-    void runAgent(pendingPrompt, rf);
+    void runAgent(pendingPrompt, pendingData, rf);
   }, [pendingPrompt, rf]);
 
   // Resolve a palette drop: add at the cursor if over the canvas, else (a plain

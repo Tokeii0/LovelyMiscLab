@@ -329,12 +329,39 @@ impl<'a> GraphExecutor<'a> {
         sink: &dyn ProgressSink,
         cancel: &CancellationToken,
     ) -> Result<PortMap, CoreError> {
+        let node_id = format!("standalone:{descriptor_id}");
+        Self::run_node_with_env_id(
+            registry,
+            descriptor_id,
+            &node_id,
+            inputs,
+            params,
+            env,
+            sink,
+            cancel,
+        )
+    }
+
+    /// Standalone single-node run that stamps progress with an explicit `node_id`.
+    /// The caller passes the canvas node id so streamed `NodeProgress`/`Log` events
+    /// attribute to the right node on the frontend (single-node live progress).
+    #[allow(clippy::too_many_arguments)]
+    pub fn run_node_with_env_id(
+        registry: &NodeRegistry,
+        descriptor_id: &str,
+        node_id: &str,
+        inputs: &PortMap,
+        params: &Value,
+        env: &crate::node::NodeEnv,
+        sink: &dyn ProgressSink,
+        cancel: &CancellationToken,
+    ) -> Result<PortMap, CoreError> {
         let node = registry
             .create(descriptor_id)
             .ok_or_else(|| CoreError::NodeNotFound(descriptor_id.to_string()))?;
         let inputs = coerce_inputs(registry, descriptor_id, inputs.clone());
         let mut ctx = NodeCtx {
-            node_id: format!("standalone:{descriptor_id}"),
+            node_id: node_id.to_string(),
             sink,
             cancel,
             env,

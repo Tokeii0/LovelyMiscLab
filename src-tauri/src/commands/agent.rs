@@ -27,9 +27,9 @@ use crate::error::AppError;
 use crate::state::AppState;
 
 /// Primary ceiling: stop once the running transcript approaches the model's
-/// context window. Modern models comfortably handle ~100k tokens, so let the
-/// agent build as large as that allows. Tracked from each response's `usage`.
-const MAX_CONTEXT_TOKENS: u64 = 100_000;
+/// context window. Modern models handle ~1M-token contexts, so let the agent
+/// build as large as that allows. Tracked from each response's `usage`.
+const MAX_CONTEXT_TOKENS: u64 = 1_000_000;
 /// Runaway backstop on LLM turns (each turn may emit many tool calls) — the
 /// effective bound only when the provider returns no token usage. Actual work is
 /// bounded by NODES_MAX / RUN_BUDGET and the token budget above.
@@ -186,7 +186,7 @@ fn system_prompt(catalog: &str) -> String {
 【硬性规则】\n\
 4. 只能使用上面出现过的节点 id。\n\
 5. 连线类型要匹配(text↔text, bytes↔bytes；any 通配)。\n\
-6. 任务若从一段文本开始，用 text_input 作源并把文本填进它的 text 参数(add_node 的 params 或 set_param)；需要展示最终结果时末尾接 text_output。\n\
+6. 任务若从一段文本开始，用 text_input 作源并把文本填进它的 text 参数(add_node 的 params 或 set_param)；但**若用户说明待处理数据已由程序单独填入**，则 text_input 的 text 留空、绝不要重复那段数据。需要展示最终结果时末尾接 text_output。\n\
 7. select 参数只能取候选值之一；参数也能被连线驱动(connect 到目标节点的“参数名”)。\n\
 8. 只通过工具调用行动，不要输出散文解释。搭建完成后调用 finish。"
     )

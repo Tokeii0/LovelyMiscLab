@@ -36,6 +36,7 @@ export function AiGenerateDialog() {
   const lastError = useRunStore((s) => s.lastError);
   const [mode, setMode] = useState<Mode>("generate");
   const [prompt, setPrompt] = useState("");
+  const [data, setData] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [answer, setAnswer] = useState("");
@@ -100,11 +101,13 @@ export function AiGenerateDialog() {
       // generate → hand off to the live agent; the user watches it build the
       // graph node-by-node on the canvas (AgentPanel narrates each step).
       const task = prompt.trim();
+      const blob = data.trim();
       setPrompt("");
+      setData("");
       setAnswer("");
       setOpen(false);
       setView("canvas");
-      useAgentStore.getState().launch(task);
+      useAgentStore.getState().launch(task, blob || undefined);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -185,6 +188,18 @@ export function AiGenerateDialog() {
               if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void run();
             }}
           />
+          {mode === "generate" && (
+            <textarea
+              value={data}
+              onChange={(e) => setData(e.target.value)}
+              rows={3}
+              placeholder="待处理数据（可选）—— 很长的密文/字节等粘这里；程序会直接填入源节点，AI 只看开头预览，避免抄写出错或截断"
+              className="mt-2 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+              onKeyDown={(e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void run();
+              }}
+            />
+          )}
           {mode === "generate" && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {EXAMPLES.map((ex) => (

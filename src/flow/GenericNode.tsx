@@ -2,6 +2,7 @@ import { memo, useState } from "react";
 import { Handle, NodeToolbar, Position, type NodeProps } from "@xyflow/react";
 import { Ban, Check, Copy, Eye, Play, Sparkles, Trash2, X } from "lucide-react";
 
+import { ProgressBar } from "@/components/ui/progress";
 import type { PortValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useDescriptorStore } from "@/store/descriptors";
@@ -107,6 +108,12 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
   }
 
   const Icon = nodeIcon(descriptor.id, descriptor.category);
+  // Latest log line, shown under the progress bar as the current stage.
+  const runningStatus = data.logs?.[data.logs.length - 1]?.message;
+  // Dedicated viewer nodes get a richer on-node preview: a larger image / a
+  // multi-line scrollable text block instead of the default one-line preview.
+  const isImageView = descriptor.id === "image_view";
+  const isTextView = descriptor.id === "text_view";
   const outputs = data.outputs;
   // Preview the first *declared* output that has a value. Node outputs arrive as
   // an unordered map (Rust HashMap → JSON), so iterating by key order would pick
@@ -242,11 +249,8 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
         </div>
 
         {data.status === "running" && (
-          <div className="h-0.5 w-full bg-secondary">
-            <div
-              className="h-full bg-primary transition-all"
-              style={{ width: `${Math.round((data.progress ?? 0) * 100)}%` }}
-            />
+          <div className="border-b border-border px-2 py-1.5">
+            <ProgressBar value={data.progress ?? 0} status={runningStatus} />
           </div>
         )}
 
@@ -331,8 +335,17 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
                       data.label?.trim() || descriptor.displayName
                     );
                 }}
-                className="nodrag max-h-32 w-full cursor-zoom-in rounded object-contain"
+                className={cn(
+                  "nodrag w-full cursor-zoom-in rounded object-contain",
+                  isImageView ? "max-h-72" : "max-h-32"
+                )}
               />
+            </div>
+          ) : isTextView ? (
+            <div className="border-t border-border bg-secondary/40 p-1">
+              <pre className="nodrag nowheel max-h-44 overflow-auto whitespace-pre-wrap break-all rounded bg-background/60 px-2 py-1 font-mono text-[10px] leading-snug">
+                {shortText(firstOut[1]).slice(0, 4000) || "（空）"}
+              </pre>
             </div>
           ) : (
             <div

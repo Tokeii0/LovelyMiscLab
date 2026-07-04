@@ -26,7 +26,11 @@ function placeDuringBuild(n: number): { x: number; y: number } {
  * tool calls), the camera follows, and every step shows the agent's one-line
  * 巧思. Clears the canvas first — this is a fresh build.
  */
-export async function runAgent(prompt: string, rf: ReactFlowInstance): Promise<void> {
+export async function runAgent(
+  task: string,
+  data: string | null,
+  rf: ReactFlowInstance
+): Promise<void> {
   const byId = useDescriptorStore.getState().byId;
   const idMap: Record<string, string> = {};
   const placedKeys = new Set<string>();
@@ -35,6 +39,19 @@ export async function runAgent(prompt: string, rf: ReactFlowInstance): Promise<v
   let placed = 0;
   let streamEnded = false;
   let completed = false;
+  let dataInjected = false;
+
+  // When the user supplies a long input separately, the app fills it into the
+  // source node itself — the model only gets a short preview (to pick the first
+  // decode step) and is told NOT to echo the full blob (which would blow the
+  // output-token limit and truncate the JSON).
+  const prompt =
+    data && data.trim()
+      ? `${task.trim()}\n\n【待处理数据】用户已单独提供一段待处理数据（共 ${data.length} 字），` +
+        `程序会自动把它填入源节点 text_input 的 text 参数。你搭图时：把 text_input 的 text 留空，` +
+        `**绝不要**在输出里重复这段完整数据（否则会超长截断）。开头预览（仅供你判断编码类型，勿照抄）：\n` +
+        `${data.slice(0, 200)}${data.length > 200 ? " …（后略）" : ""}`
+      : task;
 
   useGraphStore.getState().clear();
   // Collapse the whole build into one undo entry (the pre-build snapshot).
@@ -93,6 +110,13 @@ export async function runAgent(prompt: string, rf: ReactFlowInstance): Promise<v
           for (const [k, v] of Object.entries(ev.params as Record<string, unknown>)) {
             gg.setParam(realId, k, v);
           }
+        }
+        // Inject the user's long input into the first text source, overriding
+        // whatever (empty/placeholder) text the model produced.
+        if (data && !dataInjected && d.inputs.length === 0 && d.params.some((p) => p.name === "text")) {
+          gg.setParam(realId, "text", data);
+          dataInjected = true;
+          a.pushStep({ kind: "param", text: `⚙ 已填入数据 → ${d.displayName}`, detail: `${data.length} 字` });
         }
         gg.setSelected(realId);
         follow(pos);

@@ -129,6 +129,7 @@ export const api = {
   listNodeDescriptors: () =>
     invoke<NodeDescriptor[]>("list_node_descriptors"),
 
+  /** Run a single node silently (no progress stream). */
   runNode: (
     descriptorId: string,
     inputs: Record<string, PortValue>,
@@ -139,6 +140,26 @@ export const api = {
       inputs,
       params,
     }),
+
+  /** Run a single node while streaming live progress/logs (stamped with `nodeId`);
+   * the run is cancellable via `cancelJob`. Resolves with the node's outputs. */
+  runNodeStreamed: (
+    descriptorId: string,
+    nodeId: string,
+    inputs: Record<string, PortValue>,
+    params: unknown,
+    onEvent: (m: ProgressMsg) => void
+  ) => {
+    const channel = new Channel<ProgressMsg>();
+    channel.onmessage = onEvent;
+    return invoke<Record<string, PortValue>>("run_node_streamed", {
+      descriptorId,
+      nodeId,
+      inputs,
+      params,
+      onEvent: channel,
+    });
+  },
 
   /** Run a graph, streaming per-node progress; resolves with all node outputs. */
   runGraph: (graph: SerializedGraph, onEvent: (m: ProgressMsg) => void) => {
