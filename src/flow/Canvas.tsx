@@ -9,17 +9,23 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 
-import type { NodeDescriptor, PortType } from "@/lib/types";
-import { useDescriptorStore } from "@/store/descriptors";
+import type { NodeDescriptor } from "@/lib/types";
+import { AgentPanel } from "@/app/AgentPanel";
+import { useAgentStore } from "@/store/agent";
 import { useGraphStore } from "@/store/graph";
 import { usePaletteDrag } from "@/store/paletteDrag";
+import { usePortSuggest } from "@/store/portSuggest";
 import { useThemeStore } from "@/store/theme";
 
+import { runAgent } from "./agentRunner";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
+import { viewportAspect } from "./layout";
 import { GenericNode } from "./GenericNode";
 import { LabeledEdge } from "./LabeledEdge";
 import { NodeSearchMenu } from "./NodeSearchMenu";
-import { canConnect, paramPortType } from "./portColors";
+import { canConnect } from "./portColors";
+import { PortSuggest } from "./PortSuggest";
+import { resolvePortType } from "./portUtils";
 import { executeGraph } from "./runner";
 import { SelectorNode } from "./SelectorNode";
 
@@ -47,8 +53,18 @@ export function Canvas() {
   const setDrop = usePaletteDrag((s) => s.setDrop);
   const theme = useThemeStore((s) => s.theme);
   const rf = useReactFlow();
+  const suggestCtx = usePortSuggest((s) => s.ctx);
+  const pendingPrompt = useAgentStore((s) => s.pendingPrompt);
   const [menu, setMenu] = useState<Menu | null>(null);
   const [search, setSearch] = useState<Search | null>(null);
+
+  // The AI dialog hands the agent prompt off here (Canvas owns the ReactFlow
+  // instance the agent needs for camera-follow). Consume it once.
+  useEffect(() => {
+    if (!pendingPrompt) return;
+    useAgentStore.getState().clearPending();
+    void runAgent(pendingPrompt, rf);
+  }, [pendingPrompt, rf]);
 
   // Resolve a palette drop: add at the cursor if over the canvas, else (a plain
   // click) add near the canvas center.
@@ -70,25 +86,6 @@ export function Canvas() {
     });
   }, [setDrop, addNode, rf]);
 
-  const portType = useCallback(
-    (nodeId: string, port: string, dir: "in" | "out"): PortType | undefined => {
-      const n = useGraphStore.getState().nodes.find((x) => x.id === nodeId);
-      if (!n) return undefined;
-      const d = useDescriptorStore.getState().byId[n.data.descriptorId];
-      if (!d) return undefined;
-      const list = dir === "in" ? d.inputs : d.outputs;
-      const found = list.find((p) => p.name === port)?.type;
-      if (found) return found;
-      // A promoted parameter accepts a connection of its widget-derived type.
-      if (dir === "in") {
-        const param = d.params.find((p) => p.name === port);
-        if (param) return paramPortType(param.widget);
-      }
-      return undefined;
-    },
-    []
-  );
-
   const isValidConnection = useCallback(
     (c: {
       source?: string | null;
@@ -98,12 +95,12 @@ export function Canvas() {
     }) => {
       if (!c.source || !c.target || !c.sourceHandle || !c.targetHandle) return false;
       if (c.source === c.target) return false;
-      const s = portType(c.source, c.sourceHandle, "out");
-      const t = portType(c.target, c.targetHandle, "in");
+      const s = resolvePortType(c.source, c.sourceHandle, "out");
+      const t = resolvePortType(c.target, c.targetHandle, "in");
       if (!s || !t) return false;
       return canConnect(s, t);
     },
-    [portType]
+    []
   );
 
   const closeMenu = useCallback(() => setMenu(null), []);
@@ -142,6 +139,14 @@ export function Canvas() {
     return [
       { label: "添加节点…", onClick: () => flow && setSearch({ x, y, flow }) },
       { label: "运行整图", onClick: () => void executeGraph() },
+      {
+        label: "整理节点",
+        onClick: () => {
+          g.arrangeNodes(viewportAspect());
+          // Let React Flow apply the new positions before fitView measures them.
+          requestAnimationFrame(() => rf.fitView({ duration: 250, padding: 0.15 }));
+        },
+      },
       { label: "适应视图", onClick: () => rf.fitView({ duration: 200 }) },
       { label: "全选节点", onClick: () => g.selectAll() },
       { label: "清空画布", danger: true, onClick: () => g.clear() },
@@ -217,6 +222,8 @@ export function Canvas() {
           onClose={() => setSearch(null)}
         />
       )}
+      {suggestCtx && <PortSuggest />}
+      <AgentPanel />
     </div>
   );
 }

@@ -106,6 +106,8 @@ pub fn run() {
             commands::project::save_project,
             commands::project::load_project,
             commands::ai_workflow::explain_workflow,
+            commands::ai_workflow::suggest_next_nodes,
+            commands::agent::agent_run,
             commands::update::check_update,
             commands::update::install_update,
             #[cfg(feature = "mcp")]

@@ -83,6 +83,33 @@ export interface AiTextResult {
   text: string;
 }
 
+export interface SuggestCtx {
+  descriptorId: string;
+  port: string;
+  direction: "in" | "out";
+  /** Serialized PortType, e.g. "text". */
+  portType: string;
+  hint?: string;
+}
+export interface Suggestion {
+  descriptorId: string;
+  reason: string;
+}
+
+/** Streamed step of the AI agent building a workflow. Nodes are referenced by
+ * the agent's own `key`; the frontend maps those to real store ids. */
+export type AgentEvent =
+  | { kind: "started"; job: string; stepsMax: number }
+  | { kind: "thinking"; text: string }
+  | { kind: "addNode"; key: string; descriptorId: string; params: unknown }
+  | { kind: "connect"; fromKey: string; fromPort: string; toKey: string; toPort: string }
+  | { kind: "setParam"; key: string; name: string; value: unknown }
+  | { kind: "runStart"; keys: string[] }
+  | { kind: "nodeResult"; key: string; ok: boolean; summary: string }
+  | { kind: "toolError"; tool: string; message: string }
+  | { kind: "done"; notes: string; stepsUsed: number }
+  | { kind: "error"; message: string };
+
 export const api = {
   ping: (name: string) => invoke<string>("ping", { name }),
   appInfo: () => invoke<AppInfo>("app_info"),
@@ -126,6 +153,15 @@ export const api = {
     invoke<GeneratedGraph>("generate_workflow", { prompt }),
   explainWorkflow: (graph: SerializedGraph, prompt: string) =>
     invoke<AiTextResult>("explain_workflow", { graph, prompt }),
+  /** Suggest compatible next/previous nodes for a hovered port. */
+  suggestNextNodes: (ctx: SuggestCtx) =>
+    invoke<Suggestion[]>("suggest_next_nodes", { ctx }),
+  /** Build a workflow step-by-step, streaming each action to the canvas. */
+  agentRun: (prompt: string, onEvent: (m: AgentEvent) => void) => {
+    const channel = new Channel<AgentEvent>();
+    channel.onmessage = onEvent;
+    return invoke<void>("agent_run", { prompt, onEvent: channel });
+  },
 
   // User-defined composite (sub-graph) modules.
   listCompositeModules: () => invoke<CompositeModule[]>("list_composite_modules"),

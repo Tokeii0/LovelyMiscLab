@@ -19,37 +19,37 @@ use crate::state::AppState;
 // ---- output (matches the frontend Template node/edge shape) ----------------
 
 #[derive(Serialize)]
-struct Pos {
-    x: f64,
-    y: f64,
+pub(crate) struct Pos {
+    pub(crate) x: f64,
+    pub(crate) y: f64,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct GenNode {
-    key: String,
-    descriptor_id: String,
-    params: serde_json::Value,
-    position: Pos,
+pub(crate) struct GenNode {
+    pub(crate) key: String,
+    pub(crate) descriptor_id: String,
+    pub(crate) params: serde_json::Value,
+    pub(crate) position: Pos,
 }
 
 #[derive(Serialize)]
-struct GenRef {
-    node: String,
-    port: String,
+pub(crate) struct GenRef {
+    pub(crate) node: String,
+    pub(crate) port: String,
 }
 
 #[derive(Serialize)]
-struct GenEdge {
-    from: GenRef,
-    to: GenRef,
+pub(crate) struct GenEdge {
+    pub(crate) from: GenRef,
+    pub(crate) to: GenRef,
 }
 
 #[derive(Serialize)]
 pub struct GeneratedGraph {
-    nodes: Vec<GenNode>,
-    edges: Vec<GenEdge>,
-    notes: String,
+    pub(crate) nodes: Vec<GenNode>,
+    pub(crate) edges: Vec<GenEdge>,
+    pub(crate) notes: String,
 }
 
 #[derive(Serialize)]
@@ -86,7 +86,7 @@ struct LlmGraph {
 
 // ---- catalog ---------------------------------------------------------------
 
-fn pt_str(t: PortType) -> &'static str {
+pub(crate) fn pt_str(t: PortType) -> &'static str {
     match t {
         PortType::Any => "any",
         PortType::Text => "text",
@@ -124,24 +124,34 @@ fn ports_str(ports: &[PortSpec]) -> String {
         .join(",")
 }
 
-fn build_catalog(ds: &[NodeDescriptor]) -> String {
-    let mut out = String::new();
-    for d in ds {
-        let params = if d.params.is_empty() {
-            "-".to_string()
-        } else {
-            d.params.iter().map(param_str).collect::<Vec<_>>().join(", ")
-        };
-        out.push_str(&format!(
-            "{} | {} | in:{} | out:{} | params:{}\n",
-            d.id,
-            d.display_name,
-            ports_str(&d.inputs),
-            ports_str(&d.outputs),
-            params
-        ));
-    }
-    out
+fn catalog_line(d: &NodeDescriptor) -> String {
+    let params = if d.params.is_empty() {
+        "-".to_string()
+    } else {
+        d.params.iter().map(param_str).collect::<Vec<_>>().join(", ")
+    };
+    format!(
+        "{} | {} | in:{} | out:{} | params:{}\n",
+        d.id,
+        d.display_name,
+        ports_str(&d.inputs),
+        ports_str(&d.outputs),
+        params
+    )
+}
+
+pub(crate) fn build_catalog(ds: &[NodeDescriptor]) -> String {
+    ds.iter().map(catalog_line).collect()
+}
+
+/// Catalog text for only the descriptors whose id is in `only` (used by the
+/// port-suggestion command to keep the prompt small and on-topic).
+pub(crate) fn build_catalog_filtered(ds: &[NodeDescriptor], only: &[&str]) -> String {
+    let set: std::collections::HashSet<&str> = only.iter().copied().collect();
+    ds.iter()
+        .filter(|d| set.contains(d.id.as_str()))
+        .map(catalog_line)
+        .collect()
 }
 
 fn extract_json(s: &str) -> Option<&str> {
@@ -150,7 +160,7 @@ fn extract_json(s: &str) -> Option<&str> {
     (end > start).then(|| &s[start..=end])
 }
 
-fn truncate(s: &str, n: usize) -> String {
+pub(crate) fn truncate(s: &str, n: usize) -> String {
     if s.chars().count() <= n {
         s.to_string()
     } else {
@@ -367,4 +377,115 @@ pub async fn explain_workflow(
     })
     .await
     .map_err(|e| AppError::new("join", e.to_string()))?
+}
+
+// ---- port-hover next-node suggestions ---------------------------------------
+
+/// The port type a param exposes when driven by a connection — mirrors the
+/// frontend `paramPortType`.
+pub(crate) fn param_port_type(w: &ParamWidget) -> PortType {
+    match w {
+        ParamWidget::Number { .. } | ParamWidget::Slider { .. } => PortType::Number,
+        ParamWidget::Toggle => PortType::Bool,
+        ParamWidget::Image => PortType::Image,
+        _ => PortType::Text, // text / select / file
+    }
+}
+
+/// Is `d` a sensible neighbour for a port of type `pt`? `dir_out` = the hovered
+/// port is an output (we want a downstream consumer); otherwise it's an input
+/// (we want an upstream producer).
+fn port_compatible(d: &NodeDescriptor, pt: PortType, dir_out: bool) -> bool {
+    if dir_out {
+        d.inputs.iter().any(|i| i.port_type.accepts(pt))
+            || d.params.iter().any(|p| param_port_type(&p.widget).accepts(pt))
+    } else {
+        d.outputs.iter().any(|o| pt.accepts(o.port_type))
+    }
+}
+
+fn extract_json_array(s: &str) -> Option<&str> {
+    let start = s.find('[')?;
+    let end = s.rfind(']')?;
+    (end > start).then(|| &s[start..=end])
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestCtx {
+    descriptor_id: String,
+    port: String,
+    /// "in" or "out".
+    direction: String,
+    /// Serialized `PortType`, e.g. "text".
+    port_type: String,
+    #[serde(default)]
+    hint: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Suggestion {
+    descriptor_id: String,
+    #[serde(default)]
+    reason: String,
+}
+
+fn suggest(registry: &NodeRegistry, cfg: &ModelConfig, ctx: &SuggestCtx) -> Result<Vec<Suggestion>, AppError> {
+    let pt: PortType = serde_json::from_value(serde_json::Value::String(ctx.port_type.clone()))
+        .unwrap_or(PortType::Any);
+    let dir_out = ctx.direction != "in";
+    let descriptors = registry.descriptors();
+    let compatible_ids: Vec<&str> = descriptors
+        .iter()
+        .filter(|d| port_compatible(d, pt, dir_out))
+        .map(|d| d.id.as_str())
+        .collect();
+    if compatible_ids.is_empty() {
+        return Ok(vec![]);
+    }
+    let catalog = build_catalog_filtered(&descriptors, &compatible_ids);
+    let dir_desc = if dir_out { "下游（消费该输出）" } else { "上游（产生该输入）" };
+    let system = format!(
+        "你是 LovelyMiscLab 的节点推荐助手。用户想在某节点的一个端口上接一个{dir_desc}节点。\n\n\
+【候选节点】格式: id | 名称 | 输入 | 输出 | 参数\n{catalog}\n\
+【要求】\n\
+1. 只能从上面候选里选，按适用度从高到低排序，返回 3-6 个。\n\
+2. 每个给一句极简中文理由（≤12字）。\n\
+3. 只输出 JSON 数组：[{{\"descriptorId\":\"...\",\"reason\":\"...\"}}]，禁止任何其他文字或 markdown。"
+    );
+    let user = match ctx.hint.as_deref().map(str::trim) {
+        Some(h) if !h.is_empty() => format!(
+            "当前节点 {} 的端口「{}」(类型 {})。用户想做: {}",
+            ctx.descriptor_id, ctx.port, ctx.port_type, h
+        ),
+        _ => format!(
+            "当前节点 {} 的端口「{}」(类型 {})。给出最常见有用的下一步。",
+            ctx.descriptor_id, ctx.port, ctx.port_type
+        ),
+    };
+    let raw = ai::chat(cfg, &system, &user)?;
+    let json = extract_json_array(&raw).unwrap_or(raw.as_str());
+    let parsed: Vec<Suggestion> = serde_json::from_str(json).unwrap_or_default();
+    // Drop any id the model invented that isn't in the compatible set.
+    let allow: std::collections::HashSet<&str> = compatible_ids.into_iter().collect();
+    Ok(parsed
+        .into_iter()
+        .filter(|s| allow.contains(s.descriptor_id.as_str()))
+        .collect())
+}
+
+/// Suggest compatible next/previous nodes for a hovered port. Returns `Err` when
+/// the LLM isn't configured — the frontend then just keeps its static candidate
+/// list.
+#[tauri::command]
+pub async fn suggest_next_nodes(
+    state: State<'_, AppState>,
+    ctx: SuggestCtx,
+) -> Result<Vec<Suggestion>, AppError> {
+    let cfg = state.settings.lock().expect("settings mutex").ai.llm.clone();
+    let registry = state.registry.clone();
+    tauri::async_runtime::spawn_blocking(move || suggest(&registry, &cfg, &ctx))
+        .await
+        .map_err(|e| AppError::new("join", e.to_string()))?
 }

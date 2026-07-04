@@ -1,6 +1,6 @@
 import { memo, useState } from "react";
 import { Handle, NodeToolbar, Position, type NodeProps } from "@xyflow/react";
-import { Ban, Check, Copy, Eye, Play, Trash2, X } from "lucide-react";
+import { Ban, Check, Copy, Eye, Play, Sparkles, Trash2, X } from "lucide-react";
 
 import type { PortValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,7 @@ import { useDescriptorStore } from "@/store/descriptors";
 import { useGraphStore, type FlowNodeData } from "@/store/graph";
 import { useImageViewer } from "@/store/imageViewer";
 import { useInspectorStore } from "@/store/inspector";
+import { usePortSuggest } from "@/store/portSuggest";
 
 import { nodeIcon } from "./nodeIcons";
 import { paramPortType, portColor } from "./portColors";
@@ -48,6 +49,33 @@ function shortText(v: PortValue): string {
     default:
       return "";
   }
+}
+
+/** Hover-revealed ✨ button on a port row → opens the AI next-node suggester.
+ * Absolutely positioned in the row's empty inner gutter so it never overlaps the
+ * connection Handle or shifts layout; `nodrag` keeps it from starting a drag. */
+function PortSparkle({
+  side,
+  onClick,
+}: {
+  side: "left" | "right";
+  onClick: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <button
+      type="button"
+      title="AI 推荐下一个节点"
+      onClick={onClick}
+      className={cn(
+        "nodrag absolute top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded",
+        "bg-card text-primary opacity-0 shadow-sm ring-1 ring-primary/30 transition-opacity",
+        "hover:bg-primary/10 group-hover/port:opacity-100",
+        side === "left" ? "left-1" : "right-1"
+      )}
+    >
+      <Sparkles className="h-2.5 w-2.5" />
+    </button>
+  );
 }
 
 function StatusIcon({ status }: { status: FlowNodeData["status"] }) {
@@ -99,6 +127,17 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
 
   const action =
     "flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground";
+
+  const openSuggest = (e: React.MouseEvent, port: string, dir: "in" | "out") => {
+    e.stopPropagation();
+    usePortSuggest.getState().open({
+      nodeId: id,
+      descriptorId: descriptor.id,
+      port,
+      dir,
+      anchor: { x: e.clientX, y: e.clientY },
+    });
+  };
 
   return (
     <>
@@ -213,7 +252,10 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
 
         <div className="flex flex-col gap-1 p-2">
           {descriptor.inputs.map((p) => (
-            <div key={`in-${p.name}`} className="flex items-center gap-1.5 text-[11px]">
+            <div
+              key={`in-${p.name}`}
+              className="group/port relative flex items-center gap-1.5 text-[11px]"
+            >
               <Handle
                 type="target"
                 position={Position.Left}
@@ -221,6 +263,7 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
                 style={handleStyle(portColor(p.type))}
               />
               <span className="text-muted-foreground">{p.label}</span>
+              <PortSparkle side="right" onClick={(e) => openSuggest(e, p.name, "in")} />
             </div>
           ))}
           {(data.inputParams ?? []).map((name) => {
@@ -241,8 +284,9 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
           {descriptor.outputs.map((p) => (
             <div
               key={`out-${p.name}`}
-              className="flex items-center justify-end gap-1.5 text-[11px]"
+              className="group/port relative flex items-center justify-end gap-1.5 text-[11px]"
             >
+              <PortSparkle side="left" onClick={(e) => openSuggest(e, p.name, "out")} />
               <span className="text-muted-foreground">{p.label}</span>
               <Handle
                 type="source"

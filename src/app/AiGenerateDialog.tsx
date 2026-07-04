@@ -8,6 +8,7 @@ import type { Template } from "@/lib/templates";
 import { cn } from "@/lib/utils";
 import { loadTemplate } from "@/flow/loadTemplate";
 import { buildGraph } from "@/flow/runner";
+import { useAgentStore } from "@/store/agent";
 import { useAiStore } from "@/store/ai";
 import { useRunStore } from "@/store/run";
 import { useViewStore } from "@/store/view";
@@ -23,7 +24,7 @@ const EXAMPLES = [
 ];
 
 const MODES: { mode: Mode; label: string; icon: typeof Sparkles; hint: string }[] = [
-  { mode: "generate", label: "生成", icon: Sparkles, hint: "从一句话创建节点图" },
+  { mode: "generate", label: "生成", icon: Sparkles, hint: "AI 逐步在画布上搭建" },
   { mode: "explain", label: "解释", icon: Bot, hint: "解释当前画布的数据流" },
   { mode: "repair", label: "修复", icon: RefreshCw, hint: "根据当前图和错误重建流程" },
 ];
@@ -96,7 +97,14 @@ export function AiGenerateDialog() {
         loadGenerated(await api.generateWorkflow(repairPrompt));
         return;
       }
-      loadGenerated(await api.generateWorkflow(prompt.trim()));
+      // generate → hand off to the live agent; the user watches it build the
+      // graph node-by-node on the canvas (AgentPanel narrates each step).
+      const task = prompt.trim();
+      setPrompt("");
+      setAnswer("");
+      setOpen(false);
+      setView("canvas");
+      useAgentStore.getState().launch(task);
     } catch (e) {
       setError(String(e));
     } finally {

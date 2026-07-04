@@ -13,6 +13,8 @@ import { create } from "zustand";
 import type { NodeDescriptor, PortValue } from "@/lib/types";
 import type { SavedEdge, SavedNode } from "@/lib/project";
 
+import { packedLayout } from "@/flow/layout";
+
 export type NodeStatus = "idle" | "running" | "done" | "error";
 
 export interface NodeLog {
@@ -102,6 +104,19 @@ function pushPast(past: GraphSnapshot[], snap: GraphSnapshot): GraphSnapshot[] {
   return [...past, snap].slice(-MAX_HISTORY);
 }
 
+/** History patch for a mutating action: a fresh past entry (clearing redo),
+ * unless recording is suppressed (agent batch) — then `{}` keeps undo collapsed
+ * to the single pre-build snapshot. */
+function histFields(state: {
+  suppressHistory: boolean;
+  past: GraphSnapshot[];
+  nodes: FlowNode[];
+  edges: Edge[];
+}): { past?: GraphSnapshot[]; future?: GraphSnapshot[] } {
+  if (state.suppressHistory) return {};
+  return { past: pushPast(state.past, snapshot(state.nodes, state.edges)), future: [] };
+}
+
 function shouldRecordNodeChanges(changes: NodeChange<FlowNode>[]) {
   return changes.some((c) => c.type !== "select" && c.type !== "dimensions");
 }
@@ -117,6 +132,9 @@ interface GraphState {
   past: GraphSnapshot[];
   future: GraphSnapshot[];
   runRevision: number;
+  /** When true, mutations skip history recording — used to collapse an agent's
+   * many-step build into a single undo entry (the pre-build snapshot). */
+  suppressHistory: boolean;
 
   onNodesChange: (changes: NodeChange<FlowNode>[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
@@ -131,6 +149,10 @@ interface GraphState {
   deleteNode: (id: string) => void;
   deleteEdge: (id: string) => void;
   duplicateNode: (id: string) => void;
+  /** Pack all nodes to fit the current view (vertical-first, wrap horizontally).
+   * `aspect` = viewport width/height, so the block matches the screen. */
+  arrangeNodes: (aspect: number) => void;
+  setSuppressHistory: (v: boolean) => void;
   selectAll: () => void;
   setDisabled: (id: string, disabled: boolean) => void;
   appendLog: (id: string, log: NodeLog) => void;
@@ -152,6 +174,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   past: [],
   future: [],
   runRevision: 0,
+  suppressHistory: false,
 
   onNodesChange: (changes) =>
     set((state) => {
@@ -177,8 +200,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   onConnect: (conn) =>
     set((state) => ({
       edges: addEdge(conn, state.edges),
-      past: pushPast(state.past, snapshot(state.nodes, state.edges)),
-      future: [],
+      ...histFields(state),
       runRevision: state.runRevision + 1,
     })),
 
@@ -204,8 +226,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     set((state) => ({
       nodes: [...state.nodes, node],
       selectedId: node.id,
-      past: pushPast(state.past, snapshot(state.nodes, state.edges)),
-      future: [],
+      ...histFields(state),
       runRevision: state.runRevision + 1,
     }));
     return node.id;
@@ -221,8 +242,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
             }
           : n
       ),
-      past: pushPast(state.past, snapshot(state.nodes, state.edges)),
-      future: [],
+      ...histFields(state),
       runRevision: state.runRevision + 1,
     })),
 
@@ -307,6 +327,20 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     }));
   },
 
+  arrangeNodes: (aspect) =>
+    set((state) => {
+      if (state.nodes.length === 0) return {};
+      const pos = packedLayout(state.nodes, state.edges, aspect);
+      return {
+        nodes: state.nodes.map((n) =>
+          pos[n.id] ? { ...n, position: pos[n.id] } : n
+        ),
+        ...histFields(state),
+      };
+    }),
+
+  setSuppressHistory: (v) => set({ suppressHistory: v }),
+
   selectAll: () => set({ nodes: get().nodes.map((n) => ({ ...n, selected: true })) }),
 
   setDisabled: (id, disabled) =>
@@ -349,8 +383,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       edges: removing
         ? state.edges.filter((e) => !(e.target === nodeId && e.targetHandle === name))
         : state.edges,
-      past: pushPast(state.past, snapshot(state.nodes, state.edges)),
-      future: [],
+      ...histFields(state),
       runRevision: state.runRevision + 1,
     }));
   },
