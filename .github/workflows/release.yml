@@ -53,8 +53,9 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # Pinned to match CI's clippy-gate toolchain, for reproducible builds.
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.93.0
         with:
           targets: ${{ matrix.rust_targets }}
 
