@@ -45,6 +45,8 @@ jobs:
       # the `-D warnings` gate below. Bump deliberately after a local clippy pass.
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.93.0
+        with:
+          components: clippy
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
