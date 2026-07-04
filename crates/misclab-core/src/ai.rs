@@ -114,6 +114,16 @@ pub enum AssistantTurn {
     Content(String),
 }
 
+/// Token accounting from a response's `usage` field (0 when the provider omits
+/// it). `total_tokens` ≈ the running transcript size, so the agent loop can stop
+/// before it outgrows the model's context window.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Usage {
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+    pub total_tokens: u64,
+}
+
 fn parse_tool_call(tc: &serde_json::Value) -> Option<ToolCall> {
     let name = tc["function"]["name"].as_str()?.to_string();
     let id = tc["id"].as_str().unwrap_or_default().to_string();
@@ -134,7 +144,7 @@ pub fn chat_step(
     cfg: &ModelConfig,
     messages: &[serde_json::Value],
     tools: &[ToolDef],
-) -> Result<AssistantTurn, CoreError> {
+) -> Result<(AssistantTurn, Usage), CoreError> {
     if !cfg.is_configured() {
         return Err(CoreError::Other("AI 文本模型未配置（请在设置中填写）".into()));
     }
@@ -168,19 +178,28 @@ pub fn chat_step(
     let json: serde_json::Value = resp
         .into_json()
         .map_err(|e| CoreError::Other(format!("AI 响应解析失败: {e}")))?;
+    let usage = Usage {
+        prompt_tokens: json["usage"]["prompt_tokens"].as_u64().unwrap_or(0),
+        completion_tokens: json["usage"]["completion_tokens"].as_u64().unwrap_or(0),
+        total_tokens: json["usage"]["total_tokens"].as_u64().unwrap_or(0),
+    };
     let msg = &json["choices"][0]["message"];
     if let Some(tcs) = msg.get("tool_calls").and_then(|v| v.as_array()) {
         if !tcs.is_empty() {
             let calls: Vec<ToolCall> = tcs.iter().filter_map(parse_tool_call).collect();
             if !calls.is_empty() {
-                return Ok(AssistantTurn::ToolCalls {
-                    raw_assistant_msg: msg.clone(),
-                    calls,
-                });
+                return Ok((
+                    AssistantTurn::ToolCalls {
+                        raw_assistant_msg: msg.clone(),
+                        calls,
+                    },
+                    usage,
+                ));
             }
         }
     }
-    Ok(AssistantTurn::Content(
-        msg["content"].as_str().unwrap_or_default().to_string(),
+    Ok((
+        AssistantTurn::Content(msg["content"].as_str().unwrap_or_default().to_string()),
+        usage,
     ))
 }

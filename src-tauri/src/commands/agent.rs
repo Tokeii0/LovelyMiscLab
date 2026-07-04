@@ -26,10 +26,14 @@ use crate::commands::ai_workflow::{build_catalog, generate, param_port_type, pt_
 use crate::error::AppError;
 use crate::state::AppState;
 
-/// Max LLM turns (each turn may emit many tool calls). A generous backstop
-/// against runaway loops — real builds finish in a handful of turns; NODES_MAX
-/// and RUN_BUDGET bound the actual work.
-const STEPS_MAX: u32 = 48;
+/// Primary ceiling: stop once the running transcript approaches the model's
+/// context window. Modern models comfortably handle ~100k tokens, so let the
+/// agent build as large as that allows. Tracked from each response's `usage`.
+const MAX_CONTEXT_TOKENS: u64 = 100_000;
+/// Runaway backstop on LLM turns (each turn may emit many tool calls) — the
+/// effective bound only when the provider returns no token usage. Actual work is
+/// bounded by NODES_MAX / RUN_BUDGET and the token budget above.
+const STEPS_MAX: u32 = 64;
 const NODES_MAX: usize = 40;
 const RUN_BUDGET: u32 = 6;
 
@@ -564,7 +568,7 @@ fn run_agent(
             let _ = on_event.send(AgentEvent::Error { message: "已取消".into() });
             return;
         }
-        let turn = match ai::chat_step(cfg, &messages, &tools) {
+        let (turn, usage) = match ai::chat_step(cfg, &messages, &tools) {
             Ok(t) => t,
             Err(e) => {
                 if step == 0 {
@@ -600,6 +604,19 @@ fn run_agent(
                     }
                 }
             }
+        }
+        // Primary ceiling: stop before the transcript outgrows the context window.
+        // (total_tokens ≈ current transcript + last completion; the next turn's
+        // prompt would be larger still.)
+        if usage.total_tokens >= MAX_CONTEXT_TOKENS {
+            let _ = on_event.send(AgentEvent::Done {
+                notes: format!(
+                    "已接近上下文上限（约 {} tokens），已尽力搭建",
+                    usage.total_tokens
+                ),
+                steps_used: step + 1,
+            });
+            return;
         }
     }
     let _ = on_event.send(AgentEvent::Done {
