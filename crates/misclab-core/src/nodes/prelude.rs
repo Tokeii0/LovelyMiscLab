@@ -31,6 +31,8 @@ pub const UTIL: &str = "工具/分析";
 pub const IMG: &str = "图像处理";
 pub const AUD: &str = "音频处理";
 pub const AI: &str = "AI";
+pub const BIN: &str = "二进制分析";
+pub const VIZ: &str = "可视化分析";
 
 // Node header colors.
 pub const SLATE: &str = "#64748b";
@@ -139,6 +141,39 @@ pub fn pbool(p: &serde_json::Value, name: &str, default: bool) -> bool {
 
 pub fn pnum(p: &serde_json::Value, name: &str, default: f64) -> f64 {
     p.get(name).and_then(|v| v.as_f64()).unwrap_or(default)
+}
+
+/// Read a Number-ish input: `Number` as-is, `Text` parsed as f64, `Bool` as 0/1.
+/// `None` if the port is absent, `None`, or unparseable. Mirrors `switch_case`'s
+/// selector coercion so a number that arrived as coerced Text still works.
+pub fn in_num(inputs: &PortMap, name: &str) -> Option<f64> {
+    match inputs.get(name) {
+        Some(PortValue::Number(n)) => Some(*n),
+        Some(PortValue::Text(t)) => t.trim().parse::<f64>().ok(),
+        Some(PortValue::Bool(b)) => Some(if *b { 1.0 } else { 0.0 }),
+        _ => None,
+    }
+}
+
+/// Format an f64 as a compact string: whole numbers without a trailing `.0`.
+pub fn fmt_num(x: f64) -> String {
+    if x.fract() == 0.0 && x.abs() < 1e15 {
+        format!("{}", x as i64)
+    } else {
+        x.to_string()
+    }
+}
+
+/// True when a value carries nothing: `None`, or an empty Text/StringList/Bytes.
+/// Used by `is_empty` (presence check) and `coalesce` (skip blank branches).
+pub fn port_is_blank(v: &PortValue) -> bool {
+    match v {
+        PortValue::None => true,
+        PortValue::Text(s) => s.is_empty(),
+        PortValue::StringList(l) => l.is_empty(),
+        PortValue::Bytes(b) => b.is_empty(),
+        _ => false,
+    }
 }
 
 /// Read an input as a list of strings: StringList / Candidates (their text) /

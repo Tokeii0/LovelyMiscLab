@@ -71,6 +71,8 @@ rustfft = "6.4.1"
 imageproc = "0.27.0"
 # audio: WAV (PCM) decode/encode for the audio-stego nodes
 hound = "3.5"
+# binary / executable analysis (ELF / PE / Mach-O) — pure-Rust multi-format parser
+goblin = "0.10.7"
 
 [dev-dependencies]
 rand = "0.8"  # matches rPGP; only used by in-crate PGP fixture-generation test

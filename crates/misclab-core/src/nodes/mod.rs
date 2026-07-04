@@ -170,6 +170,45 @@ mod zip_pseudo_encrypt;
 mod zip_repair;
 mod zsteg_scan;
 
+// 控制/逻辑补全（数值 / 合流 / 列表工具 / 路由 / 注释）
+mod coalesce;
+mod is_empty;
+mod list_get;
+mod list_ops;
+mod list_reduce;
+mod math;
+mod note;
+mod number_compare;
+mod regex_router;
+mod zip_lists;
+
+// 二进制分析（ELF / PE / Mach-O）
+mod bin_common;
+mod binary_info;
+mod binary_overlay;
+mod binary_sections;
+mod binary_symbols;
+mod section_extract;
+mod strings;
+
+// 可视化分析（字节直方图 / 熵曲线 / 字节分布图）
+mod byte_viz;
+
+// 常见 CTF 小技巧
+mod base64_stego;
+mod caesar_brute;
+mod dna_encode;
+mod endian_swap;
+mod fullwidth_halfwidth;
+mod ip_convert;
+mod keyboard_shift;
+mod leetspeak;
+mod nato_phonetic;
+mod number_theory;
+mod phone_keypad;
+mod polybius;
+mod roman_numeral;
+
 use crate::node::registry::NodeRegistry;
 
 /// Register every built-in node.
@@ -273,6 +312,17 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     filter_list::register(reg);
     join_list::register(reg);
     iterate::register(reg);
+    // control / logic — Phase 1 additions
+    number_compare::register(reg);
+    math::register(reg);
+    coalesce::register(reg);
+    is_empty::register(reg);
+    regex_router::register(reg);
+    list_ops::register(reg);
+    list_get::register(reg);
+    list_reduce::register(reg);
+    zip_lists::register(reg);
+    note::register(reg);
     // CyberChef parity — text / classical cipher / format / util
     change_case::register(reg);
     remove_whitespace::register(reg);
@@ -339,6 +389,29 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     zip_pseudo_encrypt::register(reg);
     zsteg_scan::register(reg);
     rabbit::register(reg);
+    // binary analysis (ELF / PE / Mach-O)
+    binary_info::register(reg);
+    strings::register(reg);
+    binary_sections::register(reg);
+    binary_symbols::register(reg);
+    section_extract::register(reg);
+    binary_overlay::register(reg);
+    // visualization analysis
+    byte_viz::register(reg);
+    // common CTF tricks
+    keyboard_shift::register(reg);
+    phone_keypad::register(reg);
+    polybius::register(reg);
+    nato_phonetic::register(reg);
+    caesar_brute::register(reg);
+    leetspeak::register(reg);
+    fullwidth_halfwidth::register(reg);
+    roman_numeral::register(reg);
+    ip_convert::register(reg);
+    dna_encode::register(reg);
+    number_theory::register(reg);
+    endian_swap::register(reg);
+    base64_stego::register(reg);
     // ai
     ai_judge::register(reg);
     ai_vision::register(reg);
