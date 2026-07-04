@@ -73,6 +73,7 @@ mod jwt;
 mod length;
 mod logic;
 mod loop_decode;
+mod lsb_embed;
 mod lsb_stego;
 mod magic_decode;
 mod map;
@@ -161,6 +162,8 @@ mod gif_timing;
 mod jwt_crack;
 mod rabbit;
 mod zip_crc_crack;
+mod zip_create;
+mod zip_pseudo_encrypt;
 mod zip_repair;
 mod zsteg_scan;
 
@@ -205,6 +208,7 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     // steganography
     zero_width::register(reg);
     lsb_stego::register(reg);
+    lsb_embed::register(reg);
     stegcloak::register(reg);
     whitespace_stego::register(reg);
     imagein::register(reg);
@@ -325,6 +329,8 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     file_carve::register(reg);
     gif_timing::register(reg);
     zip_crc_crack::register(reg);
+    zip_create::register(reg);
+    zip_pseudo_encrypt::register(reg);
     zsteg_scan::register(reg);
     rabbit::register(reg);
     // ai

@@ -139,6 +139,27 @@ pub(crate) fn redact_settings(env: &NodeEnv) -> Value {
     v
 }
 
+/// Some MCP clients serialize object/array-valued tool arguments as a JSON
+/// *string* — our structured args (`inputs`, `params`, `graph`, `snapshot`) are
+/// loosely-typed `serde_json::Value` with no schema `type`, so a client can't
+/// tell they're meant to be objects and JSON-encodes them. Accept both forms: if
+/// `v` is a string whose trimmed content parses as a JSON object/array, return
+/// the parsed value; otherwise return it unchanged. Without this, such a client's
+/// `run_node`/`run_graph`/`set_canvas` calls silently see empty inputs.
+pub(crate) fn coerce_json_arg(v: &Value) -> Value {
+    if let Value::String(s) = v {
+        let t = s.trim();
+        let looks_json = (t.starts_with('{') && t.ends_with('}'))
+            || (t.starts_with('[') && t.ends_with(']'));
+        if looks_json {
+            if let Ok(parsed) = serde_json::from_str::<Value>(t) {
+                return parsed;
+            }
+        }
+    }
+    v.clone()
+}
+
 // ---- McpState methods (supply live state) -----------------------------------
 
 impl McpState {
@@ -183,13 +204,15 @@ impl McpState {
     /// [`port_value_in`]); `params` is the node's param object. Blocking — call
     /// from a blocking thread.
     pub fn run_node(&self, descriptor_id: &str, inputs: &Value, params: &Value) -> Result<Value, String> {
+        let inputs = coerce_json_arg(inputs);
         let mut port_inputs: PortMap = HashMap::new();
         if let Some(obj) = inputs.as_object() {
             for (k, v) in obj {
                 port_inputs.insert(k.clone(), port_value_in(v, self)?);
             }
         }
-        let params = if params.is_null() { json!({}) } else { params.clone() };
+        let params = coerce_json_arg(params);
+        let params = if params.is_null() { json!({}) } else { params };
         let registry = self.combined_registry();
         let env = self.settings.lock().expect("settings mutex poisoned").clone();
         let cancel = CancellationToken::new();
@@ -212,7 +235,7 @@ impl McpState {
     pub fn run_graph(&self, graph: Option<Value>) -> Result<Value, String> {
         let graph: SerializedGraph = match graph {
             Some(v) if !v.is_null() => {
-                serde_json::from_value(v).map_err(|e| format!("invalid graph: {e}"))?
+                serde_json::from_value(coerce_json_arg(&v)).map_err(|e| format!("invalid graph: {e}"))?
             }
             _ => self.canvas.lock().expect("canvas mutex poisoned").to_serialized_graph(),
         };
@@ -278,13 +301,71 @@ pub(crate) fn add_node_to(
     id
 }
 
-pub(crate) fn connect_in(cv: &mut CanvasSnapshot, source: &str, sh: &str, target: &str, th: &str) -> Result<String, String> {
-    if !cv.nodes.iter().any(|n| n.id == source) {
-        return Err(format!("unknown source node: {source}"));
+/// Connect a source output to a target input (or param). Validates the handle
+/// names against the node descriptors so the edge actually binds to real React
+/// Flow handles — the #1 cause of AI-built edges that "don't connect" is a wrong
+/// or unpromoted handle name. When the target handle is a *param* (not a declared
+/// input port), it is promoted onto the node's `input_params` so the frontend
+/// renders a handle for it. Unknown handles fail with the valid options listed,
+/// so the caller can retry correctly instead of silently producing a dead edge.
+pub(crate) fn connect_in(
+    cv: &mut CanvasSnapshot,
+    reg: &NodeRegistry,
+    source: &str,
+    sh: &str,
+    target: &str,
+    th: &str,
+) -> Result<String, String> {
+    let src_did = cv
+        .nodes
+        .iter()
+        .find(|n| n.id == source)
+        .map(|n| n.descriptor_id.clone())
+        .ok_or_else(|| format!("unknown source node: {source}"))?;
+    let tgt_did = cv
+        .nodes
+        .iter()
+        .find(|n| n.id == target)
+        .map(|n| n.descriptor_id.clone())
+        .ok_or_else(|| format!("unknown target node: {target}"))?;
+
+    // Validate the source output handle (skip if the descriptor is unknown, e.g.
+    // a composite/script not in this registry — better to allow than to block).
+    if let Some(entry) = reg.get(&src_did) {
+        let d = &entry.descriptor;
+        if !d.outputs.iter().any(|p| p.name == sh) {
+            let valid: Vec<&str> = d.outputs.iter().map(|p| p.name.as_str()).collect();
+            return Err(format!(
+                "source node '{source}' ({src_did}) has no output port '{sh}'; valid outputs: {valid:?}"
+            ));
+        }
     }
-    if !cv.nodes.iter().any(|n| n.id == target) {
-        return Err(format!("unknown target node: {target}"));
+
+    // Validate the target handle: a declared input port, or a param (which we
+    // then promote to an input handle so it renders and accepts the edge).
+    let mut promote_param = false;
+    if let Some(entry) = reg.get(&tgt_did) {
+        let d = &entry.descriptor;
+        let is_input = d.inputs.iter().any(|p| p.name == th);
+        let is_param = d.params.iter().any(|p| p.name == th);
+        if !is_input && !is_param {
+            let inputs: Vec<&str> = d.inputs.iter().map(|p| p.name.as_str()).collect();
+            let params: Vec<&str> = d.params.iter().map(|p| p.name.as_str()).collect();
+            return Err(format!(
+                "target node '{target}' ({tgt_did}) has no input port or param '{th}'; \
+                 valid inputs: {inputs:?}, params: {params:?}"
+            ));
+        }
+        promote_param = !is_input && is_param;
     }
+    if promote_param {
+        if let Some(n) = cv.nodes.iter_mut().find(|n| n.id == target) {
+            if !n.input_params.iter().any(|p| p == th) {
+                n.input_params.push(th.to_string());
+            }
+        }
+    }
+
     let id = unique_edge_id(cv);
     cv.edges.push(CanvasEdge {
         id: id.clone(),
@@ -360,7 +441,7 @@ impl McpState {
     /// Replace the whole canvas (server assigns a fresh `rev`).
     pub fn set_canvas(&self, snapshot: Value) -> Result<Value, String> {
         let incoming: CanvasSnapshot =
-            serde_json::from_value(snapshot).map_err(|e| format!("invalid snapshot: {e}"))?;
+            serde_json::from_value(coerce_json_arg(&snapshot)).map_err(|e| format!("invalid snapshot: {e}"))?;
         let count = incoming.nodes.len();
         self.mutate_canvas(|cv| {
             cv.nodes = incoming.nodes;
@@ -379,9 +460,11 @@ impl McpState {
         for ps in &d.params {
             p.insert(ps.name.clone(), ps.default.clone());
         }
-        if let Some(Value::Object(over)) = params {
-            for (k, v) in over {
-                p.insert(k, v);
+        if let Some(pv) = params {
+            if let Value::Object(over) = coerce_json_arg(&pv) {
+                for (k, v) in over {
+                    p.insert(k, v);
+                }
             }
         }
         let (label, color) = (d.display_name.clone(), d.color.clone());
@@ -392,7 +475,8 @@ impl McpState {
     }
 
     pub fn connect(&self, source: &str, source_handle: &str, target: &str, target_handle: &str) -> Result<Value, String> {
-        let id = self.mutate_canvas(|cv| connect_in(cv, source, source_handle, target, target_handle))?;
+        let reg = self.combined_registry();
+        let id = self.mutate_canvas(|cv| connect_in(cv, &reg, source, source_handle, target, target_handle))?;
         Ok(json!({ "ok": true, "edgeId": id }))
     }
 
@@ -444,7 +528,9 @@ impl McpState {
             return Err("path must end with .lml or .json".into());
         }
         let snap: CanvasSnapshot = match snapshot {
-            Some(v) if !v.is_null() => serde_json::from_value(v).map_err(|e| format!("invalid snapshot: {e}"))?,
+            Some(v) if !v.is_null() => {
+                serde_json::from_value(coerce_json_arg(&v)).map_err(|e| format!("invalid snapshot: {e}"))?
+            }
             _ => self.canvas.lock().expect("canvas mutex poisoned").clone(),
         };
         let project = json!({
@@ -643,6 +729,7 @@ mod tests {
 
     #[test]
     fn canvas_ops_add_connect_remove() {
+        let reg = default_registry();
         let mut cv = CanvasSnapshot::default();
 
         // Add two nodes — ids are unique and `ai_`-prefixed.
@@ -652,13 +739,17 @@ mod tests {
         assert_eq!(cv.nodes.len(), 2);
         assert_ne!(a, b);
 
-        // Connect them.
-        let e = connect_in(&mut cv, &a, "text", &b, "text").unwrap();
+        // Connect them (handles are validated against the descriptors).
+        let e = connect_in(&mut cv, &reg, &a, "text", &b, "text").unwrap();
         assert_eq!(cv.edges.len(), 1);
         assert_eq!(cv.edges[0].source_handle.as_deref(), Some("text"));
 
         // Connecting to a missing node is rejected and adds no edge.
-        assert!(connect_in(&mut cv, &a, "text", "ghost", "text").is_err());
+        assert!(connect_in(&mut cv, &reg, &a, "text", "ghost", "text").is_err());
+        assert_eq!(cv.edges.len(), 1);
+
+        // A wrong source-handle name is rejected instead of making a dead edge.
+        assert!(connect_in(&mut cv, &reg, &a, "nope", &b, "text").is_err());
         assert_eq!(cv.edges.len(), 1);
 
         // set_param merges into the node's params object.
@@ -677,5 +768,18 @@ mod tests {
         // A fresh add reuses the now-free id slot.
         let a2 = add_node_to(&mut cv, "text_input", "In".into(), "#fff".into(), json!({}), 0.0, 0.0);
         assert_eq!(a2, "ai_text_input_1");
+    }
+
+    #[test]
+    fn coerce_json_arg_accepts_stringified_objects() {
+        // Real objects/arrays pass through unchanged.
+        assert_eq!(coerce_json_arg(&json!({"text": "hi"})), json!({"text": "hi"}));
+        assert_eq!(coerce_json_arg(&json!([1, 2, 3])), json!([1, 2, 3]));
+        // A JSON-stringified object/array (what some MCP clients send) is parsed.
+        assert_eq!(coerce_json_arg(&json!("{\"text\":\"hi\"}")), json!({"text": "hi"}));
+        assert_eq!(coerce_json_arg(&json!("[1,2,3]")), json!([1, 2, 3]));
+        // Plain scalar strings are left alone — not every string is JSON.
+        assert_eq!(coerce_json_arg(&json!("RGBA")), json!("RGBA"));
+        assert_eq!(coerce_json_arg(&json!("{ not json")), json!("{ not json"));
     }
 }

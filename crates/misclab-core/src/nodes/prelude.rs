@@ -53,17 +53,41 @@ pub fn in_text<'a>(inputs: &'a PortMap, name: &str) -> Result<&'a str, CoreError
         .as_text()
 }
 
-/// Read an input as raw bytes: Bytes as-is, Text as its UTF-8 bytes.
+/// Read an input as raw bytes: Bytes as-is, Text as its UTF-8 bytes, and an Image
+/// as the bytes behind its `data:` URL. Accepting Image lets byte-consuming nodes
+/// (LSB extract, carving, hashing, …) take an `image` output or an MCP-supplied
+/// image directly, instead of erroring on a type they can trivially decode.
 pub fn in_bytes(inputs: &PortMap, name: &str) -> Result<Vec<u8>, CoreError> {
     match inputs.get(name) {
         Some(PortValue::Bytes(b)) => Ok(b.to_vec()),
         Some(PortValue::Text(s)) => Ok(s.as_bytes().to_vec()),
+        Some(PortValue::Image(url)) => bytes_from_data_url(url, name),
         Some(PortValue::None) | None => Err(CoreError::MissingInput(name.to_string())),
         Some(other) => Err(CoreError::Type(format!(
-            "expected Bytes or Text, got {:?}",
+            "expected Bytes, Text or Image, got {:?}",
             other.port_type()
         ))),
     }
+}
+
+/// Decode the bytes behind an `Image` port value: a `data:` URL (base64 or raw),
+/// or a bare file path (which `image_input` may pass through).
+fn bytes_from_data_url(url: &str, name: &str) -> Result<Vec<u8>, CoreError> {
+    use base64::Engine as _;
+    let s = url.trim();
+    if let Some(rest) = s.strip_prefix("data:") {
+        let comma = rest
+            .find(',')
+            .ok_or_else(|| CoreError::Parse(format!("端口 {name}: 无效的 data URL")))?;
+        let payload = rest[comma + 1..].trim();
+        if rest[..comma].contains(";base64") {
+            return base64::engine::general_purpose::STANDARD
+                .decode(payload)
+                .map_err(|e| CoreError::Parse(format!("端口 {name}: 图片 base64 解码失败: {e}")));
+        }
+        return Ok(payload.as_bytes().to_vec());
+    }
+    std::fs::read(s).map_err(|e| CoreError::Other(format!("端口 {name}: 读取图片失败: {e}")))
 }
 
 /// Parse a key/IV string given a format: `UTF8` (raw bytes), `Hex`, or `Base64`.
