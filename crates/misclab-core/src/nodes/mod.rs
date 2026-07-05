@@ -33,16 +33,20 @@ mod base85;
 mod base92;
 mod bcrypt;
 mod binary;
+mod binary_enhanced;
 mod bitwise;
 mod charcode;
 mod charset;
 mod cloacked_pixel;
 mod compare;
 mod concat;
+mod crypto_analysis;
 mod decimal;
+mod document_forensics;
 mod enigma;
 mod exif_meta;
 mod extract;
+mod file_format;
 mod file_import;
 mod file_output;
 mod filetype;
@@ -299,6 +303,7 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     adfgvx::register(reg);
     pgp_armor::register(reg);
     pgp_decrypt::register(reg);
+    crypto_analysis::register(reg);
     // control / logic
     switch::register(reg);
     switch_case::register(reg);
@@ -351,6 +356,8 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     substitution::register(reg);
     braille::register(reg);
     timestamp::register(reg);
+    document_forensics::register(reg);
+    file_format::register(reg);
     filetype::register(reg);
     extract::register(reg);
     password_crack::register(reg);
@@ -391,6 +398,7 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     rabbit::register(reg);
     // binary analysis (ELF / PE / Mach-O)
     binary_info::register(reg);
+    binary_enhanced::register(reg);
     strings::register(reg);
     binary_sections::register(reg);
     binary_symbols::register(reg);

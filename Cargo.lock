@@ -3662,7 +3662,7 @@ dependencies = [
 
 [[package]]
 name = "misclab-app"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -3690,7 +3690,7 @@ dependencies = [
 
 [[package]]
 name = "misclab-core"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "aes",
  "base64 0.22.1",
