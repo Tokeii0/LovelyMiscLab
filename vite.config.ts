@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { viteSingleFile } from "vite-plugin-singlefile";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 
@@ -13,7 +14,10 @@ const pkg = JSON.parse(
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+  // viteSingleFile inlines JS + CSS + assets into one self-contained index.html
+  // (galgame art is already WebP to keep that single file small). Tauri CSP is
+  // null, so inline scripts are allowed.
+  plugins: [react(), tailwindcss(), viteSingleFile()],
 
   // Expose the package version to the app (shown in the status bar).
   define: {
@@ -45,18 +49,6 @@ export default defineConfig(async () => ({
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
-    },
-  },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          react: ["react", "react-dom", "react-router-dom", "zustand", "@tanstack/react-query"],
-          flow: ["@xyflow/react"],
-          tauri: ["@tauri-apps/api", "@tauri-apps/plugin-dialog", "@tauri-apps/plugin-opener"],
-          icons: ["lucide-react"],
-        },
-      },
     },
   },
 }));

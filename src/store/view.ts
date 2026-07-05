@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type View = "canvas" | "modules" | "templates" | "runs" | "resources" | "settings";
+export type View = "canvas" | "galgame" | "modules" | "templates" | "runs" | "resources" | "settings";
 
 interface ViewState {
   view: View;

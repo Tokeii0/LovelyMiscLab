@@ -22,6 +22,7 @@ import { UpdateDialog } from "@/app/UpdateDialog";
 import { useUpdate } from "@/store/update";
 import { WindowResizeHandles } from "@/app/WindowResizeHandles";
 import { CanvasView } from "@/views/CanvasView";
+import { GalgameView } from "@/views/GalgameView";
 import { ResourcesView, RunsView } from "@/views/EmptyState";
 import { ModulesView } from "@/views/ModulesView";
 import { SettingsView } from "@/views/SettingsView";
@@ -110,6 +111,7 @@ function App() {
           <LeftRail />
           <div className="min-w-0 flex-1">
             {view === "canvas" && <CanvasView />}
+            {view === "galgame" && <GalgameView />}
             {view === "modules" && <ModulesView />}
             {view === "templates" && <TemplatesView />}
             {view === "runs" && <RunsView />}

@@ -1,9 +1,13 @@
 //! AI model configuration and OpenAI-compatible chat/vision calls used by AI
 //! nodes. Kept small and synchronous (nodes run on `spawn_blocking`).
 
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
+
+const AI_HTTP_TIMEOUT: Duration = Duration::from_secs(90);
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +45,7 @@ fn content_of(v: &serde_json::Value) -> String {
 
 fn post(cfg: &ModelConfig, body: serde_json::Value) -> Result<String, CoreError> {
     let resp = ureq::post(&cfg.endpoint())
+        .timeout(AI_HTTP_TIMEOUT)
         .set("Authorization", &format!("Bearer {}", cfg.api_key))
         .set("Content-Type", "application/json")
         .send_json(body)
@@ -171,6 +176,7 @@ pub fn chat_step(
     // We need the full message object (not just `content`), so we can't reuse
     // `post()` here.
     let resp = ureq::post(&cfg.endpoint())
+        .timeout(AI_HTTP_TIMEOUT)
         .set("Authorization", &format!("Bearer {}", cfg.api_key))
         .set("Content-Type", "application/json")
         .send_json(body)

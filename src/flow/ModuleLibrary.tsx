@@ -117,7 +117,7 @@ export function ModuleLibrary() {
           className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="thin-scrollbar flex-1 overflow-y-auto p-2">
         {grouped.map(([category, nodes]) => {
           const isCollapsed = !searching && collapsed.has(category);
           return (

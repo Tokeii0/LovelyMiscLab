@@ -36,6 +36,9 @@ const MAX_CONTEXT_TOKENS: u64 = 1_000_000;
 const STEPS_MAX: u32 = 64;
 const NODES_MAX: usize = 40;
 const RUN_BUDGET: u32 = 6;
+const TRANSCRIPT_STRING_MAX: usize = 320;
+const TRANSCRIPT_ARRAY_MAX: usize = 24;
+const TOOL_RESULT_TRANSCRIPT_MAX: usize = 3000;
 
 /// One thing the agent did, streamed to the frontend and applied to the live
 /// canvas. Nodes are referenced by the agent's own `key`; the frontend maps
@@ -173,6 +176,71 @@ fn tool_defs() -> Vec<ToolDef> {
             }),
         },
     ]
+}
+
+fn compact_string_for_transcript(s: &str) -> String {
+    let len = s.chars().count();
+    if len <= TRANSCRIPT_STRING_MAX {
+        return s.to_string();
+    }
+    let head: String = s.chars().take(TRANSCRIPT_STRING_MAX).collect();
+    format!("{head}…（已为上下文省略 {} 字，实际工具调用使用完整值）", len.saturating_sub(TRANSCRIPT_STRING_MAX))
+}
+
+fn compact_value_for_transcript(v: &Value) -> Value {
+    match v {
+        Value::String(s) => Value::String(compact_string_for_transcript(s)),
+        Value::Array(items) => {
+            let mut out: Vec<Value> = items
+                .iter()
+                .take(TRANSCRIPT_ARRAY_MAX)
+                .map(compact_value_for_transcript)
+                .collect();
+            if items.len() > TRANSCRIPT_ARRAY_MAX {
+                out.push(json!({
+                    "_omitted": items.len() - TRANSCRIPT_ARRAY_MAX,
+                    "reason": "agent transcript compacted"
+                }));
+            }
+            Value::Array(out)
+        }
+        Value::Object(obj) => Value::Object(
+            obj.iter()
+                .map(|(k, v)| (k.clone(), compact_value_for_transcript(v)))
+                .collect(),
+        ),
+        _ => v.clone(),
+    }
+}
+
+fn compact_assistant_msg_for_transcript(mut raw: Value, calls: &[ToolCall]) -> Value {
+    let Some(tool_calls) = raw.get_mut("tool_calls").and_then(|v| v.as_array_mut()) else {
+        return raw;
+    };
+    for tc in tool_calls {
+        let tc_id = tc.get("id").and_then(|v| v.as_str()).unwrap_or("");
+        let tc_name = tc
+            .get("function")
+            .and_then(|v| v.get("name"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let Some(call) = calls
+            .iter()
+            .find(|c| !tc_id.is_empty() && c.id == tc_id)
+            .or_else(|| calls.iter().find(|c| c.name == tc_name))
+        else {
+            continue;
+        };
+        if let Some(func) = tc.get_mut("function").and_then(|v| v.as_object_mut()) {
+            let compact_args = compact_value_for_transcript(&call.arguments);
+            func.insert("arguments".into(), Value::String(compact_args.to_string()));
+        }
+    }
+    raw
+}
+
+fn compact_tool_result_for_transcript(result: &Value) -> String {
+    truncate(&compact_value_for_transcript(result).to_string(), TOOL_RESULT_TRANSCRIPT_MAX)
 }
 
 fn system_prompt(catalog: &str) -> String {
@@ -590,13 +658,13 @@ fn run_agent(
                 return;
             }
             AssistantTurn::ToolCalls { raw_assistant_msg, calls } => {
-                messages.push(raw_assistant_msg);
+                messages.push(compact_assistant_msg_for_transcript(raw_assistant_msg, &calls));
                 for call in calls {
                     let (outcome, result) = dispatch(&mut graph, &mut ctx, &call, on_event);
                     messages.push(json!({
                         "role": "tool",
                         "tool_call_id": call.id,
-                        "content": result.to_string(),
+                        "content": compact_tool_result_for_transcript(&result),
                     }));
                     if let Outcome::Finish(notes) = outcome {
                         let _ = on_event.send(AgentEvent::Done { notes, steps_used: step + 1 });

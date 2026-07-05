@@ -1,5 +1,6 @@
 import {
   Boxes,
+  Gamepad2,
   History,
   LayoutGrid,
   type LucideIcon,
@@ -15,6 +16,7 @@ type Item = { view: View; label: string; icon: LucideIcon };
 
 const ITEMS: Item[] = [
   { view: "canvas", label: "画布", icon: LayoutGrid },
+  { view: "galgame", label: "故事模式", icon: Gamepad2 },
   { view: "modules", label: "模块", icon: Boxes },
   { view: "templates", label: "模板", icon: Workflow },
   { view: "runs", label: "运行记录", icon: History },

@@ -1,0 +1,280 @@
+import { type CSSProperties, useMemo, useRef, useState } from "react";
+import {
+  Gamepad2,
+  Loader2,
+  type LucideIcon,
+  Play,
+  RotateCcw,
+  X,
+} from "lucide-react";
+
+import type { GalgameChoice } from "@/lib/bindings";
+import { Button } from "@/components/ui/button";
+import { CharacterSprite } from "@/components/galgame/CharacterSprite";
+import { ChoiceList } from "@/components/galgame/ChoiceList";
+import { ContentPanel } from "@/components/galgame/ContentPanel";
+import { DialogueBox } from "@/components/galgame/DialogueBox";
+import { ManualInput } from "@/components/galgame/ManualInput";
+import { SceneBackground } from "@/components/galgame/SceneBackground";
+import { useTypewriter } from "@/hooks/useTypewriter";
+import { inTauri } from "@/lib/devMocks";
+import { cn } from "@/lib/utils";
+import { type Mood, useGalgameStore } from "@/store/galgame";
+import { useViewStore } from "@/store/view";
+
+const MOODS: Mood[] = ["neutral", "happy", "thinking", "worried", "excited"];
+const asMood = (m: string): Mood => (MOODS.includes(m as Mood) ? (m as Mood) : "neutral");
+
+/** Keyframes for the sprite float, blink, and the select particle burst. */
+function StyleTag() {
+  return (
+    <style>{`
+      @keyframes galgame-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+      @keyframes galgame-blink { 0%,100%{opacity:1} 50%{opacity:0.15} }
+      @keyframes galgame-particle { 0%{transform:translate(0,0) scale(1);opacity:1} 100%{transform:translate(var(--tx),var(--ty)) scale(0.25);opacity:0} }
+      @keyframes galgame-ring { 0%{transform:scale(0.2);opacity:0.7} 100%{transform:scale(1.9);opacity:0} }
+      .galgame-float{ animation: galgame-float 4.5s ease-in-out infinite; }
+      .galgame-blink{ animation: galgame-blink 1.1s steps(1) infinite; }
+      .galgame-particle{ animation: galgame-particle 0.7s ease-out forwards; }
+      .galgame-ring{ animation: galgame-ring 0.55s ease-out forwards; }
+    `}</style>
+  );
+}
+
+/** A short-lived particle burst at a viewport position, fired on select. */
+function ParticleBurst({ x, y }: { x: number; y: number }) {
+  const parts = useMemo(
+    () =>
+      Array.from({ length: 16 }, (_, i) => {
+        const ang = (i / 16) * Math.PI * 2 + (Math.random() - 0.5) * 0.6;
+        const dist = 36 + Math.random() * 64;
+        return {
+          tx: Math.cos(ang) * dist,
+          ty: Math.sin(ang) * dist,
+          size: 4 + Math.random() * 5,
+          gold: Math.random() < 0.45,
+          delay: Math.random() * 60,
+        };
+      }),
+    []
+  );
+  return (
+    <div className="pointer-events-none fixed z-50" style={{ left: x, top: y }}>
+      <span
+        className="galgame-ring absolute rounded-full border-2 border-primary"
+        style={{ width: 24, height: 24, marginLeft: -12, marginTop: -12 }}
+      />
+      {parts.map((p, i) => (
+        <span
+          key={i}
+          className="galgame-particle absolute rounded-full"
+          style={
+            {
+              width: p.size,
+              height: p.size,
+              marginLeft: -p.size / 2,
+              marginTop: -p.size / 2,
+              background: p.gold ? "#fbbf24" : "var(--color-primary)",
+              boxShadow: p.gold ? "0 0 6px #fbbf24" : "0 0 6px var(--color-primary)",
+              "--tx": `${p.tx}px`,
+              "--ty": `${p.ty}px`,
+              animationDelay: `${p.delay}ms`,
+            } as CSSProperties
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+function TopBtn({
+  onClick,
+  icon: Icon,
+  label,
+}: {
+  onClick: () => void;
+  icon: LucideIcon;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-300 backdrop-blur-md transition-colors hover:border-primary/60 hover:text-white"
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </button>
+  );
+}
+
+function EndingBanner({ ending }: { ending: string }) {
+  const good = ending === "good";
+  return (
+    <div
+      className={cn(
+        "rounded-xl border px-4 py-2.5 text-center text-sm font-semibold backdrop-blur-md",
+        good
+          ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
+          : "border-rose-500/50 bg-rose-500/15 text-rose-300"
+      )}
+    >
+      {good ? "🎉 通关！flag 到手" : "💀 Bad End —— 这条路走不通，换个方向再试试"}
+    </div>
+  );
+}
+
+/** Challenge-input screen shown before a story starts. */
+function Intro() {
+  const [text, setText] = useState("");
+  const start = useGalgameStore((s) => s.start);
+  const error = useGalgameStore((s) => s.error);
+
+  return (
+    <div className="relative flex h-full items-center justify-center overflow-hidden">
+      <StyleTag />
+      <SceneBackground mood="neutral" />
+      <div className="relative z-10 w-[560px] max-w-[92vw] rounded-2xl border border-white/10 bg-slate-900/85 p-7 shadow-2xl backdrop-blur-md">
+        <div className="mb-5 flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/15 text-primary">
+            <Gamepad2 className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-100">故事模式</h2>
+            <p className="text-xs text-slate-400">
+              把解题变成一场 galgame——搭档 Misca 陪你一步步做选择，每个选择都真的在跑节点。
+            </p>
+          </div>
+        </div>
+
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="把题目数据粘进来（一段文本 / 密文 / 编码……），然后开始你的解题冒险。"
+          className="h-40 w-full resize-none rounded-lg border border-white/10 bg-slate-950/60 p-3 font-mono text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-primary focus:ring-2 focus:ring-primary/30"
+        />
+
+        {error && <p className="mt-2 text-xs text-rose-300">{error}</p>}
+
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <p className="text-[11px] leading-tight text-slate-400">
+            {inTauri
+              ? "需先在「设置」里配置 AI 文本模型（Base URL / 模型 / API Key）。"
+              : "浏览器预览使用模拟剧情；桌面应用内为真实解题。"}
+          </p>
+          <Button disabled={!text.trim()} onClick={() => start(text)}>
+            <Play className="h-4 w-4" />
+            开始解题
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The playing screen: Misca (left) + content/dialogue/choices/input (right). */
+function Story() {
+  const speaker = useGalgameStore((s) => s.speaker);
+  const mood = useGalgameStore((s) => s.mood);
+  const narration = useGalgameStore((s) => s.narration);
+  const choices = useGalgameStore((s) => s.choices);
+  const busy = useGalgameStore((s) => s.busy);
+  const ending = useGalgameStore((s) => s.ending);
+  const error = useGalgameStore((s) => s.error);
+  const lastOutputs = useGalgameStore((s) => s.lastOutputs);
+  const challenge = useGalgameStore((s) => s.challenge);
+  const sceneSeed = useGalgameStore((s) => s.sceneSeed);
+  const pick = useGalgameStore((s) => s.pick);
+  const reset = useGalgameStore((s) => s.reset);
+  const setView = useViewStore((s) => s.setView);
+
+  const { shown, done, skip } = useTypewriter(narration);
+  const m = asMood(mood);
+
+  // Select particle bursts.
+  const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([]);
+  const burstId = useRef(0);
+  const fire = (x: number, y: number) => {
+    const id = (burstId.current += 1);
+    setBursts((b) => [...b, { id, x, y }]);
+    window.setTimeout(() => setBursts((b) => b.filter((z) => z.id !== id)), 800);
+  };
+  const handlePick = (c: GalgameChoice, at?: { x: number; y: number }) => {
+    if (at) fire(at.x, at.y);
+    pick(c);
+  };
+
+  return (
+    <div className="relative flex h-full flex-col overflow-hidden">
+      <StyleTag />
+      <SceneBackground mood={m} />
+      {bursts.map((b) => (
+        <ParticleBurst key={b.id} x={b.x} y={b.y} />
+      ))}
+
+      {/* top bar */}
+      <div className="relative z-20 flex items-center justify-between p-3">
+        <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-100 backdrop-blur-md">
+          <Gamepad2 className="h-4 w-4 text-primary" /> 故事模式
+        </div>
+        <div className="flex items-center gap-2">
+          <TopBtn onClick={reset} icon={RotateCcw} label="重新开始" />
+          <TopBtn onClick={() => setView("canvas")} icon={X} label="退出" />
+        </div>
+      </div>
+
+      {/* body: Misca (left) | content + dialogue + choices (right) */}
+      <div className="relative z-10 flex min-h-0 flex-1 gap-2 px-3 pb-3">
+        {/* left: character */}
+        <div className="relative flex w-[34%] max-w-[420px] shrink-0 items-end justify-center">
+          <CharacterSprite mood={m} seed={sceneSeed} />
+        </div>
+
+        {/* right column */}
+        <div className="relative flex min-w-0 flex-1 flex-col gap-3">
+          <ContentPanel outputs={lastOutputs} challenge={challenge} />
+
+          <div className="space-y-3">
+            {error && (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {error}
+              </div>
+            )}
+            {ending && <EndingBanner ending={ending} />}
+            <DialogueBox speaker={speaker} text={shown} done={done} thinking={busy} onSkip={skip} />
+
+            {busy ? (
+              <div className="flex items-center justify-center gap-2 py-1 text-sm text-slate-300">
+                <Loader2 className="h-4 w-4 animate-spin" /> 生成中…
+              </div>
+            ) : (
+              <>
+                {choices.length > 0 && (
+                  <ChoiceList choices={choices} disabled={busy} onPick={handlePick} />
+                )}
+                {ending && choices.length === 0 && (
+                  <Button onClick={reset} className="w-full">
+                    <RotateCcw className="h-4 w-4" /> 再来一局
+                  </Button>
+                )}
+              </>
+            )}
+
+            <ManualInput
+              disabled={busy}
+              onSubmit={(t, at) => {
+                if (at) fire(at.x, at.y);
+                pick({ text: t });
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 故事模式 (galgame): solve CTF challenges as a visual novel. */
+export function GalgameView() {
+  const started = useGalgameStore((s) => s.started);
+  return started ? <Story /> : <Intro />;
+}

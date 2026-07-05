@@ -71,9 +71,16 @@ pub fn run() {
                 let cfg = mcp::state::load_config(&data_dir);
                 if cfg.enabled {
                     let st = app.state::<AppState>();
-                    let mcp_state =
-                        mcp::McpState::from_app(st.inner(), app.handle().clone(), cfg.token.clone());
-                    let host = if cfg.bind_all { [0, 0, 0, 0] } else { [127, 0, 0, 1] };
+                    let mcp_state = mcp::McpState::from_app(
+                        st.inner(),
+                        app.handle().clone(),
+                        cfg.token.clone(),
+                    );
+                    let host = if cfg.bind_all {
+                        [0, 0, 0, 0]
+                    } else {
+                        [127, 0, 0, 1]
+                    };
                     let addr = std::net::SocketAddr::from((host, cfg.port));
                     match mcp::start(mcp_state, addr) {
                         Ok(h) => *st.mcp.lock().expect("mcp mutex poisoned") = Some(h),
@@ -98,6 +105,7 @@ pub fn run() {
             commands::settings::set_settings,
             commands::settings::detect_tool,
             commands::ai_workflow::generate_workflow,
+            commands::galgame::galgame_step,
             commands::modules::list_composite_modules,
             commands::modules::save_composite_module,
             commands::modules::delete_composite_module,

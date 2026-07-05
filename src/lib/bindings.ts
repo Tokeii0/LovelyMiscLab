@@ -83,6 +83,43 @@ export interface AiTextResult {
   text: string;
 }
 
+// ---- 故事模式 (galgame) -----------------------------------------------------
+export interface GalgameChoice {
+  text: string;
+  /** Descriptor id of the tool to run on the current data (absent ⇒ narrative). */
+  node?: string | null;
+  params?: Record<string, unknown> | null;
+}
+export interface GalgameHistoryItem {
+  narration: string;
+  picked?: string | null;
+  outputs?: string | null;
+}
+export interface GalgamePicked {
+  text: string;
+  node?: string | null;
+  params?: Record<string, unknown> | null;
+}
+export interface GalgameStepRequest {
+  challenge: string;
+  challengeKind: string;
+  history: GalgameHistoryItem[];
+  picked?: GalgamePicked | null;
+}
+export interface GalgameTurn {
+  speaker: string;
+  /** neutral | happy | thinking | worried | excited */
+  mood: string;
+  narration: string;
+  choices: GalgameChoice[];
+  /** Tool result summary produced this turn. */
+  outputs?: string | null;
+  /** "good" | "bad" | null. */
+  ending?: string | null;
+  /** Raw pipeline output this round — chained into the next round's input. */
+  resultData?: string | null;
+}
+
 export interface SuggestCtx {
   descriptorId: string;
   port: string;
@@ -190,6 +227,10 @@ export const api = {
     channel.onmessage = onEvent;
     return invoke<void>("agent_run", { prompt, onEvent: channel });
   },
+
+  /** 故事模式：跑一"幕"——可选执行一次解题动作，然后由 LLM 叙述下一幕。 */
+  galgameStep: (req: GalgameStepRequest) =>
+    invoke<GalgameTurn>("galgame_step", { req }),
 
   // User-defined composite (sub-graph) modules.
   listCompositeModules: () => invoke<CompositeModule[]>("list_composite_modules"),

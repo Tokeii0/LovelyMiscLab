@@ -2,6 +2,7 @@
 
 pub mod agent;
 pub mod ai_workflow;
+pub mod galgame;
 pub mod graph;
 #[cfg(feature = "mcp")]
 pub mod mcp;
