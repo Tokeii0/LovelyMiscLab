@@ -33,6 +33,10 @@ pub enum CoreError {
     #[error("operation cancelled")]
     Cancelled,
 
+    /// An AI model is required but not set up in Settings.
+    #[error("{0}")]
+    AiNotConfigured(String),
+
     #[error("{0}")]
     Other(String),
 }

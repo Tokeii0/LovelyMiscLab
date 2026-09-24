@@ -5,6 +5,7 @@ import { useDescriptorStore } from "@/store/descriptors";
 import { useGraphStore } from "@/store/graph";
 import { useProjectStore } from "@/store/project";
 import { useRunStore } from "@/store/run";
+import { errorMessage, isCancelled } from "@/lib/errors";
 
 // Module-level run coordination (single in-flight run; latest state coalesced).
 let currentJob: string | null = null;
@@ -162,10 +163,10 @@ function startHistory(scope: "graph" | "node" | "debug", title: string, graph: S
 }
 
 function finishHistory(entryId: string, elapsed: number, graph: SerializedGraph, error?: unknown) {
-  const text = error ? String(error) : "";
+  const text = error ? errorMessage(error) : "";
   const ids = new Set(graph.nodes.map((n) => n.id));
-  const status = text
-    ? text.toLowerCase().includes("cancel")
+  const status = error
+    ? isCancelled(error)
       ? "cancelled"
       : "error"
     : useGraphStore.getState().nodes.some((n) => ids.has(n.id) && n.data.status === "error")
@@ -200,8 +201,7 @@ async function runSerializedGraph(graph: SerializedGraph, scope: "graph" | "debu
     }
   } catch (e) {
     failure = e;
-    useRunStore.getState().setLastError(String(e));
-    console.error("run_graph failed", e);
+    if (!isCancelled(e)) useRunStore.getState().setLastError(errorMessage(e));
   } finally {
     inFlight = false;
     currentJob = null;
@@ -331,18 +331,19 @@ export async function runSingleNode(nodeId: string) {
       nodes: historyNodes().filter((n) => n.id === nodeId),
     });
   } catch (e) {
-    g.updateRuntime(nodeId, { status: "error", error: String(e) });
-    g.appendLog(nodeId, { time: now(), level: "error", message: String(e) });
+    const msg = errorMessage(e);
+    g.updateRuntime(nodeId, { status: "error", error: msg });
+    g.appendLog(nodeId, { time: now(), level: "error", message: msg });
     useRunStore.getState().appendHistoryEvent(entryId, {
       time: now(),
       level: "error",
       node: nodeId,
-      message: String(e),
+      message: msg,
     });
     useRunStore.getState().finishHistory(entryId, {
-      status: "error",
+      status: isCancelled(e) ? "cancelled" : "error",
       elapsed: Date.now() - t0,
-      error: String(e),
+      error: msg,
       nodes: historyNodes().filter((n) => n.id === nodeId),
     });
   } finally {

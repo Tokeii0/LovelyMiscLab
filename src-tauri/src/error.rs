@@ -33,7 +33,14 @@ impl From<rusqlite::Error> for AppError {
 
 impl From<misclab_core::CoreError> for AppError {
     fn from(e: misclab_core::CoreError) -> Self {
-        AppError::new("core", e.to_string())
+        use misclab_core::CoreError;
+        // Stable codes the UI branches on; everything else is a generic "core".
+        let code = match &e {
+            CoreError::Cancelled => "cancelled",
+            CoreError::AiNotConfigured(_) => "ai_config",
+            _ => "core",
+        };
+        AppError::new(code, e.to_string())
     }
 }
 

@@ -6,6 +6,7 @@ import { useDescriptorStore } from "@/store/descriptors";
 import { useGraphStore } from "@/store/graph";
 
 import { viewportAspect } from "./layout";
+import { errorMessage } from "@/lib/errors";
 
 type ConnectEvent = Extract<AgentEvent, { kind: "connect" }>;
 
@@ -188,7 +189,7 @@ export async function runAgent(
 
   const runPromise = api
     .agentRun(prompt, (ev) => queue.push(ev))
-    .catch((e) => useAgentStore.getState().setError(String(e)))
+    .catch((e) => useAgentStore.getState().setError(errorMessage(e)))
     .finally(() => {
       streamEnded = true;
     });

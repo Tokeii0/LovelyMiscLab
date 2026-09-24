@@ -4,6 +4,7 @@ import { Check, Copy, Loader2, RefreshCw, Server, ShieldAlert } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { api, type McpSettings, type McpStatus } from "@/lib/bindings";
 import { inTauri } from "@/lib/devMocks";
+import { toast } from "@/store/toast";
 
 type ClientId = "claude-code" | "cursor" | "codex" | "other";
 
@@ -36,6 +37,10 @@ export function McpPanel() {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [client, setClient] = useState<ClientId>("claude-code");
+  // Port is edited as a draft and saved on blur/Enter, so clearing the field to
+  // type a new number doesn't snap back to the default mid-edit.
+  const [portDraft, setPortDraft] = useState("8765");
+  useEffect(() => setPortDraft(String(cfg.port)), [cfg.port]);
 
   const refresh = async () => {
     const [c, st] = await Promise.all([api.mcpGetConfig(), api.mcpStatus()]);
@@ -72,7 +77,7 @@ export function McpPanel() {
       await api.mcpStart();
       await refresh();
     } catch (e) {
-      console.error("mcpStart failed", e);
+      toast.error("MCP 服务启动失败", { error: e });
     } finally {
       setBusy(false);
     }
@@ -83,7 +88,7 @@ export function McpPanel() {
       await api.mcpStop();
       await refresh();
     } catch (e) {
-      console.error("mcpStop failed", e);
+      toast.error("MCP 服务停止失败", { error: e });
     } finally {
       setBusy(false);
     }
@@ -93,7 +98,7 @@ export function McpPanel() {
     try {
       await api.mcpSetConfig(next);
     } catch (e) {
-      console.error("mcpSetConfig failed", e);
+      toast.error("MCP 配置保存失败", { error: e });
     }
   };
   const regen = () => void persist({ ...cfg, token: crypto.randomUUID().replace(/-/g, "") });
@@ -154,9 +159,23 @@ export function McpPanel() {
             端口
             <input
               type="number"
-              value={cfg.port}
+              min={1}
+              max={65535}
+              value={portDraft}
               disabled={running}
-              onChange={(e) => void persist({ ...cfg, port: Number(e.target.value) || 8765 })}
+              onChange={(e) => setPortDraft(e.target.value)}
+              onBlur={() => {
+                const port = Number(portDraft);
+                if (Number.isInteger(port) && port >= 1 && port <= 65535) {
+                  if (port !== cfg.port) void persist({ ...cfg, port });
+                } else {
+                  toast.error("端口需为 1–65535 之间的整数");
+                  setPortDraft(String(cfg.port));
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
               className="w-24 rounded-md border border-input bg-background px-2 py-1 text-xs disabled:opacity-50"
             />
           </label>

@@ -19,6 +19,7 @@ import { LeftRail } from "@/app/LeftRail";
 import { LiveRunner } from "@/app/LiveRunner";
 import { TitleBar } from "@/app/TitleBar";
 import { UpdateDialog } from "@/app/UpdateDialog";
+import { toast } from "@/store/toast";
 import { useUpdate } from "@/store/update";
 import { WindowResizeHandles } from "@/app/WindowResizeHandles";
 import { ConfirmHost } from "@/components/ui/ConfirmHost";
@@ -51,10 +52,14 @@ function App() {
 
   useEffect(() => {
     if (inTauri) {
-      api
-        .listNodeDescriptors()
-        .then(setDescriptors)
-        .catch((e) => console.error("listNodeDescriptors failed", e));
+      const load = () =>
+        api
+          .listNodeDescriptors()
+          .then(setDescriptors)
+          .catch((e) =>
+            toast.error("节点目录加载失败", { error: e, actions: [{ label: "重试", run: load }] })
+          );
+      load();
       // Auto-check for a newer release shortly after launch (opens the update
       // dialog only when one is available; silent otherwise).
       const t = setTimeout(() => void useUpdate.getState().check({ silent: true }), 3000);

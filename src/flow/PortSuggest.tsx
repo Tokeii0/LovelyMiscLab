@@ -10,6 +10,7 @@ import { usePortSuggest } from "@/store/portSuggest";
 
 import { nodeIcon } from "./nodeIcons";
 import { candidateNodes, firstCompatibleInput, firstCompatibleOutput, resolvePortType } from "./portUtils";
+import { errorCode, errorMessage } from "@/lib/errors";
 
 const WIDTH = 268;
 
@@ -106,9 +107,8 @@ export function PortSuggest() {
       setAiReasons(reasons);
       setAiOrder(res.map((s) => s.descriptorId));
     } catch (e) {
-      const msg = String(e);
-      if (msg.includes("未配置")) aiKnownUnavailable = true;
-      setAiError(msg);
+      if (errorCode(e) === "ai_config") aiKnownUnavailable = true;
+      setAiError(errorMessage(e));
     } finally {
       setAiLoading(false);
     }

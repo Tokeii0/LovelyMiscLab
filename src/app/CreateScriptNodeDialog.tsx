@@ -17,6 +17,7 @@ import type {
 } from "@/lib/types";
 import { useDescriptorStore } from "@/store/descriptors";
 import { useScriptDialogStore } from "@/store/scriptDialog";
+import { errorMessage } from "@/lib/errors";
 
 const COLORS = ["#8b5cf6", "#f43f5e", "#06b6d4", "#22c55e", "#f59e0b", "#3b82f6"];
 const PORT_TYPES: PortType[] = ["text", "bytes", "number", "bool", "json", "stringList", "any"];
@@ -191,7 +192,7 @@ export function CreateScriptNodeDialog() {
       setOpen(false);
       reset();
     } catch (e) {
-      setError(String(e));
+      setError(errorMessage(e));
     } finally {
       setSaving(false);
     }

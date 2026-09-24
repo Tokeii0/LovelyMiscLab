@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   Bot,
@@ -21,6 +21,9 @@ import { inTauri } from "@/lib/devMocks";
 import { TOOLS } from "@/lib/tools";
 import { useUpdate } from "@/store/update";
 import { McpPanel } from "@/views/McpPanel";
+import { choose } from "@/store/confirm";
+import { toast } from "@/store/toast";
+import { useViewStore } from "@/store/view";
 
 const EMPTY: AppSettings = {
   ai: {
@@ -196,12 +199,22 @@ type Tab = (typeof TABS)[number]["id"];
 
 export function SettingsView() {
   const [s, setS] = useState<AppSettings>(EMPTY);
+  // Last persisted copy — the form is dirty while it differs from this.
+  const [stored, setStored] = useState<AppSettings>(EMPTY);
   const [status, setStatus] = useState<Record<string, ToolStatus | "checking">>({});
   const [saved, setSaved] = useState(false);
   const [tab, setTab] = useState<Tab>("ai");
+  const dirty = useMemo(() => JSON.stringify(s) !== JSON.stringify(stored), [s, stored]);
 
   useEffect(() => {
-    if (inTauri) api.getSettings().then(setS).catch(() => {});
+    if (!inTauri) return;
+    api
+      .getSettings()
+      .then((v) => {
+        setS(v);
+        setStored(v);
+      })
+      .catch((e) => toast.error("读取设置失败", { error: e }));
   }, []);
 
   const setAi = (g: "llm" | "vision", field: keyof ModelConfig, v: string) =>
@@ -209,17 +222,46 @@ export function SettingsView() {
   const setTool = (k: string, v: string) =>
     setS((c) => ({ ...c, tools: { ...c.tools, [k]: v } }));
 
-  const save = async () => {
-    if (inTauri) {
-      try {
-        await api.setSettings(s);
-      } catch (e) {
-        console.error("setSettings failed", e);
-      }
+  const save = async (): Promise<boolean> => {
+    if (!inTauri) {
+      toast.info("浏览器预览中不会保存设置");
+      return true;
     }
+    try {
+      await api.setSettings(s);
+    } catch (e) {
+      toast.error("保存设置失败", { error: e });
+      return false;
+    }
+    setStored(s);
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
+    return true;
   };
+
+  // Leaving the page with unsaved edits asks first instead of silently dropping them.
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  useEffect(() => {
+    const { setLeaveGuard } = useViewStore.getState();
+    if (!dirty) {
+      setLeaveGuard(null);
+      return;
+    }
+    setLeaveGuard(async () => {
+      const pick = await choose({
+        title: "设置尚未保存",
+        message: "离开前要保存这些修改吗？",
+        options: [
+          { value: "discard", label: "不保存", variant: "outline" },
+          { value: "save", label: "保存" },
+        ],
+      });
+      if (pick === "save") return saveRef.current();
+      return pick === "discard";
+    });
+    return () => setLeaveGuard(null);
+  }, [dirty]);
 
   const pickDir = async () => {
     if (!inTauri) return;
@@ -250,14 +292,14 @@ export function SettingsView() {
           <p className="text-xs text-muted-foreground">配置 AI 模型、输出目录、外部工具与 MCP 服务。</p>
         </div>
         {tab !== "mcp" && tab !== "update" && (
-          <Button size="sm" onClick={save}>
+          <Button size="sm" onClick={() => void save()} disabled={!dirty && !saved}>
             {saved ? (
               <>
                 <Check className="mr-1 h-3.5 w-3.5" /> 已保存
               </>
             ) : (
               <>
-                <Save className="mr-1 h-3.5 w-3.5" /> 保存
+                <Save className="mr-1 h-3.5 w-3.5" /> {dirty ? "保存" : "已是最新"}
               </>
             )}
           </Button>

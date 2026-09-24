@@ -8,6 +8,7 @@ import {
   type GalgameTurn,
 } from "@/lib/bindings";
 import { inTauri } from "@/lib/devMocks";
+import { errorMessage } from "@/lib/errors";
 
 /** Sprite/background moods the narrator LLM may return. */
 export type Mood = "neutral" | "happy" | "thinking" | "worried" | "excited";
@@ -122,7 +123,7 @@ export const useGalgameStore = create<GalgameState>((set, get) => {
             : s.challengeKind,
       }));
     } catch (e) {
-      set({ busy: false, error: String(e) });
+      set({ busy: false, error: errorMessage(e) });
     }
   };
 

@@ -15,6 +15,7 @@ import {
 } from "@/flow/encapsulate";
 import { useDescriptorStore } from "@/store/descriptors";
 import { useModuleDialogStore } from "@/store/moduleDialog";
+import { errorMessage } from "@/lib/errors";
 
 const COLORS = ["#8b5cf6", "#f43f5e", "#06b6d4", "#22c55e", "#f59e0b", "#3b82f6"];
 
@@ -118,7 +119,7 @@ export function CreateModuleDialog() {
       }
       setOpen(false);
     } catch (e) {
-      setError(String(e));
+      setError(errorMessage(e));
     } finally {
       setSaving(false);
     }

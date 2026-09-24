@@ -8,6 +8,7 @@ import { inTauri } from "@/lib/devMocks";
 import type { NodeDescriptor, ParamSpec, PortValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { nodeIcon } from "@/flow/nodeIcons";
+import { errorMessage } from "@/lib/errors";
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -210,12 +211,12 @@ export function ModuleRunDialog({
       );
     } catch (e) {
       const el = Date.now() - t0;
-      setError(String(e));
+      setError(errorMessage(e));
       setElapsed(el);
       setTab("result");
-      setLogs((l) => [...l, { time: new Date().toLocaleTimeString(), level: "error", message: String(e) }]);
+      setLogs((l) => [...l, { time: new Date().toLocaleTimeString(), level: "error", message: errorMessage(e) }]);
       setHistory((h) =>
-        [{ time, params: { ...params }, inputs: { ...inputs }, outputs: null, error: String(e), elapsed: el }, ...h].slice(0, 20)
+        [{ time, params: { ...params }, inputs: { ...inputs }, outputs: null, error: errorMessage(e), elapsed: el }, ...h].slice(0, 20)
       );
     } finally {
       setRunning(false);

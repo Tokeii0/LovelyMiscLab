@@ -12,6 +12,7 @@ import { useAgentStore } from "@/store/agent";
 import { useAiStore } from "@/store/ai";
 import { useRunStore } from "@/store/run";
 import { useViewStore } from "@/store/view";
+import { errorMessage } from "@/lib/errors";
 
 type Mode = "generate" | "explain" | "repair";
 
@@ -109,7 +110,7 @@ export function AiGenerateDialog() {
       setView("canvas");
       useAgentStore.getState().launch(task, blob || undefined);
     } catch (e) {
-      setError(String(e));
+      setError(errorMessage(e));
     } finally {
       setLoading(false);
     }
