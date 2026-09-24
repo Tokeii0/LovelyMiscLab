@@ -655,9 +655,9 @@ fn columnar_decode(cipher: &str, order: &[usize]) -> String {
     }
     let mut out = String::with_capacity(chars.len());
     for r in 0..rows {
-        for c in 0..cols {
-            if r < columns[c].len() {
-                out.push(columns[c][r]);
+        for column in columns.iter().take(cols) {
+            if let Some(&ch) = column.get(r) {
+                out.push(ch);
             }
         }
     }

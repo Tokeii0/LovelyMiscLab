@@ -365,7 +365,7 @@ fn manual_archive_password_retry(req: &GalgameStepRequest) -> Option<String> {
     {
         return None;
     }
-    previous_archive_needs_password(req).then(|| ())?;
+    previous_archive_needs_password(req).then_some(())?;
     password_from_text(&picked.text)
 }
 
@@ -653,7 +653,7 @@ fn search_tools(descriptors: &[NodeDescriptor], query: &str) -> Option<String> {
         if intent != 0 && dir != 0 {
             score += if intent == dir { 3 } else { -6 };
         }
-        if score > 0 && best.as_ref().map_or(true, |(bs, _)| score > *bs) {
+        if score > 0 && best.as_ref().is_none_or(|(bs, _)| score > *bs) {
             best = Some((score, d.id.clone()));
         }
     }
@@ -800,7 +800,7 @@ fn compact_sample(s: &str) -> String {
 
 fn looks_hex(s: &str) -> bool {
     let t = compact_sample(s);
-    t.len() >= 8 && t.len() % 2 == 0 && t.chars().all(|c| c.is_ascii_hexdigit())
+    t.len() >= 8 && t.len().is_multiple_of(2) && t.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 fn looks_binary(s: &str) -> bool {
@@ -811,7 +811,7 @@ fn looks_binary(s: &str) -> bool {
 fn looks_base64(s: &str) -> bool {
     let t = compact_sample(s);
     t.len() >= 8
-        && t.len() % 4 == 0
+        && t.len().is_multiple_of(4)
         && t.chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '/' | '=' | '-' | '_'))
 }

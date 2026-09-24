@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use super::prelude::*;
 
-fn entries<'a>(bundle: &'a Value) -> Result<&'a Vec<Value>, CoreError> {
+fn entries(bundle: &Value) -> Result<&Vec<Value>, CoreError> {
     bundle
         .get("entries")
         .and_then(|v| v.as_array())
@@ -178,7 +178,7 @@ mod tests {
         let out = run(bundle.clone(), json!({ "index": 1 }));
         assert!(matches!(out.get("name"), Some(PortValue::Text(s)) if s == "dir/b.bin"));
         assert!(
-            matches!(out.get("bytes"), Some(PortValue::Bytes(b)) if b.as_ref() == &[0, 1, 2, 3])
+            matches!(out.get("bytes"), Some(PortValue::Bytes(b)) if b.as_ref() == [0, 1, 2, 3])
         );
 
         let out = run(bundle, json!({ "entry": "b.bin", "match": "包含" }));

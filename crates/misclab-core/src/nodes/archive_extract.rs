@@ -57,7 +57,7 @@ fn decode_base64_archive_text(s: &str) -> Option<Vec<u8>> {
     let compact = compact_base64_candidate(s)?;
     let mut padded = compact.trim_end_matches('=').to_string();
     let pad = (4 - padded.len() % 4) % 4;
-    padded.extend(std::iter::repeat('=').take(pad));
+    padded.extend(std::iter::repeat_n('=', pad));
     for engine in [
         &base64::engine::general_purpose::STANDARD,
         &base64::engine::general_purpose::URL_SAFE,
