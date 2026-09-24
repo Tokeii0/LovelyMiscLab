@@ -52,7 +52,9 @@ tokio = { version = "1", optional = true, features = ["rt-multi-thread", "net", 
 tokio-util = { version = "0.7", optional = true }
 tower = { version = "0.5", optional = true }
 schemars = { version = "1", optional = true }
-base64 = { version = "0.22", optional = true }
+# Non-optional: 故事模式 decodes file/image data URLs (see commands/galgame.rs),
+# which is compiled regardless of the `mcp` feature.
+base64 = "0.22"
 uuid = { version = "1", optional = true, features = ["v4"] }
 
 [features]
@@ -60,4 +62,4 @@ uuid = { version = "1", optional = true, features = ["v4"] }
 # itself stays off until the user enables it. Build with `--no-default-features`
 # to compile the app without the MCP stack.
 default = ["mcp"]
-mcp = ["dep:rmcp", "dep:axum", "dep:tokio", "dep:tokio-util", "dep:tower", "dep:schemars", "dep:base64", "dep:uuid"]
+mcp = ["dep:rmcp", "dep:axum", "dep:tokio", "dep:tokio-util", "dep:tower", "dep:schemars", "dep:uuid"]

@@ -1,10 +1,13 @@
 import { type CSSProperties, useMemo, useRef, useState } from "react";
 import {
+  FileUp,
   Gamepad2,
+  Image as ImageIcon,
   Loader2,
   type LucideIcon,
   Play,
   RotateCcw,
+  Type,
   X,
 } from "lucide-react";
 
@@ -123,11 +126,35 @@ function EndingBanner({ ending }: { ending: string }) {
   );
 }
 
-/** Challenge-input screen shown before a story starts. */
+type IntroMode = "text" | "image" | "file";
+
+/** Challenge-input screen shown before a story starts. Text is pasted; a file or
+ * image is read to a `data:` URL (works in browser + Tauri webview) and handed to
+ * the engine, which decodes it to bytes for the identify/extract tools. */
 function Intro() {
+  const [mode, setMode] = useState<IntroMode>("text");
   const [text, setText] = useState("");
+  const [dataUrl, setDataUrl] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [brief, setBrief] = useState("");
   const start = useGalgameStore((s) => s.start);
   const error = useGalgameStore((s) => s.error);
+
+  const readFile = (f: File | undefined) => {
+    if (!f) return;
+    setFileName(`${f.name} · ${(f.size / 1024).toFixed(1)} KB`);
+    const r = new FileReader();
+    r.onload = () => setDataUrl(r.result as string);
+    r.readAsDataURL(f);
+  };
+
+  const payload = mode === "text" ? text : dataUrl;
+  const canStart = mode === "text" ? !!text.trim() : !!dataUrl;
+  const tabs: { id: IntroMode; label: string; icon: LucideIcon }[] = [
+    { id: "text", label: "文本 / 密文", icon: Type },
+    { id: "image", label: "图片", icon: ImageIcon },
+    { id: "file", label: "文件", icon: FileUp },
+  ];
 
   return (
     <div className="relative flex h-full items-center justify-center overflow-hidden">
@@ -141,17 +168,85 @@ function Intro() {
           <div>
             <h2 className="text-lg font-semibold text-slate-100">故事模式</h2>
             <p className="text-xs text-slate-400">
-              把解题变成一场 galgame——搭档 Misca 陪你一步步做选择，每个选择都真的在跑节点。
+              把解题变成一场 galgame——傲娇搭档 Misca 嘴上嫌弃，其实一步步陪你把题啃下来。
             </p>
           </div>
         </div>
 
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="把题目数据粘进来（一段文本 / 密文 / 编码……），然后开始你的解题冒险。"
-          className="h-40 w-full resize-none rounded-lg border border-white/10 bg-slate-950/60 p-3 font-mono text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-primary focus:ring-2 focus:ring-primary/30"
-        />
+        <div className="mb-3 flex gap-1 rounded-lg border border-white/10 bg-slate-950/40 p-1">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setMode(t.id)}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                mode === t.id ? "bg-primary text-white" : "text-slate-300 hover:text-white"
+              )}
+            >
+              <t.icon className="h-3.5 w-3.5" />
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {mode === "text" && (
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="把题目数据粘进来（一段文本 / 密文 / 编码……），然后开始你的解题冒险。"
+            className="h-40 w-full resize-none rounded-lg border border-white/10 bg-slate-950/60 p-3 font-mono text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-primary focus:ring-2 focus:ring-primary/30"
+          />
+        )}
+
+        {mode === "image" && (
+          <div className="flex h-40 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-white/15 bg-slate-950/60 p-3">
+            {dataUrl ? (
+              <img
+                src={dataUrl}
+                alt=""
+                className="max-h-24 rounded border border-white/10 bg-white object-contain"
+              />
+            ) : (
+              <ImageIcon className="h-8 w-8 text-slate-500" />
+            )}
+            <label className="cursor-pointer rounded-lg border border-white/10 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-200 transition-colors hover:border-primary/60">
+              选择图片
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => readFile(e.target.files?.[0])}
+              />
+            </label>
+            {fileName && <span className="max-w-full truncate text-[11px] text-slate-400">{fileName}</span>}
+          </div>
+        )}
+
+        {mode === "file" && (
+          <div className="flex h-40 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-white/15 bg-slate-950/60 p-3">
+            <FileUp className="h-8 w-8 text-slate-500" />
+            <label className="cursor-pointer rounded-lg border border-white/10 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-200 transition-colors hover:border-primary/60">
+              选择文件
+              <input type="file" className="hidden" onChange={(e) => readFile(e.target.files?.[0])} />
+            </label>
+            {fileName ? (
+              <span className="max-w-full truncate text-[11px] text-slate-300">{fileName}</span>
+            ) : (
+              <span className="px-4 text-center text-[11px] text-slate-500">
+                图片 / 压缩包 / 任意文件都行——Misca 会先识别类型、抽字符串、查隐写，再进入解码。
+              </span>
+            )}
+          </div>
+        )}
+
+        {mode !== "text" && (
+          <textarea
+            value={brief}
+            onChange={(e) => setBrief(e.target.value)}
+            placeholder="可选 · 题干/提示：把题目描述也写上，Misca 会照着解（例：附件是张 PNG，flag 藏在 LSB；压缩包密码是出题人生日）"
+            className="mt-3 h-20 w-full resize-none rounded-lg border border-white/10 bg-slate-950/60 p-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-primary focus:ring-2 focus:ring-primary/30"
+          />
+        )}
 
         {error && <p className="mt-2 text-xs text-rose-300">{error}</p>}
 
@@ -161,7 +256,7 @@ function Intro() {
               ? "需先在「设置」里配置 AI 文本模型（Base URL / 模型 / API Key）。"
               : "浏览器预览使用模拟剧情；桌面应用内为真实解题。"}
           </p>
-          <Button disabled={!text.trim()} onClick={() => start(text)}>
+          <Button disabled={!canStart} onClick={() => start(payload, mode, brief)}>
             <Play className="h-4 w-4" />
             开始解题
           </Button>

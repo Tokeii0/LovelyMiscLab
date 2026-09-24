@@ -21,6 +21,9 @@ interface GalgameState {
 
   challenge: string;
   challengeKind: string;
+  /** Optional problem statement / hint typed with a file/image challenge (题干);
+   * echoed to the engine every round for context. */
+  brief: string;
   /** The evolving working data — starts as `challenge`, then advances to each
    * solving round's output so the next round continues where the last ended. */
   workData: string;
@@ -37,7 +40,8 @@ interface GalgameState {
   /** Increments each turn; seeds the random sprite-variant pick. */
   sceneSeed: number;
 
-  start: (challenge: string) => void;
+  /** `kind`: "text" | "image" | "file". `brief`: optional 题干 for a file/image. */
+  start: (challenge: string, kind?: string, brief?: string) => void;
   pick: (choice: GalgameChoice) => void;
   /** Back to the intro screen (keeps nothing). */
   reset: () => void;
@@ -49,6 +53,7 @@ const base = {
   error: "",
   challenge: "",
   challengeKind: "text",
+  brief: "",
   workData: "",
   speaker: "Misca",
   mood: "neutral",
@@ -67,12 +72,12 @@ function mockTurn(req: GalgameStepRequest): GalgameTurn {
     speaker: "Misca",
     mood: solving ? "excited" : "thinking",
     narration: req.picked
-      ? `（预览）你选了「${req.picked.text}」。${
+      ? `（预览）「${req.picked.text}」……${
           solving
-            ? "我把当前数据直接喂给这个工具跑了一下——浏览器预览是模拟数据，装进桌面应用后就是真结果。"
-            : "嗯……我们再观察观察。"
+            ? "哼，早把数据喂给工具跑好了。浏览器预览只是模拟数据啦，装进桌面应用才是真本事——才、才不是特意帮你。"
+            : "急什么，再多观察观察不行吗。"
         }`
-      : "（预览剧情）唔，这段数据看着可疑。浏览器预览用的是模拟数据；装进桌面应用、并在「设置」里配好 AI 文本模型后，我就能真判断内容、直接从工具库里挑对口的工具解题啦。",
+      : "（预览剧情）哼，这种数据也想难住本小姐？浏览器预览用的是模拟数据；装进桌面应用、在「设置」里配好 AI 文本模型，我才好真刀真枪帮你解——别、别误会，我只是顺手而已。",
     choices: [
       { text: "这串八成是 base64，解一层", node: "base64_decode" },
       { text: "当成十六进制还原", node: "hex_decode" },
@@ -107,6 +112,14 @@ export const useGalgameStore = create<GalgameState>((set, get) => {
         ending: turn.ending ?? null,
         sceneSeed: s.sceneSeed + 1,
         workData: turn.resultData ?? s.workData,
+        // Once a round yields text, the chain is text from here on; a data-URL
+        // result (a produced file/image) stays binary.
+        challengeKind:
+          turn.resultData != null
+            ? turn.resultData.startsWith("data:")
+              ? s.challengeKind
+              : "text"
+            : s.challengeKind,
       }));
     } catch (e) {
       set({ busy: false, error: String(e) });
@@ -116,10 +129,11 @@ export const useGalgameStore = create<GalgameState>((set, get) => {
   return {
     ...base,
 
-    start: (challenge) => {
+    start: (challenge, kind = "text", brief = "") => {
       const c = challenge.trim();
-      set({ ...base, started: true, challenge: c, workData: c });
-      void run({ challenge: c, challengeKind: "text", history: [], picked: null }, []);
+      const b = brief.trim();
+      set({ ...base, started: true, challenge: c, workData: c, challengeKind: kind, brief: b });
+      void run({ challenge: c, challengeKind: kind, brief: b, history: [], picked: null }, []);
     },
 
     pick: (choice) => {
@@ -138,6 +152,7 @@ export const useGalgameStore = create<GalgameState>((set, get) => {
         {
           challenge: st.workData,
           challengeKind: st.challengeKind,
+          brief: st.brief,
           history,
           picked: { text: choice.text, node: choice.node ?? null, params: choice.params ?? null },
         },

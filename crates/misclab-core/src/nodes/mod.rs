@@ -15,6 +15,7 @@ mod affine;
 mod ai_judge;
 mod ai_vision;
 mod archive_extract;
+mod archive_get_file;
 mod archive_list;
 mod atbash;
 // audio-stego nodes (share audio_util)
@@ -252,6 +253,7 @@ pub fn register_builtins(reg: &mut NodeRegistry) {
     replace::register(reg);
     // archives
     archive_extract::register(reg);
+    archive_get_file::register(reg);
     archive_list::register(reg);
     // steganography
     zero_width::register(reg);

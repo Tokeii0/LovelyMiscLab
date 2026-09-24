@@ -44,10 +44,20 @@ export function ContentPanel({
         题目原文
       </button>
       {showChallenge && (
-        <div className="max-h-28 overflow-auto border-t border-white/10 bg-black/40 p-3">
-          <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-slate-200">
-            {challenge || "（无文本）"}
-          </pre>
+        <div className="max-h-40 overflow-auto border-t border-white/10 bg-black/40 p-3">
+          {challenge.startsWith("data:image") ? (
+            <img
+              src={challenge}
+              alt="题目图片"
+              className="max-h-32 rounded border border-white/10 bg-white object-contain"
+            />
+          ) : challenge.startsWith("data:") ? (
+            <p className="font-mono text-xs text-slate-300">已载入一个文件（二进制），由节点按字节处理。</p>
+          ) : (
+            <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-slate-200">
+              {challenge || "（无文本）"}
+            </pre>
+          )}
         </div>
       )}
     </div>

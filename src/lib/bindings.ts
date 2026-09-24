@@ -103,6 +103,8 @@ export interface GalgamePicked {
 export interface GalgameStepRequest {
   challenge: string;
   challengeKind: string;
+  /** Optional problem statement / hint typed alongside a file/image (题干). */
+  brief: string;
   history: GalgameHistoryItem[];
   picked?: GalgamePicked | null;
 }

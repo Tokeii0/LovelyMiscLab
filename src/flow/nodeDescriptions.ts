@@ -129,7 +129,8 @@ export const NODE_DESCRIPTIONS: Record<string, string> = {
 
   // 压缩包
   compress: "Gzip / Zlib / Raw Deflate 压缩。",
-  archive_extract: "解压 zip/7z/rar/gz/tar（支持密码）。",
+  archive_extract: "解压 zip/7z/rar/gz/tar/zlib/deflate，输出文件列表、当前文件和可复用的多文件解压结果。",
+  archive_get_file: "从「解压」节点的多文件结果中按文件名或序号取出单个文件。",
   archive_list: "不解压列出压缩包条目：名称、大小、压缩方式、是否加密、CRC。",
   zip_directory_diff: "比较 ZIP 本地文件头与中央目录元数据差异，定位伪加密和篡改。",
   zip_create: "把文本或字节打包成单文件 ZIP，用于出题或中间封装。",
