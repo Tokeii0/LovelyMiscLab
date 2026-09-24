@@ -26,7 +26,7 @@ target/*
 .workbuddy/*
 .vscode/*
 .claude/*
+!.claude/launch.json
 .workbuddy/memory/2026-07-02.md
-crates/misclab-core/tests/*
 .codex/config.toml
 misca-sprites/*

@@ -21,6 +21,8 @@ import { TitleBar } from "@/app/TitleBar";
 import { UpdateDialog } from "@/app/UpdateDialog";
 import { useUpdate } from "@/store/update";
 import { WindowResizeHandles } from "@/app/WindowResizeHandles";
+import { ConfirmHost } from "@/components/ui/ConfirmHost";
+import { Toaster } from "@/components/ui/toaster";
 import { CanvasView } from "@/views/CanvasView";
 import { GalgameView } from "@/views/GalgameView";
 import { ResourcesView, RunsView } from "@/views/EmptyState";
@@ -131,6 +133,8 @@ function App() {
         <CreateScriptNodeDialog />
         <ImageViewerModal />
         <UpdateDialog />
+        <ConfirmHost />
+        <Toaster />
       </div>
     </ReactFlowProvider>
   );

@@ -60,6 +60,9 @@ jobs:
       - name: Frontend typecheck & build
         run: pnpm build
 
+      - name: Frontend unit tests
+        run: pnpm test
+
       # Zero-warning gate (matches CONTRIBUTING). After the frontend build so the
       # app crate's generate_context! can embed ../dist while linting --all-targets.
       - name: Clippy (-D warnings)

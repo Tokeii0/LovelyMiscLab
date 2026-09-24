@@ -2,13 +2,10 @@ import { create } from "zustand";
 
 import { api, type UpdateInfo } from "@/lib/bindings";
 import { inTauri } from "@/lib/devMocks";
+import { errorMessage } from "@/lib/errors";
 
 type Status = "idle" | "checking" | "available" | "uptodate" | "installing" | "error";
 
-function errText(e: unknown): string {
-  if (e && typeof e === "object" && "message" in e) return String((e as { message: unknown }).message);
-  return String(e);
-}
 
 interface UpdateState {
   status: Status;
@@ -42,7 +39,7 @@ export const useUpdate = create<UpdateState>((set, get) => ({
         set({ status: "uptodate", info, dialogOpen: silent ? get().dialogOpen : true });
       }
     } catch (e) {
-      set({ status: "error", error: errText(e), dialogOpen: silent ? get().dialogOpen : true });
+      set({ status: "error", error: errorMessage(e), dialogOpen: silent ? get().dialogOpen : true });
     }
   },
 
@@ -58,7 +55,7 @@ export const useUpdate = create<UpdateState>((set, get) => ({
       // typically never resolves — the whole app restarts.
       await api.installUpdate(info.downloadUrl);
     } catch (e) {
-      set({ status: "error", error: errText(e) });
+      set({ status: "error", error: errorMessage(e) });
     }
   },
 

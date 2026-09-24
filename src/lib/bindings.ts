@@ -2,6 +2,9 @@
 // is deferred; when the command surface stabilizes we can regenerate this file.)
 import { Channel, invoke } from "@tauri-apps/api/core";
 
+/** Every command rejects with an `AppError`; format it with `errorMessage`. */
+export type { AppError } from "@/lib/errors";
+
 import type {
   CompositeModule,
   GraphOutputs,

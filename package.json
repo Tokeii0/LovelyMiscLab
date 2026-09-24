@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "test": "vitest run",
     "check:utf8": "node scripts/check-utf8.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
@@ -34,6 +35,7 @@
     "tailwindcss": "^4.3.2",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
-    "vite-plugin-singlefile": "^2.3.3"
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^5.0.1"
   }
 }
