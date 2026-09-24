@@ -63,7 +63,12 @@ pub fn register(reg: &mut NodeRegistry) {
             BLUE,
             vec![t_in()],
             vec![t_out()],
-            vec![ParamSpec::select("operation", "操作", &["解码", "编码"], "解码")],
+            vec![ParamSpec::select(
+                "operation",
+                "操作",
+                &["解码", "编码"],
+                "解码",
+            )],
         ),
         Arc::new(|| Arc::new(N)),
     );

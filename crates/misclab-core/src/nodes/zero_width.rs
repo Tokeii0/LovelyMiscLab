@@ -25,14 +25,7 @@ const RLM: char = '\u{200F}'; // RIGHT-TO-LEFT MARK
 /// Code points treated as "zero width" digits when scanning a carrier string
 /// (drives frequency analysis + the 二进制/四进制 schemes).
 const ZW_SET: &[char] = &[
-    ZWSP,
-    ZWNJ,
-    ZWJ,
-    ZWNBSP,
-    WJ,
-    LRM,
-    RLM,
-    '\u{2061}', // FUNCTION APPLICATION
+    ZWSP, ZWNJ, ZWJ, ZWNBSP, WJ, LRM, RLM, '\u{2061}', // FUNCTION APPLICATION
     '\u{2062}', // INVISIBLE TIMES
     '\u{2063}', // INVISIBLE SEPARATOR
     '\u{2064}', // INVISIBLE PLUS
@@ -486,7 +479,9 @@ fn auto_decode(input: &str) -> Result<PortMap, CoreError> {
 
     if cands.is_empty() {
         let note = if counts.len() == 1 {
-            format!("发现零宽字符：{found}。只有 1 种符号，无法二值解码（请切到具体方案并指定映射）。")
+            format!(
+                "发现零宽字符：{found}。只有 1 种符号，无法二值解码（请切到具体方案并指定映射）。"
+            )
         } else {
             format!("发现隐形字符：{found}，但未能自动解码（可尝试指定具体方案）。")
         };

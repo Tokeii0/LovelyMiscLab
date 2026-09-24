@@ -3,7 +3,12 @@ use super::prelude::*;
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let chars: Vec<char> = in_text(inputs, "text")?.chars().collect();
         let start = (pnum(params, "start", 0.0) as i64).max(0) as usize;
         let len = pnum(params, "length", 0.0) as i64;

@@ -94,7 +94,9 @@ fn locate_head(data: &[u8], base: usize, len: usize) -> Option<(usize, String)> 
         }
         let dec = decode_data(data, base + i, 104, 4);
         let ver = &dec[0..4];
-        if (ver == b"DSC2" || ver == b"DSCF") && matches!(dec[4], 2 | 4 | 8) && matches!(dec[5], 0 | 1)
+        if (ver == b"DSC2" || ver == b"DSCF")
+            && matches!(dec[4], 2 | 4 | 8)
+            && matches!(dec[5], 0 | 1)
         {
             return Some((i, String::from_utf8_lossy(ver).into_owned()));
         }
@@ -169,7 +171,9 @@ fn extract(wav: &[u8], password: &str) -> Result<Analysis, CoreError> {
         }
         if &hdr[0..4] != b"DSSF" {
             if encrypted && files.is_empty() {
-                return Err(CoreError::Other("密码错误（解密后未出现 DSSF 记录）。".into()));
+                return Err(CoreError::Other(
+                    "密码错误（解密后未出现 DSSF 记录）。".into(),
+                ));
             }
             break;
         }
@@ -190,7 +194,10 @@ fn extract(wav: &[u8], password: &str) -> Result<Analysis, CoreError> {
             aes_ecb_decrypt(k, &mut content);
         }
         content.truncate(size);
-        files.push(Extracted { name, data: content });
+        files.push(Extracted {
+            name,
+            data: content,
+        });
         pos = cstart + content_carrier;
     }
 
@@ -218,7 +225,11 @@ impl Node for N {
             "DeepSound {} · 质量模式 {} · {}\n共 {} 个隐藏文件：",
             a.version,
             a.mode,
-            if a.encrypted { "AES-256 加密" } else { "未加密" },
+            if a.encrypted {
+                "AES-256 加密"
+            } else {
+                "未加密"
+            },
             a.files.len()
         );
         for f in &a.files {
@@ -239,7 +250,10 @@ impl Node for N {
                 m.insert("filename".into(), PortValue::Text(first.name.clone()));
             }
             None => {
-                m.insert("bytes".into(), PortValue::Bytes(Arc::from(Vec::new().into_boxed_slice())));
+                m.insert(
+                    "bytes".into(),
+                    PortValue::Bytes(Arc::from(Vec::new().into_boxed_slice())),
+                );
                 m.insert("text".into(), PortValue::Text(String::new()));
                 m.insert("filename".into(), PortValue::Text(String::new()));
             }

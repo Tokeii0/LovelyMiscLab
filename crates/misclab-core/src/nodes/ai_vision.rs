@@ -7,8 +7,7 @@ fn to_image_url(input: &str) -> Result<String, CoreError> {
     if s.starts_with("http://") || s.starts_with("https://") || s.starts_with("data:") {
         return Ok(s.to_string());
     }
-    let bytes =
-        std::fs::read(s).map_err(|e| CoreError::Other(format!("读取图片失败: {e}")))?;
+    let bytes = std::fs::read(s).map_err(|e| CoreError::Other(format!("读取图片失败: {e}")))?;
     let mime = if s.ends_with(".jpg") || s.ends_with(".jpeg") {
         "image/jpeg"
     } else if s.ends_with(".gif") {

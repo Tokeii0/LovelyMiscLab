@@ -17,7 +17,9 @@ impl Node for N {
             "包含" => a.contains(b),
             "开头" => a.starts_with(b),
             "结尾" => a.ends_with(b),
-            "匹配正则" => regex::Regex::new(b).map(|re| re.is_match(a)).unwrap_or(false),
+            "匹配正则" => regex::Regex::new(b)
+                .map(|re| re.is_match(a))
+                .unwrap_or(false),
             _ => false,
         };
         Ok(one("result", PortValue::Bool(result)))

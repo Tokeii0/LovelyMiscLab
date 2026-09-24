@@ -3,7 +3,12 @@ use super::prelude::*;
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let v: serde_json::Value = serde_json::from_str(in_text(inputs, "text")?)
             .map_err(|e| CoreError::Parse(format!("JSON 无效: {e}")))?;
         let out = if pstr(params, "operation", "美化") == "压缩" {
@@ -25,7 +30,12 @@ pub fn register(reg: &mut NodeRegistry) {
             CYAN,
             vec![t_in()],
             vec![t_out()],
-            vec![ParamSpec::select("operation", "操作", &["美化", "压缩"], "美化")],
+            vec![ParamSpec::select(
+                "operation",
+                "操作",
+                &["美化", "压缩"],
+                "美化",
+            )],
         ),
         Arc::new(|| Arc::new(N)),
     );

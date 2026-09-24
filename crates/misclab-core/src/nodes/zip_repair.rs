@@ -44,8 +44,9 @@ impl Node for N {
         {
             return Err(CoreError::Parse("不是 ZIP 文件（缺少 PK 头）。".into()));
         }
-        let eocd = find_eocd(&d)
-            .ok_or_else(|| CoreError::Parse("找不到 ZIP 中央目录（EOCD），文件可能截断。".into()))?;
+        let eocd = find_eocd(&d).ok_or_else(|| {
+            CoreError::Parse("找不到 ZIP 中央目录（EOCD），文件可能截断。".into())
+        })?;
         let count = u16le(&d, eocd + 10);
         let cd_off = u32le(&d, eocd + 16);
 
@@ -94,7 +95,11 @@ impl Node for N {
         } else {
             format!(
                 "修复完成：{scanned} 个条目中清除了 {cleared} 个加密位{}。",
-                if clear_strong { "（含强加密位 bit6）" } else { "" }
+                if clear_strong {
+                    "（含强加密位 bit6）"
+                } else {
+                    ""
+                }
             )
         };
         let mut out = PortMap::new();
@@ -119,7 +124,11 @@ pub fn register(reg: &mut NodeRegistry) {
                 req("bytes", "修复后字节", PortType::Bytes),
                 opt("report", "分析", PortType::Text),
             ],
-            vec![ParamSpec::toggle("clearStrong", "同时清强加密位(bit6)", false)],
+            vec![ParamSpec::toggle(
+                "clearStrong",
+                "同时清强加密位(bit6)",
+                false,
+            )],
         ),
         Arc::new(|| Arc::new(N)),
     );

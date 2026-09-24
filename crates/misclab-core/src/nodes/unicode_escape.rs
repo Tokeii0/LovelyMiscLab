@@ -3,7 +3,12 @@ use super::prelude::*;
 
 struct Enc;
 impl Node for Enc {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let all = pstr(params, "mode", "仅非ASCII") == "全部";
         let mut out = String::new();
         let mut buf = [0u16; 2];
@@ -22,7 +27,12 @@ impl Node for Enc {
 
 struct Dec;
 impl Node for Dec {
-    fn run(&self, inputs: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let re = regex::Regex::new(r"\\u\{([0-9a-fA-F]+)\}|\\u([0-9a-fA-F]{4})").unwrap();
         let out = re.replace_all(in_text(inputs, "text")?, |caps: &regex::Captures| {
             let hex = caps.get(1).or_else(|| caps.get(2)).unwrap().as_str();
@@ -45,12 +55,25 @@ pub fn register(reg: &mut NodeRegistry) {
             BLUE,
             vec![t_in()],
             vec![t_out()],
-            vec![ParamSpec::select("mode", "范围", &["仅非ASCII", "全部"], "仅非ASCII")],
+            vec![ParamSpec::select(
+                "mode",
+                "范围",
+                &["仅非ASCII", "全部"],
+                "仅非ASCII",
+            )],
         ),
         Arc::new(|| Arc::new(Enc)),
     );
     reg.register(
-        desc("unicode_unescape", ENC, "Unicode 反转义", BLUE, vec![t_in()], vec![t_out()], vec![]),
+        desc(
+            "unicode_unescape",
+            ENC,
+            "Unicode 反转义",
+            BLUE,
+            vec![t_in()],
+            vec![t_out()],
+            vec![],
+        ),
         Arc::new(|| Arc::new(Dec)),
     );
 }

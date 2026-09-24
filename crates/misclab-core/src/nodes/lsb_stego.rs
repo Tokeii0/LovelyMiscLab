@@ -5,7 +5,12 @@ use super::prelude::*;
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let data = in_bytes(inputs, "data")?;
         let img = image::load_from_memory(&data)
             .map_err(|e| CoreError::Other(format!("图片解码失败: {e}")))?
@@ -43,8 +48,14 @@ impl Node for N {
         }
 
         let mut m = PortMap::new();
-        m.insert("bytes".to_string(), PortValue::Bytes(Arc::from(out.clone().into_boxed_slice())));
-        m.insert("text".to_string(), PortValue::Text(String::from_utf8_lossy(&out).into_owned()));
+        m.insert(
+            "bytes".to_string(),
+            PortValue::Bytes(Arc::from(out.clone().into_boxed_slice())),
+        );
+        m.insert(
+            "text".to_string(),
+            PortValue::Text(String::from_utf8_lossy(&out).into_owned()),
+        );
         m.insert("hex".to_string(), PortValue::Text(hex::encode(&out)));
         Ok(m)
     }

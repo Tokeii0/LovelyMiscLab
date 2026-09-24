@@ -12,7 +12,12 @@ fn io<E: std::fmt::Display>(e: E) -> CoreError {
 
 struct Comp;
 impl Node for Comp {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let data = in_bytes(inputs, "data")?;
         let out = match pstr(params, "format", "Gzip") {
             "Zlib" => {
@@ -33,7 +38,10 @@ impl Node for Comp {
         };
         let mut m = PortMap::new();
         m.insert("hex".to_string(), PortValue::Text(hex::encode(&out)));
-        m.insert("bytes".to_string(), PortValue::Bytes(Arc::from(out.into_boxed_slice())));
+        m.insert(
+            "bytes".to_string(),
+            PortValue::Bytes(Arc::from(out.into_boxed_slice())),
+        );
         Ok(m)
     }
 }
@@ -46,8 +54,16 @@ pub fn register(reg: &mut NodeRegistry) {
             "压缩",
             AMBER,
             vec![req("data", "输入", PortType::Any)],
-            vec![req("hex", "hex", PortType::Text), opt("bytes", "字节", PortType::Bytes)],
-            vec![ParamSpec::select("format", "格式", &["Gzip", "Zlib", "Raw Deflate"], "Gzip")],
+            vec![
+                req("hex", "hex", PortType::Text),
+                opt("bytes", "字节", PortType::Bytes),
+            ],
+            vec![ParamSpec::select(
+                "format",
+                "格式",
+                &["Gzip", "Zlib", "Raw Deflate"],
+                "Gzip",
+            )],
         ),
         Arc::new(|| Arc::new(Comp)),
     );

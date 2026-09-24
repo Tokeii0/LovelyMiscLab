@@ -7,7 +7,12 @@ use super::prelude::*;
 
 struct N;
 impl Node for N {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let a = load_image(i, "a")?;
         let b = load_image(i, "b")?;
         let (a, b) = align(a, b, false);
@@ -19,7 +24,10 @@ impl Node for N {
             for x in 0..w {
                 let pa = a.get_pixel(x, y).0;
                 let pb = b.get_pixel(x, y).0;
-                let d = pa[0].abs_diff(pb[0]).max(pa[1].abs_diff(pb[1])).max(pa[2].abs_diff(pb[2]));
+                let d = pa[0]
+                    .abs_diff(pb[0])
+                    .max(pa[1].abs_diff(pb[1]))
+                    .max(pa[2].abs_diff(pb[2]));
                 if d > thresh {
                     diffs += 1;
                     out.put_pixel(x, y, Rgba([255, 0, 0, 255]));
@@ -42,13 +50,23 @@ pub fn register(reg: &mut NodeRegistry) {
             IMG,
             "图像差异",
             FUCHSIA,
-            vec![req("a", "图片 A", PortType::Any), req("b", "图片 B", PortType::Any)],
+            vec![
+                req("a", "图片 A", PortType::Any),
+                req("b", "图片 B", PortType::Any),
+            ],
             vec![
                 req("image", "差异图", PortType::Image),
                 opt("bytes", "字节", PortType::Bytes),
                 opt("count", "差异像素数", PortType::Number),
             ],
-            vec![ParamSpec::number("threshold", "阈值", 0.0, 255.0, 1.0, 16.0)],
+            vec![ParamSpec::number(
+                "threshold",
+                "阈值",
+                0.0,
+                255.0,
+                1.0,
+                16.0,
+            )],
         ),
         Arc::new(|| Arc::new(N)),
     );

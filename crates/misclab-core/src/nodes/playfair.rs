@@ -73,7 +73,12 @@ fn transform(sq: &[char], pairs: &[(char, char)], dir: i32) -> String {
 
 struct Enc;
 impl Node for Enc {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let sq = square(pstr(params, "keyword", ""));
         let pairs = encrypt_pairs(&clean(in_text(inputs, "text")?));
         Ok(out_text(transform(&sq, &pairs, 1)))
@@ -82,10 +87,19 @@ impl Node for Enc {
 
 struct Dec;
 impl Node for Dec {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let sq = square(pstr(params, "keyword", ""));
         let letters = clean(in_text(inputs, "text")?);
-        let pairs: Vec<(char, char)> = letters.chunks(2).filter(|c| c.len() == 2).map(|c| (c[0], c[1])).collect();
+        let pairs: Vec<(char, char)> = letters
+            .chunks(2)
+            .filter(|c| c.len() == 2)
+            .map(|c| (c[0], c[1]))
+            .collect();
         Ok(out_text(transform(&sq, &pairs, -1)))
     }
 }
@@ -93,11 +107,27 @@ impl Node for Dec {
 pub fn register(reg: &mut NodeRegistry) {
     let kw = || ParamSpec::text("keyword", "关键词", "", false);
     reg.register(
-        desc("playfair_encode", CRYPTO, "Playfair 加密", ROSE, vec![t_in()], vec![t_out()], vec![kw()]),
+        desc(
+            "playfair_encode",
+            CRYPTO,
+            "Playfair 加密",
+            ROSE,
+            vec![t_in()],
+            vec![t_out()],
+            vec![kw()],
+        ),
         Arc::new(|| Arc::new(Enc)),
     );
     reg.register(
-        desc("playfair_decode", CRYPTO, "Playfair 解密", ROSE, vec![t_in()], vec![t_out()], vec![kw()]),
+        desc(
+            "playfair_decode",
+            CRYPTO,
+            "Playfair 解密",
+            ROSE,
+            vec![t_in()],
+            vec![t_out()],
+            vec![kw()],
+        ),
         Arc::new(|| Arc::new(Dec)),
     );
 }

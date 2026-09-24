@@ -25,17 +25,35 @@ impl Node for Encode {
         params: &serde_json::Value,
         _ctx: &mut NodeCtx,
     ) -> Result<PortMap, CoreError> {
-        Ok(out_text(base64_engine(params)?.encode(in_text(inputs, "text")?.as_bytes())))
+        Ok(out_text(
+            base64_engine(params)?.encode(in_text(inputs, "text")?.as_bytes()),
+        ))
     }
 }
 
 pub fn register(reg: &mut NodeRegistry) {
     reg.register(
-        desc("base64_decode", ENC, "Base64 解码", BLUE, vec![t_in()], vec![t_out()], base64_params()),
+        desc(
+            "base64_decode",
+            ENC,
+            "Base64 解码",
+            BLUE,
+            vec![t_in()],
+            vec![t_out()],
+            base64_params(),
+        ),
         Arc::new(|| Arc::new(Decode)),
     );
     reg.register(
-        desc("base64_encode", ENC, "Base64 编码", BLUE, vec![t_in()], vec![t_out()], base64_params()),
+        desc(
+            "base64_encode",
+            ENC,
+            "Base64 编码",
+            BLUE,
+            vec![t_in()],
+            vec![t_out()],
+            base64_params(),
+        ),
         Arc::new(|| Arc::new(Encode)),
     );
 }

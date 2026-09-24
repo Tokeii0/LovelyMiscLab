@@ -16,7 +16,10 @@ impl Node for Enc {
         params: &serde_json::Value,
         _ctx: &mut NodeCtx,
     ) -> Result<PortMap, CoreError> {
-        Ok(out_text(base32_encode(&in_bytes(inputs, "data")?, &alpha(params))))
+        Ok(out_text(base32_encode(
+            &in_bytes(inputs, "data")?,
+            &alpha(params),
+        )))
     }
 }
 
@@ -29,7 +32,11 @@ impl Node for Dec {
         _ctx: &mut NodeCtx,
     ) -> Result<PortMap, CoreError> {
         let strip = pbool(params, "strip", true);
-        Ok(decoded(base32_decode(in_text(inputs, "text")?, &alpha(params), strip)))
+        Ok(decoded(base32_decode(
+            in_text(inputs, "text")?,
+            &alpha(params),
+            strip,
+        )))
     }
 }
 
@@ -58,7 +65,10 @@ pub fn register(reg: &mut NodeRegistry) {
                 req("text", "文本", PortType::Text),
                 opt("bytes", "字节", PortType::Bytes),
             ],
-            vec![variant(), ParamSpec::toggle("strip", "去除非码表字符", true)],
+            vec![
+                variant(),
+                ParamSpec::toggle("strip", "去除非码表字符", true),
+            ],
         ),
         Arc::new(|| Arc::new(Dec)),
     );

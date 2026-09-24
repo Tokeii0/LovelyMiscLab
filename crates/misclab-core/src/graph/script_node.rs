@@ -95,12 +95,28 @@ impl ScriptModule {
     pub fn descriptor(&self) -> NodeDescriptor {
         NodeDescriptor {
             id: self.id.clone(),
-            category: if self.category.is_empty() { "自定义".into() } else { self.category.clone() },
+            category: if self.category.is_empty() {
+                "自定义".into()
+            } else {
+                self.category.clone()
+            },
             display_name: self.name.clone(),
             description: self.description.clone(),
-            color: if self.color.is_empty() { "#8b5cf6".into() } else { self.color.clone() },
-            inputs: self.inputs.iter().map(|p| PortSpec::new(&p.name, &p.label, p.port_type, false)).collect(),
-            outputs: self.outputs.iter().map(|p| PortSpec::new(&p.name, &p.label, p.port_type, false)).collect(),
+            color: if self.color.is_empty() {
+                "#8b5cf6".into()
+            } else {
+                self.color.clone()
+            },
+            inputs: self
+                .inputs
+                .iter()
+                .map(|p| PortSpec::new(&p.name, &p.label, p.port_type, false))
+                .collect(),
+            outputs: self
+                .outputs
+                .iter()
+                .map(|p| PortSpec::new(&p.name, &p.label, p.port_type, false))
+                .collect(),
             params: self.params.clone(),
             cost: Cost::Heavy,
         }
@@ -108,7 +124,11 @@ impl ScriptModule {
 
     pub fn factory(&self) -> NodeFactory {
         let module = self.clone();
-        Arc::new(move || Arc::new(ScriptNode { module: module.clone() }))
+        Arc::new(move || {
+            Arc::new(ScriptNode {
+                module: module.clone(),
+            })
+        })
     }
 }
 
@@ -120,12 +140,24 @@ pub struct ScriptNode {
 
 /// Keep temp filenames safe.
 fn sanitize(name: &str) -> String {
-    name.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' }).collect()
+    name.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 fn truncate(s: &str, n: usize) -> String {
     let t: String = s.chars().take(n).collect();
-    if t.chars().count() < s.chars().count() { format!("{t}…") } else { t }
+    if t.chars().count() < s.chars().count() {
+        format!("{t}…")
+    } else {
+        t
+    }
 }
 
 /// Split an args template into tokens, honoring `"double quoted"` spans (so paths
@@ -228,7 +260,11 @@ fn value_from_json(v: &serde_json::Value, ty: PortType) -> PortValue {
         }),
         PortType::Number => match v {
             J::Number(n) => PortValue::Number(n.as_f64().unwrap_or(0.0)),
-            J::String(s) => s.trim().parse::<f64>().map(PortValue::Number).unwrap_or_else(|_| PortValue::Text(s.clone())),
+            J::String(s) => s
+                .trim()
+                .parse::<f64>()
+                .map(PortValue::Number)
+                .unwrap_or_else(|_| PortValue::Text(s.clone())),
             _ => PortValue::Json(v.clone()),
         },
         PortType::Bool => match v {
@@ -237,7 +273,12 @@ fn value_from_json(v: &serde_json::Value, ty: PortType) -> PortValue {
         },
         PortType::StringList => match v {
             J::Array(a) => PortValue::StringList(
-                a.iter().map(|x| match x { J::String(s) => s.clone(), o => o.to_string() }).collect(),
+                a.iter()
+                    .map(|x| match x {
+                        J::String(s) => s.clone(),
+                        o => o.to_string(),
+                    })
+                    .collect(),
             ),
             _ => PortValue::Json(v.clone()),
         },
@@ -258,42 +299,68 @@ fn value_from_raw(raw: &[u8], ty: PortType) -> PortValue {
         PortType::Bytes => PortValue::Bytes(Arc::from(raw.to_vec().into_boxed_slice())),
         PortType::Number => {
             let s = String::from_utf8_lossy(raw);
-            s.trim().parse::<f64>().map(PortValue::Number).unwrap_or_else(|_| PortValue::Text(s.into_owned()))
+            s.trim()
+                .parse::<f64>()
+                .map(PortValue::Number)
+                .unwrap_or_else(|_| PortValue::Text(s.into_owned()))
         }
         PortType::Bool => {
             let s = String::from_utf8_lossy(raw);
-            PortValue::Bool(matches!(s.trim().to_ascii_lowercase().as_str(), "true" | "1" | "yes" | "on" | "是"))
+            PortValue::Bool(matches!(
+                s.trim().to_ascii_lowercase().as_str(),
+                "true" | "1" | "yes" | "on" | "是"
+            ))
         }
         PortType::StringList => {
             let s = String::from_utf8_lossy(raw);
             PortValue::StringList(s.lines().map(|l| l.to_string()).collect())
         }
-        _ => PortValue::Text(String::from_utf8_lossy(raw).trim_end_matches(['\n', '\r']).to_string()),
+        _ => PortValue::Text(
+            String::from_utf8_lossy(raw)
+                .trim_end_matches(['\n', '\r'])
+                .to_string(),
+        ),
     }
 }
 
 /// Build the output PortMap from the process's stdout bytes and the temp files it
 /// wrote. Pure (no process spawning) so it can be unit-tested directly.
-pub fn build_outputs(stdout: &[u8], outputs: &[ScriptOutputPort], scratch: &Path) -> Result<PortMap, CoreError> {
+pub fn build_outputs(
+    stdout: &[u8],
+    outputs: &[ScriptOutputPort],
+    scratch: &Path,
+) -> Result<PortMap, CoreError> {
     let mut map = PortMap::new();
 
     // File-delivery outputs.
-    for p in outputs.iter().filter(|p| matches!(p.delivery, OutputDelivery::File)) {
+    for p in outputs
+        .iter()
+        .filter(|p| matches!(p.delivery, OutputDelivery::File))
+    {
         let path = scratch.join(format!("out_{}", sanitize(&p.name)));
-        let bytes = std::fs::read(&path)
-            .map_err(|_| CoreError::Other(format!("输出「{}」的文件未生成：{}", p.label, path.display())))?;
+        let bytes = std::fs::read(&path).map_err(|_| {
+            CoreError::Other(format!(
+                "输出「{}」的文件未生成：{}",
+                p.label,
+                path.display()
+            ))
+        })?;
         map.insert(p.name.clone(), value_from_raw(&bytes, p.port_type));
     }
 
-    let stdout_ports: Vec<&ScriptOutputPort> =
-        outputs.iter().filter(|p| matches!(p.delivery, OutputDelivery::StdoutJson)).collect();
+    let stdout_ports: Vec<&ScriptOutputPort> = outputs
+        .iter()
+        .filter(|p| matches!(p.delivery, OutputDelivery::StdoutJson))
+        .collect();
     if stdout_ports.is_empty() {
         return Ok(map);
     }
 
     // A single stdout port may fall back to raw stdout when it isn't JSON.
     let single = outputs.len() == 1 && stdout_ports.len() == 1;
-    let parsed = serde_json::from_slice::<serde_json::Value>(stdout).ok().filter(|v| v.is_object());
+    let parsed = serde_json::from_slice::<serde_json::Value>(stdout)
+        .ok()
+        .filter(|v| v.is_object());
     match parsed {
         Some(obj) => {
             for p in &stdout_ports {
@@ -326,7 +393,11 @@ fn resolve_command(cmd: &str, env: &NodeEnv) -> Result<String, CoreError> {
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string())
-            .ok_or_else(|| CoreError::Other(format!("未配置工具「{key}」，请在设置中填写其可执行文件路径")))
+            .ok_or_else(|| {
+                CoreError::Other(format!(
+                    "未配置工具「{key}」，请在设置中填写其可执行文件路径"
+                ))
+            })
     } else {
         Ok(cmd.to_string())
     }
@@ -347,8 +418,16 @@ fn drain(reader: impl Read, ctx: &NodeCtx, is_err: bool) -> Vec<u8> {
                 let text = String::from_utf8_lossy(&line);
                 let trimmed = text.trim_end_matches(['\n', '\r']);
                 if !trimmed.is_empty() {
-                    let level = if is_err { LogLevel::Warn } else { LogLevel::Info };
-                    let msg = if is_err { format!("[stderr] {trimmed}") } else { trimmed.to_string() };
+                    let level = if is_err {
+                        LogLevel::Warn
+                    } else {
+                        LogLevel::Info
+                    };
+                    let msg = if is_err {
+                        format!("[stderr] {trimmed}")
+                    } else {
+                        trimmed.to_string()
+                    };
                     ctx.log(level, msg);
                 }
             }
@@ -365,18 +444,36 @@ enum End {
 }
 
 impl Node for ScriptNode {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, ctx: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        ctx: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let m = &self.module;
         let command = resolve_command(&m.command, ctx.env)?;
-        let stdin_ports: Vec<&ScriptInputPort> =
-            m.inputs.iter().filter(|p| matches!(p.delivery, InputDelivery::Stdin)).collect();
+        let stdin_ports: Vec<&ScriptInputPort> = m
+            .inputs
+            .iter()
+            .filter(|p| matches!(p.delivery, InputDelivery::Stdin))
+            .collect();
         if stdin_ports.len() > 1 {
-            return Err(CoreError::Other("一个脚本节点最多只能有一个 stdin 输入端口".into()));
+            return Err(CoreError::Other(
+                "一个脚本节点最多只能有一个 stdin 输入端口".into(),
+            ));
         }
         let scratch = std::env::temp_dir().join(format!("misclab_script_{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&scratch).map_err(|e| CoreError::Other(format!("创建临时目录失败: {e}")))?;
+        std::fs::create_dir_all(&scratch)
+            .map_err(|e| CoreError::Other(format!("创建临时目录失败: {e}")))?;
 
-        let result = self.run_inner(&command, inputs, params, ctx, &scratch, stdin_ports.first().copied());
+        let result = self.run_inner(
+            &command,
+            inputs,
+            params,
+            ctx,
+            &scratch,
+            stdin_ports.first().copied(),
+        );
         let _ = std::fs::remove_dir_all(&scratch);
         result
     }
@@ -399,19 +496,30 @@ impl ScriptNode {
         for p in &m.inputs {
             match p.delivery {
                 InputDelivery::File => {
-                    let bytes = inputs.get(&p.name).map(port_value_to_bytes).unwrap_or_default();
+                    let bytes = inputs
+                        .get(&p.name)
+                        .map(port_value_to_bytes)
+                        .unwrap_or_default();
                     let path = scratch.join(format!("in_{}", sanitize(&p.name)));
-                    std::fs::write(&path, &bytes).map_err(|e| CoreError::Other(format!("写入输入文件失败: {e}")))?;
+                    std::fs::write(&path, &bytes)
+                        .map_err(|e| CoreError::Other(format!("写入输入文件失败: {e}")))?;
                     subst.insert(p.name.clone(), path.to_string_lossy().into_owned());
                 }
                 InputDelivery::Arg => {
-                    let s = inputs.get(&p.name).map(port_value_to_string).unwrap_or_default();
+                    let s = inputs
+                        .get(&p.name)
+                        .map(port_value_to_string)
+                        .unwrap_or_default();
                     subst.insert(p.name.clone(), s);
                 }
                 InputDelivery::Stdin => {}
             }
         }
-        for p in m.outputs.iter().filter(|p| matches!(p.delivery, OutputDelivery::File)) {
+        for p in m
+            .outputs
+            .iter()
+            .filter(|p| matches!(p.delivery, OutputDelivery::File))
+        {
             let path = scratch.join(format!("out_{}", sanitize(&p.name)));
             subst.insert(p.name.clone(), path.to_string_lossy().into_owned());
         }
@@ -421,7 +529,10 @@ impl ScriptNode {
             subst.insert(spec.name.clone(), json_to_arg(v));
         }
 
-        let args: Vec<String> = tokenize(&m.args_template).iter().map(|t| substitute(t, &subst)).collect();
+        let args: Vec<String> = tokenize(&m.args_template)
+            .iter()
+            .map(|t| substitute(t, &subst))
+            .collect();
 
         let cwd = m
             .working_dir
@@ -438,10 +549,16 @@ impl ScriptNode {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| CoreError::Other(format!("无法启动「{command}」: {e}（请检查路径/工具配置）")))?;
+            .map_err(|e| {
+                CoreError::Other(format!("无法启动「{command}」: {e}（请检查路径/工具配置）"))
+            })?;
 
-        let stdin_data: Option<Vec<u8>> =
-            stdin_port.map(|p| inputs.get(&p.name).map(port_value_to_bytes).unwrap_or_default());
+        let stdin_data: Option<Vec<u8>> = stdin_port.map(|p| {
+            inputs
+                .get(&p.name)
+                .map(port_value_to_bytes)
+                .unwrap_or_default()
+        });
         let mut child_stdin = child.stdin.take();
         let child_stdout = child.stdout.take().expect("stdout piped");
         let child_stderr = child.stderr.take().expect("stderr piped");
@@ -485,11 +602,18 @@ impl ScriptNode {
         let stderr = String::from_utf8_lossy(&stderr_bytes);
         match end {
             End::Cancelled => return Err(CoreError::Cancelled),
-            End::Timeout => return Err(CoreError::Other(format!("执行超时（>{timeout}s），已终止进程"))),
+            End::Timeout => {
+                return Err(CoreError::Other(format!(
+                    "执行超时（>{timeout}s），已终止进程"
+                )))
+            }
             End::Err(e) => return Err(CoreError::Other(format!("进程执行出错: {e}"))),
             End::Ok(status) => {
                 if !status.success() {
-                    let code = status.code().map(|c| c.to_string()).unwrap_or_else(|| "已被信号终止".into());
+                    let code = status
+                        .code()
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| "已被信号终止".into());
                     return Err(CoreError::Other(format!(
                         "脚本退出码 {code}。\nstderr: {}",
                         truncate(stderr.trim(), 800)

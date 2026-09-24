@@ -23,7 +23,15 @@ impl Node for N {
 
 pub fn register(reg: &mut NodeRegistry) {
     reg.register(
-        desc("atbash", CRYPTO, "Atbash", ROSE, vec![t_in()], vec![t_out()], vec![]),
+        desc(
+            "atbash",
+            CRYPTO,
+            "Atbash",
+            ROSE,
+            vec![t_in()],
+            vec![t_out()],
+            vec![],
+        ),
         Arc::new(|| Arc::new(N)),
     );
 }

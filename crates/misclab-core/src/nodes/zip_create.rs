@@ -10,11 +10,20 @@ use super::prelude::*;
 
 struct N;
 impl Node for N {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let data = in_bytes(i, "data")?;
         let filename = {
             let f = pstr(p, "filename", "flag.txt");
-            if f.trim().is_empty() { "flag.txt" } else { f }
+            if f.trim().is_empty() {
+                "flag.txt"
+            } else {
+                f
+            }
         };
         let method_name = pstr(p, "method", "Deflated");
         let method = match method_name {
@@ -40,7 +49,10 @@ impl Node for N {
             buf.len()
         );
         let mut out = PortMap::new();
-        out.insert("bytes".into(), PortValue::Bytes(Arc::from(buf.into_boxed_slice())));
+        out.insert(
+            "bytes".into(),
+            PortValue::Bytes(Arc::from(buf.into_boxed_slice())),
+        );
         out.insert("report".into(), PortValue::Text(report));
         Ok(out)
     }

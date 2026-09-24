@@ -13,7 +13,9 @@ impl Node for N {
         let text = in_text(i, "text")?;
         let map: Vec<char> = pstr(p, "mapping", "AGCT").chars().collect();
         if map.len() != 4 {
-            return Err(CoreError::Parse("映射必须是 4 个字符（对应 00/01/10/11）".into()));
+            return Err(CoreError::Parse(
+                "映射必须是 4 个字符（对应 00/01/10/11）".into(),
+            ));
         }
 
         let out = if pstr(p, "operation", "解码") == "编码" {
@@ -28,7 +30,11 @@ impl Node for N {
             // 碱基 → 2bit → 字节。
             let bits: Vec<u8> = text
                 .chars()
-                .filter_map(|c| map.iter().position(|&m| m.eq_ignore_ascii_case(&c) || m == c).map(|v| v as u8))
+                .filter_map(|c| {
+                    map.iter()
+                        .position(|&m| m.eq_ignore_ascii_case(&c) || m == c)
+                        .map(|v| v as u8)
+                })
                 .collect();
             let bytes: Vec<u8> = bits
                 .chunks_exact(4)

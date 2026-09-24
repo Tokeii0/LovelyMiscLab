@@ -4,7 +4,12 @@ use super::prelude::*;
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let data = in_bytes(inputs, "data")?;
         let n = (pnum(params, "amount", 1.0) as u32) % 8;
         let out: Vec<u8> = match pstr(params, "operation", "XOR") {
@@ -52,7 +57,16 @@ pub fn register(reg: &mut NodeRegistry) {
                 ParamSpec::select(
                     "operation",
                     "运算",
-                    &["XOR", "AND", "OR", "NOT", "左移", "右移", "循环左移", "循环右移"],
+                    &[
+                        "XOR",
+                        "AND",
+                        "OR",
+                        "NOT",
+                        "左移",
+                        "右移",
+                        "循环左移",
+                        "循环右移",
+                    ],
                     "XOR",
                 ),
                 ParamSpec::text("key", "密钥(Hex, 用于 AND/OR/XOR)", "", false),

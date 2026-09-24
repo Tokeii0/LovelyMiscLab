@@ -24,7 +24,10 @@ fn row_size(w: u32, bpp: u32) -> u64 {
 
 fn out(bytes: &[u8], report: &str) -> PortMap {
     let mut m = PortMap::new();
-    m.insert("image".into(), PortValue::Image(data_url(bytes, "image/bmp")));
+    m.insert(
+        "image".into(),
+        PortValue::Image(data_url(bytes, "image/bmp")),
+    );
     m.insert(
         "bytes".into(),
         PortValue::Bytes(Arc::from(bytes.to_vec().into_boxed_slice())),
@@ -60,7 +63,9 @@ impl Node for N {
             return Err(CoreError::Parse("BMP 位深为 0，无法处理。".into()));
         }
         if off >= d.len() {
-            return Err(CoreError::Parse("像素数据偏移越界，BMP 头可能损坏。".into()));
+            return Err(CoreError::Parse(
+                "像素数据偏移越界，BMP 头可能损坏。".into(),
+            ));
         }
 
         let mode = pstr(p, "mode", "自动");
@@ -232,7 +237,10 @@ mod tests {
     #[test]
     fn manual_sets_dims() {
         let bmp = make_bmp(8, 8, 24);
-        let fixed = fix(bmp, serde_json::json!({"mode":"手动","width":16,"height":9}));
+        let fixed = fix(
+            bmp,
+            serde_json::json!({"mode":"手动","width":16,"height":9}),
+        );
         assert_eq!(dims(&fixed), (16, 9));
     }
 }

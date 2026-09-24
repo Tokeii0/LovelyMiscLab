@@ -30,7 +30,13 @@ impl Node for N {
                         if sh.is_writable() { 'w' } else { '-' },
                         if sh.is_executable() { 'x' } else { '-' },
                     );
-                    rows.push((name.clone(), sh.sh_addr, sh.sh_size, sh.sh_offset, perms.clone()));
+                    rows.push((
+                        name.clone(),
+                        sh.sh_addr,
+                        sh.sh_size,
+                        sh.sh_offset,
+                        perms.clone(),
+                    ));
                     jarr.push(json!({
                         "name": name, "addr": sh.sh_addr, "size": sh.sh_size,
                         "offset": sh.sh_offset, "perms": perms,
@@ -54,17 +60,28 @@ impl Node for N {
                     }));
                 }
             }
-            Object::Mach(_) => note = "Mach-O 节区列举暂未支持（可用 binary_info / strings）".into(),
+            Object::Mach(_) => {
+                note = "Mach-O 节区列举暂未支持（可用 binary_info / strings）".into()
+            }
             Object::Archive(_) => note = "归档(ar) 无节区概念".into(),
             _ => note = "该格式暂不支持节区列举".into(),
         }
 
         let text = if rows.is_empty() {
-            if note.is_empty() { "（无节区）".into() } else { note }
+            if note.is_empty() {
+                "（无节区）".into()
+            } else {
+                note
+            }
         } else {
-            let mut t = format!("{:<16}{:>12}{:>12}{:>12}  权限\n", "名称", "虚拟地址", "大小", "文件偏移");
+            let mut t = format!(
+                "{:<16}{:>12}{:>12}{:>12}  权限\n",
+                "名称", "虚拟地址", "大小", "文件偏移"
+            );
             for (name, addr, size, off, perms) in &rows {
-                t.push_str(&format!("{name:<16}{addr:>#12x}{size:>12}{off:>#12x}  {perms}\n"));
+                t.push_str(&format!(
+                    "{name:<16}{addr:>#12x}{size:>12}{off:>#12x}  {perms}\n"
+                ));
             }
             t
         };
@@ -118,7 +135,10 @@ mod tests {
         e[52..54].copy_from_slice(&64u16.to_le_bytes());
 
         let mut i = PortMap::new();
-        i.insert("data".into(), PortValue::Bytes(Arc::from(e.into_boxed_slice())));
+        i.insert(
+            "data".into(),
+            PortValue::Bytes(Arc::from(e.into_boxed_slice())),
+        );
         let out = GraphExecutor::run_node(
             &default_registry(),
             "binary_sections",
@@ -134,7 +154,10 @@ mod tests {
     #[test]
     fn non_executable_errors() {
         let mut i = PortMap::new();
-        i.insert("data".into(), PortValue::Bytes(Arc::from(vec![0u8, 1, 2, 3].into_boxed_slice())));
+        i.insert(
+            "data".into(),
+            PortValue::Bytes(Arc::from(vec![0u8, 1, 2, 3].into_boxed_slice())),
+        );
         assert!(GraphExecutor::run_node(
             &default_registry(),
             "binary_sections",

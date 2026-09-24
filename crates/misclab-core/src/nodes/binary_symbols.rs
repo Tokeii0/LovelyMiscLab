@@ -38,7 +38,11 @@ impl Node for N {
                     }
                 }
                 "导出" => {
-                    for s in e.dynsyms.iter().filter(|s| !s.is_import() && s.is_function()) {
+                    for s in e
+                        .dynsyms
+                        .iter()
+                        .filter(|s| !s.is_import() && s.is_function())
+                    {
                         let n = e.dynstrtab.get_at(s.st_name).unwrap_or("");
                         if n.is_empty() {
                             continue;
@@ -55,8 +59,14 @@ impl Node for N {
                             continue;
                         }
                         names.push(n.to_string());
-                        lines.push(format!("{n}  0x{:x}{}", s.st_value, if s.is_function() { "  func" } else { "" }));
-                        jarr.push(json!({ "name": n, "value": s.st_value, "func": s.is_function() }));
+                        lines.push(format!(
+                            "{n}  0x{:x}{}",
+                            s.st_value,
+                            if s.is_function() { "  func" } else { "" }
+                        ));
+                        jarr.push(
+                            json!({ "name": n, "value": s.st_value, "func": s.is_function() }),
+                        );
                     }
                 }
             },
@@ -84,7 +94,11 @@ impl Node for N {
             _ => {}
         }
 
-        let text = if lines.is_empty() { "（无）".to_string() } else { lines.join("\n") };
+        let text = if lines.is_empty() {
+            "（无）".to_string()
+        } else {
+            lines.join("\n")
+        };
         let mut m = PortMap::new();
         m.insert("text".into(), PortValue::Text(text));
         m.insert("json".into(), PortValue::Json(json!(jarr)));
@@ -106,7 +120,12 @@ pub fn register(reg: &mut NodeRegistry) {
                 opt("json", "结构", PortType::Json),
                 opt("names", "名称", PortType::StringList),
             ],
-            vec![ParamSpec::select("kind", "类别", &["符号", "导入", "导出"], "导入")],
+            vec![ParamSpec::select(
+                "kind",
+                "类别",
+                &["符号", "导入", "导出"],
+                "导入",
+            )],
         ),
         Arc::new(|| Arc::new(N)),
     );
@@ -131,7 +150,10 @@ mod tests {
         e[18..20].copy_from_slice(&0x3eu16.to_le_bytes());
         e[52..54].copy_from_slice(&64u16.to_le_bytes());
         let mut i = PortMap::new();
-        i.insert("data".into(), PortValue::Bytes(Arc::from(e.into_boxed_slice())));
+        i.insert(
+            "data".into(),
+            PortValue::Bytes(Arc::from(e.into_boxed_slice())),
+        );
         let out = GraphExecutor::run_node(
             &default_registry(),
             "binary_symbols",
@@ -147,7 +169,10 @@ mod tests {
     #[test]
     fn non_executable_errors() {
         let mut i = PortMap::new();
-        i.insert("data".into(), PortValue::Bytes(Arc::from(vec![9u8, 9, 9, 9].into_boxed_slice())));
+        i.insert(
+            "data".into(),
+            PortValue::Bytes(Arc::from(vec![9u8, 9, 9, 9].into_boxed_slice())),
+        );
         assert!(GraphExecutor::run_node(
             &default_registry(),
             "binary_symbols",

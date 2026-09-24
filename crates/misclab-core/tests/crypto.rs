@@ -33,7 +33,10 @@ fn text_of(m: &HashMap<String, PortValue>, port: &str) -> String {
 }
 
 fn hash(algo: &str, text: &str) -> String {
-    text_of(&run_in("hash", "data", text, json!({ "algorithm": algo })), "text")
+    text_of(
+        &run_in("hash", "data", text, json!({ "algorithm": algo })),
+        "text",
+    )
 }
 
 // ---- hashes ----------------------------------------------------------------
@@ -41,7 +44,10 @@ fn hash(algo: &str, text: &str) -> String {
 #[test]
 fn hash_known_vectors() {
     assert_eq!(hash("MD5", "abc"), "900150983cd24fb0d6963f7d28e17f72");
-    assert_eq!(hash("SHA1", "abc"), "a9993e364706816aba3e25717850c26c9cd0d89d");
+    assert_eq!(
+        hash("SHA1", "abc"),
+        "a9993e364706816aba3e25717850c26c9cd0d89d"
+    );
     assert_eq!(
         hash("SHA256", "abc"),
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
@@ -62,7 +68,10 @@ fn hmac_sha256_rfc_vector() {
         ),
         "text",
     );
-    assert_eq!(out, "f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8");
+    assert_eq!(
+        out,
+        "f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8"
+    );
 }
 
 // ---- radix -----------------------------------------------------------------
@@ -70,7 +79,15 @@ fn hmac_sha256_rfc_vector() {
 #[test]
 fn radix_conversions() {
     let conv = |t: &str, from: u32, to: u32| {
-        text_of(&run_in("radix_convert", "text", t, json!({ "from": from, "to": to })), "text")
+        text_of(
+            &run_in(
+                "radix_convert",
+                "text",
+                t,
+                json!({ "from": from, "to": to }),
+            ),
+            "text",
+        )
     };
     assert_eq!(conv("255", 10, 16), "ff");
     assert_eq!(conv("ff", 16, 2), "11111111");
@@ -80,13 +97,22 @@ fn radix_conversions() {
 
 #[test]
 fn binary_and_decimal_roundtrip() {
-    let bin = text_of(&run_in("to_binary", "data", "AB", json!({ "delimiter": "空格" })), "text");
+    let bin = text_of(
+        &run_in("to_binary", "data", "AB", json!({ "delimiter": "空格" })),
+        "text",
+    );
     assert_eq!(bin, "01000001 01000010");
-    assert_eq!(text_of(&run_in("from_binary", "text", &bin, json!({})), "text"), "AB");
+    assert_eq!(
+        text_of(&run_in("from_binary", "text", &bin, json!({})), "text"),
+        "AB"
+    );
 
     let dec = text_of(&run_in("to_decimal", "data", "AB", json!({})), "text");
     assert_eq!(dec, "65 66");
-    assert_eq!(text_of(&run_in("from_decimal", "text", "65 66", json!({})), "text"), "AB");
+    assert_eq!(
+        text_of(&run_in("from_decimal", "text", "65 66", json!({})), "text"),
+        "AB"
+    );
 }
 
 // ---- charset ---------------------------------------------------------------
@@ -132,27 +158,59 @@ fn charset_gbk_roundtrip() {
 #[test]
 fn classical_ciphers() {
     // Atbash
-    assert_eq!(text_of(&run_in("atbash", "text", "abcXYZ", json!({})), "text"), "zyxCBA");
+    assert_eq!(
+        text_of(&run_in("atbash", "text", "abcXYZ", json!({})), "text"),
+        "zyxCBA"
+    );
     // Vigenère HELLO / KEY -> RIJVS, and back
     let enc = text_of(
-        &run_in("vigenere", "text", "HELLO", json!({ "operation": "加密", "key": "KEY" })),
+        &run_in(
+            "vigenere",
+            "text",
+            "HELLO",
+            json!({ "operation": "加密", "key": "KEY" }),
+        ),
         "text",
     );
     assert_eq!(enc, "RIJVS");
     assert_eq!(
-        text_of(&run_in("vigenere", "text", "RIJVS", json!({ "operation": "解密", "key": "KEY" })), "text"),
+        text_of(
+            &run_in(
+                "vigenere",
+                "text",
+                "RIJVS",
+                json!({ "operation": "解密", "key": "KEY" })
+            ),
+            "text"
+        ),
         "HELLO"
     );
     // ROT47 is self-inverse
     let r1 = text_of(&run_in("rot47", "text", "Flag{ROT47}!", json!({})), "text");
-    assert_eq!(text_of(&run_in("rot47", "text", &r1, json!({})), "text"), "Flag{ROT47}!");
+    assert_eq!(
+        text_of(&run_in("rot47", "text", &r1, json!({})), "text"),
+        "Flag{ROT47}!"
+    );
     // Affine encrypt/decrypt roundtrip
     let ae = text_of(
-        &run_in("affine", "text", "AFFINE", json!({ "operation": "加密", "a": 5, "b": 8 })),
+        &run_in(
+            "affine",
+            "text",
+            "AFFINE",
+            json!({ "operation": "加密", "a": 5, "b": 8 }),
+        ),
         "text",
     );
     assert_eq!(
-        text_of(&run_in("affine", "text", &ae, json!({ "operation": "解密", "a": 5, "b": 8 })), "text"),
+        text_of(
+            &run_in(
+                "affine",
+                "text",
+                &ae,
+                json!({ "operation": "解密", "a": 5, "b": 8 })
+            ),
+            "text"
+        ),
         "AFFINE"
     );
 }
@@ -190,7 +248,10 @@ fn aes_cbc_nist_vector() {
         ),
         "text",
     );
-    assert!(ct.starts_with("7649abac8119b246cee98e9b12e9197d"), "got {ct}");
+    assert!(
+        ct.starts_with("7649abac8119b246cee98e9b12e9197d"),
+        "got {ct}"
+    );
 }
 
 #[test]

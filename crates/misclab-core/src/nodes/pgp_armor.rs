@@ -27,7 +27,12 @@ fn b64() -> base64::engine::GeneralPurpose {
 
 struct Dearmor;
 impl Node for Dearmor {
-    fn run(&self, inputs: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let text = in_text(inputs, "text")?;
         let mut block_type = String::new();
         let mut body = String::new();
@@ -66,20 +71,29 @@ impl Node for Dearmor {
             }
         }
         if block_type.is_empty() {
-            return Err(CoreError::Parse("未找到 PGP 装甲块（-----BEGIN …-----）".into()));
+            return Err(CoreError::Parse(
+                "未找到 PGP 装甲块（-----BEGIN …-----）".into(),
+            ));
         }
         let bytes = b64()
             .decode(body.replace(char::is_whitespace, ""))
             .map_err(|e| CoreError::Parse(format!("Base64 无效: {e}")))?;
         let crc_ok = match crc_line {
             Some(c) => {
-                let want = b64().decode(c.trim()).map_err(|e| CoreError::Parse(format!("CRC Base64 无效: {e}")))?;
-                want.len() == 3 && ((want[0] as u32) << 16 | (want[1] as u32) << 8 | want[2] as u32) == crc24(&bytes)
+                let want = b64()
+                    .decode(c.trim())
+                    .map_err(|e| CoreError::Parse(format!("CRC Base64 无效: {e}")))?;
+                want.len() == 3
+                    && ((want[0] as u32) << 16 | (want[1] as u32) << 8 | want[2] as u32)
+                        == crc24(&bytes)
             }
             None => true,
         };
         let mut m = PortMap::new();
-        m.insert("bytes".to_string(), PortValue::Bytes(Arc::from(bytes.clone().into_boxed_slice())));
+        m.insert(
+            "bytes".to_string(),
+            PortValue::Bytes(Arc::from(bytes.clone().into_boxed_slice())),
+        );
         m.insert("hex".to_string(), PortValue::Text(hex::encode(&bytes)));
         m.insert("type".to_string(), PortValue::Text(block_type));
         m.insert("crcOk".to_string(), PortValue::Bool(crc_ok));
@@ -89,7 +103,12 @@ impl Node for Dearmor {
 
 struct Enarmor;
 impl Node for Enarmor {
-    fn run(&self, inputs: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let data = in_bytes(inputs, "data")?;
         let bt = pstr(p, "blockType", "MESSAGE");
         let encoded = b64().encode(&data);
@@ -137,7 +156,12 @@ pub fn register(reg: &mut NodeRegistry) {
             vec![ParamSpec::select(
                 "blockType",
                 "块类型",
-                &["MESSAGE", "PUBLIC KEY BLOCK", "PRIVATE KEY BLOCK", "SIGNATURE"],
+                &[
+                    "MESSAGE",
+                    "PUBLIC KEY BLOCK",
+                    "PRIVATE KEY BLOCK",
+                    "SIGNATURE",
+                ],
                 "MESSAGE",
             )],
         ),

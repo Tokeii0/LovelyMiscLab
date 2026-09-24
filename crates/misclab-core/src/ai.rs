@@ -59,7 +59,9 @@ fn post(cfg: &ModelConfig, body: serde_json::Value) -> Result<String, CoreError>
 /// A single-turn chat completion.
 pub fn chat(cfg: &ModelConfig, system: &str, user: &str) -> Result<String, CoreError> {
     if !cfg.is_configured() {
-        return Err(CoreError::Other("AI 文本模型未配置（请在设置中填写）".into()));
+        return Err(CoreError::Other(
+            "AI 文本模型未配置（请在设置中填写）".into(),
+        ));
     }
     let mut messages = Vec::new();
     if !system.trim().is_empty() {
@@ -75,7 +77,9 @@ pub fn chat(cfg: &ModelConfig, system: &str, user: &str) -> Result<String, CoreE
 /// A vision completion — `image_url` may be an http(s) URL or a data URL.
 pub fn vision(cfg: &ModelConfig, prompt: &str, image_url: &str) -> Result<String, CoreError> {
     if !cfg.is_configured() {
-        return Err(CoreError::Other("AI 识图模型未配置（请在设置中填写）".into()));
+        return Err(CoreError::Other(
+            "AI 识图模型未配置（请在设置中填写）".into(),
+        ));
     }
     let content = serde_json::json!([
         { "type": "text", "text": prompt },
@@ -140,7 +144,11 @@ fn parse_tool_call(tc: &serde_json::Value) -> Option<ToolCall> {
         obj @ serde_json::Value::Object(_) => obj.clone(),
         _ => serde_json::Value::Null,
     };
-    Some(ToolCall { id, name, arguments })
+    Some(ToolCall {
+        id,
+        name,
+        arguments,
+    })
 }
 
 /// One step of a tool-calling conversation. `messages` is the running transcript
@@ -151,7 +159,9 @@ pub fn chat_step(
     tools: &[ToolDef],
 ) -> Result<(AssistantTurn, Usage), CoreError> {
     if !cfg.is_configured() {
-        return Err(CoreError::Other("AI 文本模型未配置（请在设置中填写）".into()));
+        return Err(CoreError::Other(
+            "AI 文本模型未配置（请在设置中填写）".into(),
+        ));
     }
     let tools_json: Vec<serde_json::Value> = tools
         .iter()

@@ -20,9 +20,14 @@ pub struct ToolStatus {
 /// Blocking; shared by the Tauri command and the MCP `detect_tool` tool.
 pub(crate) fn detect_tool_impl(path: &str, arg: Option<String>) -> ToolStatus {
     if path.trim().is_empty() {
-        return ToolStatus { available: false, version: String::new() };
+        return ToolStatus {
+            available: false,
+            version: String::new(),
+        };
     }
-    let arg = arg.filter(|a| !a.is_empty()).unwrap_or_else(|| "--version".into());
+    let arg = arg
+        .filter(|a| !a.is_empty())
+        .unwrap_or_else(|| "--version".into());
     match std::process::Command::new(path).arg(&arg).output() {
         Ok(out) => {
             let mut text = String::from_utf8_lossy(&out.stdout).to_string();
@@ -35,7 +40,10 @@ pub(crate) fn detect_tool_impl(path: &str, arg: Option<String>) -> ToolStatus {
                 version,
             }
         }
-        Err(_) => ToolStatus { available: false, version: String::new() },
+        Err(_) => ToolStatus {
+            available: false,
+            version: String::new(),
+        },
     }
 }
 
@@ -44,12 +52,19 @@ pub(crate) fn detect_tool_impl(path: &str, arg: Option<String>) -> ToolStatus {
 pub async fn detect_tool(path: String, arg: Option<String>) -> ToolStatus {
     tauri::async_runtime::spawn_blocking(move || detect_tool_impl(&path, arg))
         .await
-        .unwrap_or(ToolStatus { available: false, version: String::new() })
+        .unwrap_or(ToolStatus {
+            available: false,
+            version: String::new(),
+        })
 }
 
 #[tauri::command]
 pub fn get_settings(state: State<'_, AppState>) -> NodeEnv {
-    state.settings.lock().expect("settings mutex poisoned").clone()
+    state
+        .settings
+        .lock()
+        .expect("settings mutex poisoned")
+        .clone()
 }
 
 #[tauri::command]

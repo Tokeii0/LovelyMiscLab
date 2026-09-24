@@ -100,14 +100,26 @@ fn transpose_decrypt(cipher: &[u8], key: &[u8]) -> Vec<u8> {
 }
 
 fn key_bytes(k: &str) -> Vec<u8> {
-    k.bytes().filter(|b| b.is_ascii_alphanumeric()).map(|b| b.to_ascii_uppercase()).collect()
+    k.bytes()
+        .filter(|b| b.is_ascii_alphanumeric())
+        .map(|b| b.to_ascii_uppercase())
+        .collect()
 }
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let text = in_text(inputs, "text")?;
-        let size = if pstr(p, "variant", "ADFGVX (6×6)").contains('6') { 6 } else { 5 };
+        let size = if pstr(p, "variant", "ADFGVX (6×6)").contains('6') {
+            6
+        } else {
+            5
+        };
         let square = build_square(pstr(p, "square", ""), size);
         let lab = labels(size);
         let key = key_bytes(pstr(p, "keyword", "SECRET"));
@@ -117,7 +129,11 @@ impl Node for N {
 
         let result = if pstr(p, "operation", "加密") == "解密" {
             // keep only label letters, undo transposition, then de-fractionate
-            let cipher: Vec<u8> = text.bytes().map(|b| b.to_ascii_uppercase()).filter(|b| lab.contains(b)).collect();
+            let cipher: Vec<u8> = text
+                .bytes()
+                .map(|b| b.to_ascii_uppercase())
+                .filter(|b| lab.contains(b))
+                .collect();
             let pairs = transpose_decrypt(&cipher, &key);
             let mut out = String::new();
             for chunk in pairs.chunks(2) {
@@ -158,7 +174,12 @@ pub fn register(reg: &mut NodeRegistry) {
             vec![t_out()],
             vec![
                 ParamSpec::select("operation", "操作", &["加密", "解密"], "加密"),
-                ParamSpec::select("variant", "变体", &["ADFGVX (6×6)", "ADFGX (5×5)"], "ADFGVX (6×6)"),
+                ParamSpec::select(
+                    "variant",
+                    "变体",
+                    &["ADFGVX (6×6)", "ADFGX (5×5)"],
+                    "ADFGVX (6×6)",
+                ),
                 ParamSpec::text("keyword", "转置关键词", "SECRET", false),
                 ParamSpec::text("square", "方阵关键词(可空)", "", false),
             ],

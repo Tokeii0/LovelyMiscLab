@@ -14,7 +14,15 @@ impl Node for N {
 
 pub fn register(reg: &mut NodeRegistry) {
     reg.register(
-        desc("reverse", TXT, "文本反转", TEAL, vec![t_in()], vec![t_out()], vec![]),
+        desc(
+            "reverse",
+            TXT,
+            "文本反转",
+            TEAL,
+            vec![t_in()],
+            vec![t_out()],
+            vec![],
+        ),
         Arc::new(|| Arc::new(N)),
     );
 }

@@ -128,8 +128,7 @@ impl<'a> BitReader<'a> {
     fn restart(&mut self) -> bool {
         self.bits_left = 0;
         while self.pos + 1 < self.data.len()
-            && !(self.data[self.pos] == 0xFF
-                && (0xD0..=0xD7).contains(&self.data[self.pos + 1]))
+            && !(self.data[self.pos] == 0xFF && (0xD0..=0xD7).contains(&self.data[self.pos + 1]))
         {
             self.pos += 1;
         }
@@ -251,7 +250,12 @@ fn parse(jpeg: &[u8]) -> Result<Parsed, CoreError> {
 
 /// Count MCUs in a baseline scan → number of full MCU rows' worth of data.
 fn count_mcus(jpeg: &[u8], p: &Parsed) -> Option<usize> {
-    let table = |class: u8, id: u8| p.dht.iter().find(|(k, _)| *k == (class, id)).map(|(_, t)| t);
+    let table = |class: u8, id: u8| {
+        p.dht
+            .iter()
+            .find(|(k, _)| *k == (class, id))
+            .map(|(_, t)| t)
+    };
     let mut br = BitReader::new(jpeg, p.scan_start);
     let mut mcu = 0usize;
     let mut since_rst = 0u16;
@@ -325,7 +329,10 @@ fn out(bytes: &[u8], report: &str) -> PortMap {
     // Best-effort re-render so the fixed image previews on the node.
     if let Ok(img) = image::load_from_memory(bytes) {
         if let Ok(png) = to_png(&img.to_rgba8()) {
-            m.insert("image".into(), PortValue::Image(data_url(&png, "image/png")));
+            m.insert(
+                "image".into(),
+                PortValue::Image(data_url(&png, "image/png")),
+            );
         }
     }
     m.insert(

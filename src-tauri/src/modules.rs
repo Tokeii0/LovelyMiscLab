@@ -14,7 +14,13 @@ fn dir(base: &Path, subdir: &str) -> PathBuf {
 /// Keep filenames safe — ids are frontend-generated, but be defensive.
 fn sanitize(id: &str) -> String {
     id.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 

@@ -30,10 +30,7 @@ pub fn register(reg: &mut NodeRegistry) {
             CTL,
             "逻辑运算",
             AMBER,
-            vec![
-                req("a", "A", PortType::Bool),
-                opt("b", "B", PortType::Bool),
-            ],
+            vec![req("a", "A", PortType::Bool), opt("b", "B", PortType::Bool)],
             vec![req("result", "结果", PortType::Bool)],
             vec![ParamSpec::select(
                 "op",

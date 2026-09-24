@@ -89,7 +89,10 @@ impl Node for N {
             )));
         }
         let iv = parse_bytes(pstr(params, "iv", ""), pstr(params, "ivFormat", "Hex"))?;
-        let data = parse_bytes(in_text(inputs, "text")?, pstr(params, "inputFormat", "UTF8"))?;
+        let data = parse_bytes(
+            in_text(inputs, "text")?,
+            pstr(params, "inputFormat", "UTF8"),
+        )?;
         let enc = pstr(params, "operation", "加密") != "解密";
 
         let out = match pstr(params, "mode", "CBC") {
@@ -127,8 +130,18 @@ pub fn register(reg: &mut NodeRegistry) {
                 ParamSpec::select("keyFormat", "密钥格式", &["Hex", "UTF8", "Base64"], "Hex"),
                 ParamSpec::text("iv", "IV", "", false),
                 ParamSpec::select("ivFormat", "IV 格式", &["Hex", "UTF8", "Base64"], "Hex"),
-                ParamSpec::select("inputFormat", "输入格式", &["UTF8", "Hex", "Base64"], "UTF8"),
-                ParamSpec::select("outputFormat", "输出格式", &["Hex", "Base64", "UTF8"], "Hex"),
+                ParamSpec::select(
+                    "inputFormat",
+                    "输入格式",
+                    &["UTF8", "Hex", "Base64"],
+                    "UTF8",
+                ),
+                ParamSpec::select(
+                    "outputFormat",
+                    "输出格式",
+                    &["Hex", "Base64", "UTF8"],
+                    "Hex",
+                ),
             ],
         ),
         Arc::new(|| Arc::new(N)),

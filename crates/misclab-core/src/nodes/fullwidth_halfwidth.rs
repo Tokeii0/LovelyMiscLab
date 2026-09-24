@@ -45,7 +45,12 @@ pub fn register(reg: &mut NodeRegistry) {
             BLUE,
             vec![t_in()],
             vec![t_out()],
-            vec![ParamSpec::select("direction", "方向", &["全角→半角", "半角→全角"], "全角→半角")],
+            vec![ParamSpec::select(
+                "direction",
+                "方向",
+                &["全角→半角", "半角→全角"],
+                "全角→半角",
+            )],
         ),
         Arc::new(|| Arc::new(N)),
     );

@@ -13,10 +13,20 @@ pub enum LogLevel {
 /// Events streamed as a graph (or a single node) executes.
 #[derive(Debug, Clone)]
 pub enum ProgressEvent {
-    NodeEntered { node: String },
-    NodeProgress { node: String, pct: f32 },
-    NodeDone { node: String },
-    NodeFailed { node: String, error: String },
+    NodeEntered {
+        node: String,
+    },
+    NodeProgress {
+        node: String,
+        pct: f32,
+    },
+    NodeDone {
+        node: String,
+    },
+    NodeFailed {
+        node: String,
+        error: String,
+    },
     Log {
         node: Option<String>,
         level: LogLevel,

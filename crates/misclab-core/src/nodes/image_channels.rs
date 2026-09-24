@@ -9,7 +9,10 @@ fn img_in() -> PortSpec {
     req("data", "图片", PortType::Any)
 }
 fn img_out() -> Vec<PortSpec> {
-    vec![req("image", "图片", PortType::Image), opt("bytes", "字节", PortType::Bytes)]
+    vec![
+        req("image", "图片", PortType::Image),
+        opt("bytes", "字节", PortType::Bytes),
+    ]
 }
 fn chan_index(c: char) -> usize {
     match c.to_ascii_uppercase() {
@@ -26,7 +29,12 @@ fn luma_px(px: &Rgba<u8>) -> u8 {
 
 struct Extract;
 impl Node for Extract {
-    fn run(&self, inputs: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let img = load_image(inputs, "data")?;
         let ch = pstr(p, "channel", "R");
         let gray = pstr(p, "output", "灰度图") == "灰度图" || ch == "灰度";
@@ -58,10 +66,20 @@ impl Node for Extract {
 
 struct Split;
 impl Node for Split {
-    fn run(&self, inputs: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let img = load_image(inputs, "data")?;
         let (w, h) = img.dimensions();
-        let mut planes = [RgbaImage::new(w, h), RgbaImage::new(w, h), RgbaImage::new(w, h), RgbaImage::new(w, h)];
+        let mut planes = [
+            RgbaImage::new(w, h),
+            RgbaImage::new(w, h),
+            RgbaImage::new(w, h),
+            RgbaImage::new(w, h),
+        ];
         for (x, y, px) in img.enumerate_pixels() {
             for (c, plane) in planes.iter_mut().enumerate() {
                 let v = px.0[c];
@@ -69,8 +87,16 @@ impl Node for Split {
             }
         }
         let mut m = PortMap::new();
-        for (name, plane) in [("r", &planes[0]), ("g", &planes[1]), ("b", &planes[2]), ("a", &planes[3])] {
-            m.insert(name.to_string(), PortValue::Image(data_url(&to_png(plane)?, "image/png")));
+        for (name, plane) in [
+            ("r", &planes[0]),
+            ("g", &planes[1]),
+            ("b", &planes[2]),
+            ("a", &planes[3]),
+        ] {
+            m.insert(
+                name.to_string(),
+                PortValue::Image(data_url(&to_png(plane)?, "image/png")),
+            );
         }
         Ok(m)
     }
@@ -78,7 +104,12 @@ impl Node for Split {
 
 struct Merge;
 impl Node for Merge {
-    fn run(&self, inputs: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let r = load_image(inputs, "r")?;
         let g = load_image(inputs, "g")?;
         let b = load_image(inputs, "b")?;
@@ -92,8 +123,20 @@ impl Node for Merge {
         let mut out = RgbaImage::new(w, h);
         for y in 0..h {
             for x in 0..w {
-                let av = a.as_ref().map(|ai| luma_px(ai.get_pixel(x, y))).unwrap_or(255);
-                out.put_pixel(x, y, Rgba([luma_px(r.get_pixel(x, y)), luma_px(g.get_pixel(x, y)), luma_px(b.get_pixel(x, y)), av]));
+                let av = a
+                    .as_ref()
+                    .map(|ai| luma_px(ai.get_pixel(x, y)))
+                    .unwrap_or(255);
+                out.put_pixel(
+                    x,
+                    y,
+                    Rgba([
+                        luma_px(r.get_pixel(x, y)),
+                        luma_px(g.get_pixel(x, y)),
+                        luma_px(b.get_pixel(x, y)),
+                        av,
+                    ]),
+                );
             }
         }
         image_out(&out)
@@ -102,7 +145,12 @@ impl Node for Merge {
 
 struct Swap;
 impl Node for Swap {
-    fn run(&self, inputs: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let img = load_image(inputs, "data")?;
         let order: Vec<char> = pstr(p, "order", "RGB").chars().collect();
         let (oi, gi, bi) = (
@@ -121,7 +169,12 @@ impl Node for Swap {
 
 struct BitPlane;
 impl Node for BitPlane {
-    fn run(&self, inputs: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let img = load_image(inputs, "data")?;
         let ch = pstr(p, "channel", "R");
         let bit = pnum(p, "bit", 0.0).clamp(0.0, 7.0) as u8;
@@ -201,7 +254,12 @@ pub fn register(reg: &mut NodeRegistry) {
             FUCHSIA,
             vec![img_in()],
             img_out(),
-            vec![ParamSpec::select("order", "顺序", &["RGB", "RBG", "GRB", "GBR", "BRG", "BGR"], "BGR")],
+            vec![ParamSpec::select(
+                "order",
+                "顺序",
+                &["RGB", "RBG", "GRB", "GBR", "BRG", "BGR"],
+                "BGR",
+            )],
         ),
         Arc::new(|| Arc::new(Swap)),
     );

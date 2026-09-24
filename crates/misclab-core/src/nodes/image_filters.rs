@@ -16,7 +16,12 @@ fn map_rgb(img: &RgbaImage, mut f: impl FnMut(u8, u8, u8, u8) -> [u8; 4]) -> Rgb
 
 struct Gray;
 impl Node for Gray {
-    fn run(&self, i: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         image_out(&map_rgb(&load_image(i, "data")?, |r, g, b, a| {
             let v = luma(r, g, b);
             [v, v, v, a]
@@ -26,14 +31,26 @@ impl Node for Gray {
 
 struct Invert;
 impl Node for Invert {
-    fn run(&self, i: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
-        image_out(&map_rgb(&load_image(i, "data")?, |r, g, b, a| [255 - r, 255 - g, 255 - b, a]))
+    fn run(
+        &self,
+        i: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
+        image_out(&map_rgb(&load_image(i, "data")?, |r, g, b, a| {
+            [255 - r, 255 - g, 255 - b, a]
+        }))
     }
 }
 
 struct Threshold;
 impl Node for Threshold {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let img = load_image(i, "data")?;
         let thr = if pbool(p, "auto", false) {
             let mut hist = [0u32; 256];
@@ -55,20 +72,41 @@ impl Node for Threshold {
 
 struct BrightnessContrast;
 impl Node for BrightnessContrast {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let bright = pnum(p, "brightness", 0.0) as f32;
         let factor = (pnum(p, "contrast", 0.0) as f32 + 100.0) / 100.0; // 0..2
-        let adj = |v: u8| ((v as f32 - 128.0) * factor + 128.0 + bright).round().clamp(0.0, 255.0) as u8;
-        image_out(&map_rgb(&load_image(i, "data")?, |r, g, b, a| [adj(r), adj(g), adj(b), a]))
+        let adj = |v: u8| {
+            ((v as f32 - 128.0) * factor + 128.0 + bright)
+                .round()
+                .clamp(0.0, 255.0) as u8
+        };
+        image_out(&map_rgb(&load_image(i, "data")?, |r, g, b, a| {
+            [adj(r), adj(g), adj(b), a]
+        }))
     }
 }
 
 struct Gamma;
 impl Node for Gamma {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let g = pnum(p, "gamma", 1.0).clamp(0.1, 5.0) as f32;
-        let lut: Vec<u8> =
-            (0..256).map(|v| (255.0 * (v as f32 / 255.0).powf(g)).round().clamp(0.0, 255.0) as u8).collect();
+        let lut: Vec<u8> = (0..256)
+            .map(|v| {
+                (255.0 * (v as f32 / 255.0).powf(g))
+                    .round()
+                    .clamp(0.0, 255.0) as u8
+            })
+            .collect();
         image_out(&map_rgb(&load_image(i, "data")?, |r, gr, b, a| {
             [lut[r as usize], lut[gr as usize], lut[b as usize], a]
         }))
@@ -77,7 +115,12 @@ impl Node for Gamma {
 
 struct HistEqualize;
 impl Node for HistEqualize {
-    fn run(&self, i: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let img = load_image(i, "data")?;
         let total = (img.width() * img.height()) as f64;
         // Independent per-channel equalization.
@@ -92,19 +135,36 @@ impl Node for HistEqualize {
             let denom = (total - cdf_min).max(1.0);
             for v in 0..256 {
                 cdf += hist[v];
-                lut_c[v] = (((cdf as f64 - cdf_min) / denom) * 255.0).round().clamp(0.0, 255.0) as u8;
+                lut_c[v] = (((cdf as f64 - cdf_min) / denom) * 255.0)
+                    .round()
+                    .clamp(0.0, 255.0) as u8;
             }
         }
-        image_out(&map_rgb(&img, |r, g, b, a| [lut[0][r as usize], lut[1][g as usize], lut[2][b as usize], a]))
+        image_out(&map_rgb(&img, |r, g, b, a| {
+            [
+                lut[0][r as usize],
+                lut[1][g as usize],
+                lut[2][b as usize],
+                a,
+            ]
+        }))
     }
 }
 
 struct EdgeDetect;
 impl Node for EdgeDetect {
-    fn run(&self, i: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let img = load_image(i, "data")?;
         let (w, h) = img.dimensions();
-        let gray: Vec<i32> = img.pixels().map(|p| luma(p.0[0], p.0[1], p.0[2]) as i32).collect();
+        let gray: Vec<i32> = img
+            .pixels()
+            .map(|p| luma(p.0[0], p.0[1], p.0[2]) as i32)
+            .collect();
         let at = |x: i64, y: i64| -> i32 {
             let cx = x.clamp(0, w as i64 - 1) as u32;
             let cy = y.clamp(0, h as i64 - 1) as u32;
@@ -114,9 +174,13 @@ impl Node for EdgeDetect {
         for y in 0..h as i64 {
             for x in 0..w as i64 {
                 let gx = -at(x - 1, y - 1) - 2 * at(x - 1, y) - at(x - 1, y + 1)
-                    + at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1);
+                    + at(x + 1, y - 1)
+                    + 2 * at(x + 1, y)
+                    + at(x + 1, y + 1);
                 let gy = -at(x - 1, y - 1) - 2 * at(x, y - 1) - at(x + 1, y - 1)
-                    + at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1);
+                    + at(x - 1, y + 1)
+                    + 2 * at(x, y + 1)
+                    + at(x + 1, y + 1);
                 let mag = ((gx * gx + gy * gy) as f64).sqrt().min(255.0) as u8;
                 out.put_pixel(x as u32, y as u32, Rgba([mag, mag, mag, 255]));
             }
@@ -127,7 +191,12 @@ impl Node for EdgeDetect {
 
 struct XorConst;
 impl Node for XorConst {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let key = pstr(p, "key", "");
         let kb: Vec<u8> = if pstr(p, "keyFormat", "Hex") == "整数" {
             vec![(key.trim().parse::<i64>().unwrap_or(0) & 0xff) as u8]
@@ -153,9 +222,20 @@ impl Node for XorConst {
 
 pub fn register(reg: &mut NodeRegistry) {
     let din = || vec![req("data", "图片", PortType::Any)];
-    let dout = || vec![req("image", "图片", PortType::Image), opt("bytes", "字节", PortType::Bytes)];
-    reg.register(desc("grayscale", IMG, "灰度化", INDIGO, din(), dout(), vec![]), Arc::new(|| Arc::new(Gray)));
-    reg.register(desc("image_invert", IMG, "反色", INDIGO, din(), dout(), vec![]), Arc::new(|| Arc::new(Invert)));
+    let dout = || {
+        vec![
+            req("image", "图片", PortType::Image),
+            opt("bytes", "字节", PortType::Bytes),
+        ]
+    };
+    reg.register(
+        desc("grayscale", IMG, "灰度化", INDIGO, din(), dout(), vec![]),
+        Arc::new(|| Arc::new(Gray)),
+    );
+    reg.register(
+        desc("image_invert", IMG, "反色", INDIGO, din(), dout(), vec![]),
+        Arc::new(|| Arc::new(Invert)),
+    );
     reg.register(
         desc(
             "threshold",
@@ -199,8 +279,30 @@ pub fn register(reg: &mut NodeRegistry) {
         ),
         Arc::new(|| Arc::new(Gamma)),
     );
-    reg.register(desc("hist_equalize", IMG, "直方图均衡", INDIGO, din(), dout(), vec![]), Arc::new(|| Arc::new(HistEqualize)));
-    reg.register(desc("edge_detect", IMG, "边缘检测", INDIGO, din(), dout(), vec![]), Arc::new(|| Arc::new(EdgeDetect)));
+    reg.register(
+        desc(
+            "hist_equalize",
+            IMG,
+            "直方图均衡",
+            INDIGO,
+            din(),
+            dout(),
+            vec![],
+        ),
+        Arc::new(|| Arc::new(HistEqualize)),
+    );
+    reg.register(
+        desc(
+            "edge_detect",
+            IMG,
+            "边缘检测",
+            INDIGO,
+            din(),
+            dout(),
+            vec![],
+        ),
+        Arc::new(|| Arc::new(EdgeDetect)),
+    );
     reg.register(
         desc(
             "image_xor",

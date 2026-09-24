@@ -7,10 +7,8 @@ use super::prelude::*;
 // ---- alphabet presets (CyberChef-compatible, `-` denotes a range) ----------
 pub const B32_STANDARD: &str = "A-Z2-7=";
 pub const B32_HEX: &str = "0-9A-V=";
-pub const B58_BITCOIN: &str =
-    "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-pub const B58_RIPPLE: &str =
-    "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz";
+pub const B58_BITCOIN: &str = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+pub const B58_RIPPLE: &str = "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz";
 pub const B62_STANDARD: &str = "0-9A-Za-z";
 pub const B45_ALPHABET: &str = "0-9A-Z $%*+\\-./:";
 pub const B85_STANDARD: &str = "!-u";
@@ -284,11 +282,7 @@ pub fn base45_encode(input: &[u8], alphabet: &[char]) -> String {
     res
 }
 
-pub fn base45_decode(
-    input: &str,
-    alphabet: &[char],
-    strip: bool,
-) -> Result<Vec<u8>, CoreError> {
+pub fn base45_decode(input: &str, alphabet: &[char], strip: bool) -> Result<Vec<u8>, CoreError> {
     let chars: Vec<char> = if strip {
         input.chars().filter(|c| alphabet.contains(c)).collect()
     } else {
@@ -404,16 +398,12 @@ pub fn base85_decode(
                 match alphabet.iter().position(|&a| a == c) {
                     Some(p) => *slot = p as u64,
                     None => {
-                        return Err(CoreError::Parse(format!(
-                            "非法字符 '{c}' 于位置 {}",
-                            i + k
-                        )))
+                        return Err(CoreError::Parse(format!("非法字符 '{c}' 于位置 {}", i + k)))
                     }
                 }
             }
         }
-        let block =
-            (d[0] * 52200625 + d[1] * 614125 + d[2] * 7225 + d[3] * 85 + d[4]) & 0xffffffff;
+        let block = (d[0] * 52200625 + d[1] * 614125 + d[2] * 7225 + d[3] * 85 + d[4]) & 0xffffffff;
         let bb = [
             ((block >> 24) & 0xff) as u8,
             ((block >> 16) & 0xff) as u8,

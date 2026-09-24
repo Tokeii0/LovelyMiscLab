@@ -5,8 +5,7 @@ use std::io::Cursor;
 
 use super::prelude::*;
 
-const DEFAULT_CHARSET: &str =
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_{}";
+const DEFAULT_CHARSET: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_{}";
 
 /// 枚举长度恰为 `len` 的字符集组合，匹配目标 CRC-32。
 fn brute(
@@ -81,7 +80,9 @@ impl Node for N {
                 continue;
             }
             if size > max_len {
-                report.push_str(&format!("{name}  ({size} 字节)  跳过（超过 maxLen={max_len}）\n"));
+                report.push_str(&format!(
+                    "{name}  ({size} 字节)  跳过（超过 maxLen={max_len}）\n"
+                ));
                 continue;
             }
             match brute(crc, &charset, size as usize, ctx)? {
@@ -151,7 +152,8 @@ mod tests {
         let mut buf = Vec::new();
         {
             let mut w = zip::ZipWriter::new(Cursor::new(&mut buf));
-            let opt = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+            let opt =
+                SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
             w.start_file("part1", opt).unwrap();
             w.write_all(b"fl").unwrap();
             w.start_file("part2", opt).unwrap();

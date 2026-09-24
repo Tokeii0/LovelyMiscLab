@@ -41,8 +41,14 @@ fn base64_roundtrip() {
 
 #[test]
 fn hex_roundtrip() {
-    assert_eq!(text_of(&run1("hex_encode", "AB", json!({})), "text"), "4142");
-    assert_eq!(text_of(&run1("hex_decode", "4142", json!({})), "text"), "AB");
+    assert_eq!(
+        text_of(&run1("hex_encode", "AB", json!({})), "text"),
+        "4142"
+    );
+    assert_eq!(
+        text_of(&run1("hex_decode", "4142", json!({})), "text"),
+        "AB"
+    );
 }
 
 #[test]
@@ -120,12 +126,24 @@ fn full_solve_chain_base64_to_flag() {
         ],
         edges: vec![
             Edge {
-                from: PortRef { node: "in".into(), port: "text".into() },
-                to: PortRef { node: "b64".into(), port: "text".into() },
+                from: PortRef {
+                    node: "in".into(),
+                    port: "text".into(),
+                },
+                to: PortRef {
+                    node: "b64".into(),
+                    port: "text".into(),
+                },
             },
             Edge {
-                from: PortRef { node: "b64".into(), port: "text".into() },
-                to: PortRef { node: "rx".into(), port: "text".into() },
+                from: PortRef {
+                    node: "b64".into(),
+                    port: "text".into(),
+                },
+                to: PortRef {
+                    node: "rx".into(),
+                    port: "text".into(),
+                },
             },
         ],
     };

@@ -68,7 +68,11 @@ pub fn decode_wav(bytes: &[u8]) -> Result<Audio, CoreError> {
                 .samples::<i32>()
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| CoreError::Parse(format!("读取采样失败：{e}")))?;
-            let scale = if bits >= 1 { (1i64 << (bits - 1)) as f32 } else { 1.0 };
+            let scale = if bits >= 1 {
+                (1i64 << (bits - 1)) as f32
+            } else {
+                1.0
+            };
             floats = Vec::with_capacity(ints.len());
             floats.extend(ints.iter().map(|&s| (s as f32 / scale).clamp(-1.0, 1.0)));
         }

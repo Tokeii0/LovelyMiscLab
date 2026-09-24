@@ -31,12 +31,23 @@ impl Node for N {
     ) -> Result<PortMap, CoreError> {
         let v = parse_ip(in_text(i, "text")?)
             .ok_or_else(|| CoreError::Parse("无法识别为 IPv4（点分/十进制/0x十六进制）".into()))?;
-        let dotted = format!("{}.{}.{}.{}", v >> 24, (v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff);
+        let dotted = format!(
+            "{}.{}.{}.{}",
+            v >> 24,
+            (v >> 16) & 0xff,
+            (v >> 8) & 0xff,
+            v & 0xff
+        );
         let decimal = v.to_string();
         let hexs = format!("0x{v:08x}");
 
         let mut m = PortMap::new();
-        m.insert("text".into(), PortValue::Text(format!("点分：{dotted}\n十进制：{decimal}\n十六进制：{hexs}")));
+        m.insert(
+            "text".into(),
+            PortValue::Text(format!(
+                "点分：{dotted}\n十进制：{decimal}\n十六进制：{hexs}"
+            )),
+        );
         m.insert("dotted".into(), PortValue::Text(dotted));
         m.insert("decimal".into(), PortValue::Text(decimal));
         m.insert("hex".into(), PortValue::Text(hexs));

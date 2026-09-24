@@ -11,7 +11,9 @@ use super::prelude::*;
 fn bytes_from_str(s: &str) -> Result<Vec<u8>, CoreError> {
     let s = s.trim();
     if let Some(rest) = s.strip_prefix("data:") {
-        let comma = rest.find(',').ok_or_else(|| CoreError::Parse("无效的 data URL".into()))?;
+        let comma = rest
+            .find(',')
+            .ok_or_else(|| CoreError::Parse("无效的 data URL".into()))?;
         let payload = &rest[comma + 1..];
         if rest[..comma].contains(";base64") {
             return base64::engine::general_purpose::STANDARD
@@ -28,7 +30,10 @@ fn source_bytes(v: Option<&PortValue>, port: &str) -> Result<Vec<u8>, CoreError>
         Some(PortValue::Bytes(b)) => Ok(b.to_vec()),
         Some(PortValue::Image(s)) | Some(PortValue::Text(s)) => bytes_from_str(s),
         Some(PortValue::None) | None => Err(CoreError::MissingInput(port.to_string())),
-        Some(other) => Err(CoreError::Type(format!("端口 {port} 不是图片: {:?}", other.port_type()))),
+        Some(other) => Err(CoreError::Type(format!(
+            "端口 {port} 不是图片: {:?}",
+            other.port_type()
+        ))),
     }
 }
 
@@ -53,25 +58,40 @@ pub fn to_png(img: &RgbaImage) -> Result<Vec<u8>, CoreError> {
 }
 
 pub fn data_url(png: &[u8], mime: &str) -> String {
-    format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(png))
+    format!(
+        "data:{mime};base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(png)
+    )
 }
 
 /// Encode an image and return `{ image: dataURL (first, shows on the node), bytes: png }`.
 pub fn image_out(img: &RgbaImage) -> Result<PortMap, CoreError> {
     let png = to_png(img)?;
     let mut m = PortMap::new();
-    m.insert("image".to_string(), PortValue::Image(data_url(&png, "image/png")));
-    m.insert("bytes".to_string(), PortValue::Bytes(Arc::from(png.into_boxed_slice())));
+    m.insert(
+        "image".to_string(),
+        PortValue::Image(data_url(&png, "image/png")),
+    );
+    m.insert(
+        "bytes".to_string(),
+        PortValue::Bytes(Arc::from(png.into_boxed_slice())),
+    );
     Ok(m)
 }
 
 pub fn luma(r: u8, g: u8, b: u8) -> u8 {
-    (0.299 * r as f32 + 0.587 * g as f32 + 0.114 * b as f32).round().clamp(0.0, 255.0) as u8
+    (0.299 * r as f32 + 0.587 * g as f32 + 0.114 * b as f32)
+        .round()
+        .clamp(0.0, 255.0) as u8
 }
 
 /// Otsu threshold from a 256-bin histogram of `total` samples.
 pub fn otsu(hist: &[u32; 256], total: u32) -> u8 {
-    let sum: f64 = hist.iter().enumerate().map(|(i, &c)| i as f64 * c as f64).sum();
+    let sum: f64 = hist
+        .iter()
+        .enumerate()
+        .map(|(i, &c)| i as f64 * c as f64)
+        .sum();
     let (mut sum_b, mut w_b, mut max, mut thr) = (0.0f64, 0u32, -1.0f64, 0u8);
     for (t, &count) in hist.iter().enumerate() {
         w_b += count;
@@ -106,7 +126,10 @@ pub fn align(a: RgbaImage, b: RgbaImage, resize_b: bool) -> (RgbaImage, RgbaImag
     }
     if resize_b {
         let (w, h) = a.dimensions();
-        (a, image::imageops::resize(&b, w, h, image::imageops::FilterType::Nearest))
+        (
+            a,
+            image::imageops::resize(&b, w, h, image::imageops::FilterType::Nearest),
+        )
     } else {
         let w = a.width().min(b.width());
         let h = a.height().min(b.height());

@@ -14,7 +14,8 @@ use misclab_core::error::CoreError;
 use misclab_core::graph::executor::GraphExecutor;
 use misclab_core::graph::port::{PortType, PortValue};
 use misclab_core::graph::script_node::{
-    build_outputs, tokenize, InputDelivery, OutputDelivery, ScriptInputPort, ScriptModule, ScriptOutputPort,
+    build_outputs, tokenize, InputDelivery, OutputDelivery, ScriptInputPort, ScriptModule,
+    ScriptOutputPort,
 };
 use misclab_core::node::descriptor::ParamSpec;
 use misclab_core::node::PortMap;
@@ -23,10 +24,20 @@ use misclab_core::progress::NullSink;
 use serde_json::json;
 
 fn out(name: &str, ty: PortType, d: OutputDelivery) -> ScriptOutputPort {
-    ScriptOutputPort { name: name.into(), label: name.into(), port_type: ty, delivery: d }
+    ScriptOutputPort {
+        name: name.into(),
+        label: name.into(),
+        port_type: ty,
+        delivery: d,
+    }
 }
 fn inp(name: &str, ty: PortType, d: InputDelivery) -> ScriptInputPort {
-    ScriptInputPort { name: name.into(), label: name.into(), port_type: ty, delivery: d }
+    ScriptInputPort {
+        name: name.into(),
+        label: name.into(),
+        port_type: ty,
+        delivery: d,
+    }
 }
 fn script(id: &str, command: &str, args: &str) -> ScriptModule {
     ScriptModule {
@@ -50,10 +61,21 @@ fn text_of(m: &PortMap, port: &str) -> String {
         o => panic!("expected Text at '{port}', got {o:?}"),
     }
 }
-fn run_script(m: &ScriptModule, inputs: HashMap<String, PortValue>, params: serde_json::Value) -> Result<PortMap, CoreError> {
+fn run_script(
+    m: &ScriptModule,
+    inputs: HashMap<String, PortValue>,
+    params: serde_json::Value,
+) -> Result<PortMap, CoreError> {
     let mut reg = default_registry();
     reg.register(m.descriptor(), m.factory());
-    GraphExecutor::run_node(&reg, &m.id, &inputs, &params, &NullSink, &CancellationToken::new())
+    GraphExecutor::run_node(
+        &reg,
+        &m.id,
+        &inputs,
+        &params,
+        &NullSink,
+        &CancellationToken::new(),
+    )
 }
 
 // ---- pure (no process) ----
@@ -126,7 +148,10 @@ fn proc_file_roundtrip() {
     m.inputs = vec![inp("inf", PortType::Bytes, InputDelivery::File)];
     m.outputs = vec![out("outf", PortType::Bytes, OutputDelivery::File)];
     let mut inputs = HashMap::new();
-    inputs.insert("inf".into(), PortValue::Bytes(Arc::from(b"ROUNDTRIP".to_vec().into_boxed_slice())));
+    inputs.insert(
+        "inf".into(),
+        PortValue::Bytes(Arc::from(b"ROUNDTRIP".to_vec().into_boxed_slice())),
+    );
     let r = run_script(&m, inputs, json!({})).unwrap();
     assert!(matches!(r.get("outf"), Some(PortValue::Bytes(b)) if &b[..] == b"ROUNDTRIP"));
 }
@@ -154,5 +179,9 @@ fn proc_timeout_kills() {
     let t0 = Instant::now();
     let r = run_script(&m, HashMap::new(), json!({}));
     assert!(r.is_err());
-    assert!(t0.elapsed() < Duration::from_secs(4), "should be killed early, took {:?}", t0.elapsed());
+    assert!(
+        t0.elapsed() < Duration::from_secs(4),
+        "should be killed early, took {:?}",
+        t0.elapsed()
+    );
 }

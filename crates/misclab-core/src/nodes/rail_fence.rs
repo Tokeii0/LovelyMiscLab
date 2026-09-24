@@ -59,14 +59,24 @@ fn decode(s: &str, rails: usize) -> String {
 
 struct Enc;
 impl Node for Enc {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let rails = pnum(params, "rails", 3.0).max(2.0) as usize;
         Ok(out_text(encode(in_text(inputs, "text")?, rails)))
     }
 }
 struct Dec;
 impl Node for Dec {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let rails = pnum(params, "rails", 3.0).max(2.0) as usize;
         Ok(out_text(decode(in_text(inputs, "text")?, rails)))
     }
@@ -75,11 +85,27 @@ impl Node for Dec {
 pub fn register(reg: &mut NodeRegistry) {
     let rails = || ParamSpec::number("rails", "栏数", 2.0, 100.0, 1.0, 3.0);
     reg.register(
-        desc("rail_fence_encode", CRYPTO, "栅栏密码加密", ROSE, vec![t_in()], vec![t_out()], vec![rails()]),
+        desc(
+            "rail_fence_encode",
+            CRYPTO,
+            "栅栏密码加密",
+            ROSE,
+            vec![t_in()],
+            vec![t_out()],
+            vec![rails()],
+        ),
         Arc::new(|| Arc::new(Enc)),
     );
     reg.register(
-        desc("rail_fence_decode", CRYPTO, "栅栏密码解密", ROSE, vec![t_in()], vec![t_out()], vec![rails()]),
+        desc(
+            "rail_fence_decode",
+            CRYPTO,
+            "栅栏密码解密",
+            ROSE,
+            vec![t_in()],
+            vec![t_out()],
+            vec![rails()],
+        ),
         Arc::new(|| Arc::new(Dec)),
     );
 }

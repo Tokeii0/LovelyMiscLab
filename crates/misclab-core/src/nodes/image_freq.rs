@@ -9,15 +9,22 @@ use super::prelude::*;
 
 struct N;
 impl Node for N {
-    fn run(&self, i: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let img = load_image(i, "data")?;
         let (w, h) = (img.width() as usize, img.height() as usize);
         if w == 0 || h == 0 {
             return Err(CoreError::Other("空图".into()));
         }
         // Grayscale → complex plane.
-        let mut data: Vec<Complex<f32>> =
-            img.pixels().map(|p| Complex::new(luma(p.0[0], p.0[1], p.0[2]) as f32, 0.0)).collect();
+        let mut data: Vec<Complex<f32>> = img
+            .pixels()
+            .map(|p| Complex::new(luma(p.0[0], p.0[1], p.0[2]) as f32, 0.0))
+            .collect();
 
         let mut planner = FftPlanner::<f32>::new();
         let fft_row = planner.plan_fft_forward(w);
@@ -60,7 +67,10 @@ pub fn register(reg: &mut NodeRegistry) {
             "频谱 (DFT)",
             INDIGO,
             vec![req("data", "图片", PortType::Any)],
-            vec![req("image", "频谱图", PortType::Image), opt("bytes", "字节", PortType::Bytes)],
+            vec![
+                req("image", "频谱图", PortType::Image),
+                opt("bytes", "字节", PortType::Bytes),
+            ],
             vec![],
         ),
         Arc::new(|| Arc::new(N)),

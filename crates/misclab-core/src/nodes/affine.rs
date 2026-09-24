@@ -18,9 +18,10 @@ impl Node for N {
         let decrypt = pstr(params, "operation", "加密") == "解密";
 
         let a_inv = if decrypt {
-            Some(mod_inv(a.rem_euclid(26), 26).ok_or_else(|| {
-                CoreError::Parse(format!("a={a} 与 26 不互质，无法解密"))
-            })?)
+            Some(
+                mod_inv(a.rem_euclid(26), 26)
+                    .ok_or_else(|| CoreError::Parse(format!("a={a} 与 26 不互质，无法解密")))?,
+            )
         } else {
             None
         };

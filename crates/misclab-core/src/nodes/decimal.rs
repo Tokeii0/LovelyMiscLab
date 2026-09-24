@@ -11,8 +11,16 @@ impl Node for Enc {
         _ctx: &mut NodeCtx,
     ) -> Result<PortMap, CoreError> {
         let data = in_bytes(inputs, "data")?;
-        let sep = if pstr(params, "delimiter", "空格") == "逗号" { "," } else { " " };
-        let s = data.iter().map(|b| b.to_string()).collect::<Vec<_>>().join(sep);
+        let sep = if pstr(params, "delimiter", "空格") == "逗号" {
+            ","
+        } else {
+            " "
+        };
+        let s = data
+            .iter()
+            .map(|b| b.to_string())
+            .collect::<Vec<_>>()
+            .join(sep);
         Ok(out_text(s))
     }
 }
@@ -30,7 +38,9 @@ impl Node for Dec {
             .split(|c: char| !c.is_ascii_digit())
             .filter(|t| !t.is_empty())
         {
-            let n: u32 = tok.parse().map_err(|_| CoreError::Parse(format!("非法数字: {tok}")))?;
+            let n: u32 = tok
+                .parse()
+                .map_err(|_| CoreError::Parse(format!("非法数字: {tok}")))?;
             if n > 255 {
                 return Err(CoreError::Parse(format!("字节值超出范围(0-255): {n}")));
             }
@@ -49,7 +59,12 @@ pub fn register(reg: &mut NodeRegistry) {
             SLATE,
             vec![req("data", "输入", PortType::Any)],
             vec![t_out()],
-            vec![ParamSpec::select("delimiter", "分隔符", &["空格", "逗号"], "空格")],
+            vec![ParamSpec::select(
+                "delimiter",
+                "分隔符",
+                &["空格", "逗号"],
+                "空格",
+            )],
         ),
         Arc::new(|| Arc::new(Enc)),
     );

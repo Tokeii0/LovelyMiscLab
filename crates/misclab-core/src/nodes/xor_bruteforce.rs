@@ -30,7 +30,10 @@ impl Node for N {
         });
         candidates.truncate(16);
 
-        let best = candidates.first().map(|c| c.text.clone()).unwrap_or_default();
+        let best = candidates
+            .first()
+            .map(|c| c.text.clone())
+            .unwrap_or_default();
         let mut out = PortMap::new();
         out.insert("best".to_string(), PortValue::Text(best));
         out.insert("candidates".to_string(), PortValue::Candidates(candidates));

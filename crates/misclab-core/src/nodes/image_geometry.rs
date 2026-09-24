@@ -4,7 +4,12 @@ use super::prelude::*;
 
 struct Transform;
 impl Node for Transform {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let img = load_image(i, "data")?;
         use image::imageops;
         let out = match pstr(p, "op", "旋转90°") {
@@ -20,7 +25,12 @@ impl Node for Transform {
 
 struct Crop;
 impl Node for Crop {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let img = load_image(i, "data")?;
         let (iw, ih) = img.dimensions();
         let x = (pnum(p, "x", 0.0).max(0.0) as u32).min(iw.saturating_sub(1));
@@ -33,7 +43,12 @@ impl Node for Crop {
 
 struct Resize;
 impl Node for Resize {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let img = load_image(i, "data")?;
         let (iw, ih) = img.dimensions();
         let w = (pnum(p, "width", iw as f64).max(1.0) as u32).min(10000);
@@ -41,13 +56,23 @@ impl Node for Resize {
         if pbool(p, "keepAspect", false) {
             h = (w as f64 * ih as f64 / iw as f64).round().max(1.0) as u32;
         }
-        image_out(&image::imageops::resize(&img, w, h, image::imageops::FilterType::Triangle))
+        image_out(&image::imageops::resize(
+            &img,
+            w,
+            h,
+            image::imageops::FilterType::Triangle,
+        ))
     }
 }
 
 pub fn register(reg: &mut NodeRegistry) {
     let din = || vec![req("data", "图片", PortType::Any)];
-    let dout = || vec![req("image", "图片", PortType::Image), opt("bytes", "字节", PortType::Bytes)];
+    let dout = || {
+        vec![
+            req("image", "图片", PortType::Image),
+            opt("bytes", "字节", PortType::Bytes),
+        ]
+    };
     reg.register(
         desc(
             "image_transform",
@@ -56,7 +81,12 @@ pub fn register(reg: &mut NodeRegistry) {
             TEAL,
             din(),
             dout(),
-            vec![ParamSpec::select("op", "操作", &["旋转90°", "旋转180°", "旋转270°", "水平翻转", "垂直翻转"], "旋转90°")],
+            vec![ParamSpec::select(
+                "op",
+                "操作",
+                &["旋转90°", "旋转180°", "旋转270°", "水平翻转", "垂直翻转"],
+                "旋转90°",
+            )],
         ),
         Arc::new(|| Arc::new(Transform)),
     );

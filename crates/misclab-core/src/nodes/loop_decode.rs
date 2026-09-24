@@ -60,7 +60,10 @@ impl Node for N {
 
         let mut out = PortMap::new();
         out.insert("text".to_string(), PortValue::Text(current));
-        out.insert("iterations".to_string(), PortValue::Number(iterations as f64));
+        out.insert(
+            "iterations".to_string(),
+            PortValue::Number(iterations as f64),
+        );
         out.insert("hit".to_string(), PortValue::Bool(hit));
         Ok(out)
     }

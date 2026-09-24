@@ -32,7 +32,10 @@ impl Node for N {
         if key.is_empty() {
             return Err(CoreError::Parse("RC4 需要密钥".into()));
         }
-        let data = parse_bytes(in_text(inputs, "text")?, pstr(params, "inputFormat", "UTF8"))?;
+        let data = parse_bytes(
+            in_text(inputs, "text")?,
+            pstr(params, "inputFormat", "UTF8"),
+        )?;
         let out = rc4(&key, &data);
         let text = format_bytes(&out, pstr(params, "outputFormat", "Hex"));
         let mut m = PortMap::new();
@@ -60,8 +63,18 @@ pub fn register(reg: &mut NodeRegistry) {
             vec![
                 ParamSpec::text("key", "密钥", "", false),
                 ParamSpec::select("keyFormat", "密钥格式", &["UTF8", "Hex", "Base64"], "UTF8"),
-                ParamSpec::select("inputFormat", "输入格式", &["UTF8", "Hex", "Base64"], "UTF8"),
-                ParamSpec::select("outputFormat", "输出格式", &["Hex", "UTF8", "Base64"], "Hex"),
+                ParamSpec::select(
+                    "inputFormat",
+                    "输入格式",
+                    &["UTF8", "Hex", "Base64"],
+                    "UTF8",
+                ),
+                ParamSpec::select(
+                    "outputFormat",
+                    "输出格式",
+                    &["Hex", "UTF8", "Base64"],
+                    "Hex",
+                ),
             ],
         ),
         Arc::new(|| Arc::new(N)),

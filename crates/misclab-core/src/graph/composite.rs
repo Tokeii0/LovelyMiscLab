@@ -57,10 +57,18 @@ impl CompositeModule {
         let ports = |b: &BoundaryPort| PortSpec::new(&b.name, &b.label, b.port_type, false);
         NodeDescriptor {
             id: self.id.clone(),
-            category: if self.category.is_empty() { "自定义".to_string() } else { self.category.clone() },
+            category: if self.category.is_empty() {
+                "自定义".to_string()
+            } else {
+                self.category.clone()
+            },
             display_name: self.name.clone(),
             description: self.description.clone(),
-            color: if self.color.is_empty() { "#8b5cf6".to_string() } else { self.color.clone() },
+            color: if self.color.is_empty() {
+                "#8b5cf6".to_string()
+            } else {
+                self.color.clone()
+            },
             inputs: self.inputs.iter().map(ports).collect(),
             outputs: self.outputs.iter().map(ports).collect(),
             params: vec![],
@@ -101,7 +109,12 @@ pub struct SubgraphNode {
 }
 
 impl Node for SubgraphNode {
-    fn run(&self, inputs: &PortMap, _params: &serde_json::Value, ctx: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        _params: &serde_json::Value,
+        ctx: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         if ctx.depth > MAX_DEPTH {
             return Err(CoreError::Graph("模块嵌套过深（可能存在自引用）".into()));
         }

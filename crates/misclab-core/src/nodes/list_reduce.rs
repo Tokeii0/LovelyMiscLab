@@ -13,7 +13,10 @@ impl Node for N {
         let list = in_list(i, "list")?;
         let op = pstr(p, "op", "数量");
         // 数值类归约把能 parse 成 f64 的元素挑出来（非数字跳过）。
-        let nums: Vec<f64> = list.iter().filter_map(|s| s.trim().parse::<f64>().ok()).collect();
+        let nums: Vec<f64> = list
+            .iter()
+            .filter_map(|s| s.trim().parse::<f64>().ok())
+            .collect();
 
         let mut number: Option<f64> = None;
         let value: String = match op {
@@ -81,7 +84,9 @@ pub fn register(reg: &mut NodeRegistry) {
                 ParamSpec::select(
                     "op",
                     "归约",
-                    &["数量", "求和", "最小", "最大", "平均", "首个", "末个", "连接"],
+                    &[
+                        "数量", "求和", "最小", "最大", "平均", "首个", "末个", "连接",
+                    ],
                     "数量",
                 ),
                 ParamSpec::text("sep", "连接分隔符", "", false),

@@ -27,11 +27,22 @@ fn rgb_to_hsv(r: u8, g: u8, b: u8) -> (f32, f32, f32) {
 
 struct N;
 impl Node for N {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let img = load_image(i, "data")?;
         let ycbcr = pstr(p, "space", "HSV") == "YCbCr";
         let comp = pstr(p, "component", "分量1(H/Y)");
-        let idx = if comp.contains('2') { 1 } else if comp.contains('3') { 2 } else { 0 };
+        let idx = if comp.contains('2') {
+            1
+        } else if comp.contains('3') {
+            2
+        } else {
+            0
+        };
         let mut out = RgbaImage::new(img.width(), img.height());
         for (x, y, px) in img.enumerate_pixels() {
             let [r, g, b, _] = px.0;
@@ -61,10 +72,18 @@ pub fn register(reg: &mut NodeRegistry) {
             "色彩空间分量",
             FUCHSIA,
             vec![req("data", "图片", PortType::Any)],
-            vec![req("image", "图片", PortType::Image), opt("bytes", "字节", PortType::Bytes)],
+            vec![
+                req("image", "图片", PortType::Image),
+                opt("bytes", "字节", PortType::Bytes),
+            ],
             vec![
                 ParamSpec::select("space", "色彩空间", &["HSV", "YCbCr"], "HSV"),
-                ParamSpec::select("component", "分量", &["分量1(H/Y)", "分量2(S/Cb)", "分量3(V/Cr)"], "分量1(H/Y)"),
+                ParamSpec::select(
+                    "component",
+                    "分量",
+                    &["分量1(H/Y)", "分量2(S/Cb)", "分量3(V/Cr)"],
+                    "分量1(H/Y)",
+                ),
             ],
         ),
         Arc::new(|| Arc::new(N)),

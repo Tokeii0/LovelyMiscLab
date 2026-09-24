@@ -201,8 +201,8 @@ pub struct GenerateWorkflowArgs {
 /// Wrap a JSON value as a tool result (serialized to a text content block, which
 /// every MCP client renders).
 fn json_ok(value: serde_json::Value) -> Result<CallToolResult, McpError> {
-    let text = serde_json::to_string(&value)
-        .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+    let text =
+        serde_json::to_string(&value).map_err(|e| McpError::internal_error(e.to_string(), None))?;
     Ok(CallToolResult::success(vec![ContentBlock::text(text)]))
 }
 
@@ -290,7 +290,9 @@ impl McpServer {
     }
 
     /// Probe an external tool.
-    #[tool(description = "Check whether an external tool (e.g. python, 7z) is available and its version.")]
+    #[tool(
+        description = "Check whether an external tool (e.g. python, 7z) is available and its version."
+    )]
     async fn detect_tool(
         &self,
         Parameters(args): Parameters<DetectToolArgs>,
@@ -369,12 +371,17 @@ impl McpServer {
     }
 
     /// Connect two nodes.
-    #[tool(description = "Connect a source node's output port to a target node's input port (or promoted param).")]
+    #[tool(
+        description = "Connect a source node's output port to a target node's input port (or promoted param)."
+    )]
     async fn connect(
         &self,
         Parameters(a): Parameters<ConnectArgs>,
     ) -> Result<CallToolResult, McpError> {
-        json_res(self.state.connect(&a.source, &a.source_handle, &a.target, &a.target_handle))
+        json_res(
+            self.state
+                .connect(&a.source, &a.source_handle, &a.target, &a.target_handle),
+        )
     }
 
     /// Set a node parameter.
@@ -414,7 +421,9 @@ impl McpServer {
     }
 
     /// Save a workflow to disk.
-    #[tool(description = "Save a workflow to a .lml/.json file the user can open in the GUI. Omit `snapshot` to save the current canvas.")]
+    #[tool(
+        description = "Save a workflow to a .lml/.json file the user can open in the GUI. Omit `snapshot` to save the current canvas."
+    )]
     async fn save_workflow(
         &self,
         Parameters(a): Parameters<SaveWorkflowArgs>,
@@ -427,20 +436,26 @@ impl McpServer {
     }
 
     /// Load a workflow from disk.
-    #[tool(description = "Load a workflow from a .lml/.json file. Set `apply`=true to also place it on the user's canvas.")]
+    #[tool(
+        description = "Load a workflow from a .lml/.json file. Set `apply`=true to also place it on the user's canvas."
+    )]
     async fn load_workflow(
         &self,
         Parameters(a): Parameters<LoadWorkflowArgs>,
     ) -> Result<CallToolResult, McpError> {
         let state = self.state.clone();
-        let out = tokio::task::spawn_blocking(move || state.load_workflow(&a.path, a.apply.unwrap_or(false)))
-            .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+        let out = tokio::task::spawn_blocking(move || {
+            state.load_workflow(&a.path, a.apply.unwrap_or(false))
+        })
+        .await
+        .map_err(|e| McpError::internal_error(e.to_string(), None))?;
         json_res(out)
     }
 
     /// Save a composite (sub-graph) module.
-    #[tool(description = "Save a composite (sub-graph) module so it appears as a reusable node in the palette.")]
+    #[tool(
+        description = "Save a composite (sub-graph) module so it appears as a reusable node in the palette."
+    )]
     async fn save_composite_module(
         &self,
         Parameters(a): Parameters<ModuleArgs>,
@@ -453,7 +468,9 @@ impl McpServer {
     }
 
     /// Save a script/program module.
-    #[tool(description = "Save a script/external-program module so it appears as a reusable node in the palette.")]
+    #[tool(
+        description = "Save a script/external-program module so it appears as a reusable node in the palette."
+    )]
     async fn save_script_module(
         &self,
         Parameters(a): Parameters<ModuleArgs>,
@@ -466,15 +483,19 @@ impl McpServer {
     }
 
     /// Generate a workflow from a natural-language task via the configured LLM.
-    #[tool(description = "Ask the app's configured LLM to assemble a node graph from a task description. Set `apply`=true to place it on the canvas. (An MCP client can usually build graphs itself via list_nodes + set_canvas.)")]
+    #[tool(
+        description = "Ask the app's configured LLM to assemble a node graph from a task description. Set `apply`=true to place it on the canvas. (An MCP client can usually build graphs itself via list_nodes + set_canvas.)"
+    )]
     async fn generate_workflow(
         &self,
         Parameters(a): Parameters<GenerateWorkflowArgs>,
     ) -> Result<CallToolResult, McpError> {
         let state = self.state.clone();
-        let out = tokio::task::spawn_blocking(move || state.generate_workflow(&a.prompt, a.apply.unwrap_or(false)))
-            .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+        let out = tokio::task::spawn_blocking(move || {
+            state.generate_workflow(&a.prompt, a.apply.unwrap_or(false))
+        })
+        .await
+        .map_err(|e| McpError::internal_error(e.to_string(), None))?;
         json_res(out)
     }
 }
@@ -498,12 +519,9 @@ pub async fn serve(state: McpState, listener: TcpListener, cancel: CancellationT
         LocalSessionManager::default().into(),
         StreamableHttpServerConfig::default(),
     );
-    let app = axum::Router::new()
-        .nest_service("/mcp", service)
-        .layer(axum::middleware::from_fn_with_state(
-            token,
-            crate::mcp::auth::require_bearer,
-        ));
+    let app = axum::Router::new().nest_service("/mcp", service).layer(
+        axum::middleware::from_fn_with_state(token, crate::mcp::auth::require_bearer),
+    );
     if let Err(e) = axum::serve(listener, app)
         .with_graceful_shutdown(async move { cancel.cancelled().await })
         .await

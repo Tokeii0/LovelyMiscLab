@@ -53,7 +53,11 @@ impl Node for N {
                 }
             })
             .collect();
-        cands.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        cands.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         let best = cands.first().map(|c| c.text.clone()).unwrap_or_default();
 
         let mut m = PortMap::new();
@@ -109,7 +113,10 @@ mod tests {
             Some(PortValue::Candidates(v)) => v.clone(),
             o => panic!("{o:?}"),
         };
-        assert!(cands.iter().any(|c| c.text == plain), "plaintext not in candidates");
+        assert!(
+            cands.iter().any(|c| c.text == plain),
+            "plaintext not in candidates"
+        );
         // ...and the frequency score should surface it as best.
         assert!(matches!(out.get("best"), Some(PortValue::Text(s)) if s == plain));
     }

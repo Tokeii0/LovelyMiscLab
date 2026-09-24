@@ -7,7 +7,11 @@ fn rotate_carry(data: &[u8], amount: usize, left: bool) -> Vec<u8> {
     if bits == 0 {
         return Vec::new();
     }
-    let shift = if left { amount % bits } else { (bits - amount % bits) % bits };
+    let shift = if left {
+        amount % bits
+    } else {
+        (bits - amount % bits) % bits
+    };
     let get = |i: usize| (data[i / 8] >> (7 - i % 8)) & 1;
     let mut out = vec![0u8; data.len()];
     for i in 0..bits {
@@ -20,7 +24,12 @@ fn rotate_carry(data: &[u8], amount: usize, left: bool) -> Vec<u8> {
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let data = in_bytes(inputs, "data")?;
         let left = pstr(p, "direction", "左(ROL)").starts_with('左');
         let amount = pnum(p, "amount", 1.0).max(0.0) as usize;
@@ -28,12 +37,26 @@ impl Node for N {
             rotate_carry(&data, amount, left)
         } else {
             let n = (amount % 8) as u32;
-            data.iter().map(|&b| if left { b.rotate_left(n) } else { b.rotate_right(n) }).collect()
+            data.iter()
+                .map(|&b| {
+                    if left {
+                        b.rotate_left(n)
+                    } else {
+                        b.rotate_right(n)
+                    }
+                })
+                .collect()
         };
         let mut m = PortMap::new();
-        m.insert("bytes".to_string(), PortValue::Bytes(Arc::from(out.clone().into_boxed_slice())));
+        m.insert(
+            "bytes".to_string(),
+            PortValue::Bytes(Arc::from(out.clone().into_boxed_slice())),
+        );
         m.insert("hex".to_string(), PortValue::Text(hex::encode(&out)));
-        m.insert("text".to_string(), PortValue::Text(String::from_utf8_lossy(&out).into_owned()));
+        m.insert(
+            "text".to_string(),
+            PortValue::Text(String::from_utf8_lossy(&out).into_owned()),
+        );
         Ok(m)
     }
 }

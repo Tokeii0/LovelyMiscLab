@@ -14,7 +14,10 @@ impl Node for N {
             "空格" => s.chars().filter(|&c| c != ' ').collect(),
             "换行" => s.chars().filter(|&c| c != '\n' && c != '\r').collect(),
             "制表符" => s.chars().filter(|&c| c != '\t').collect(),
-            "非可见字符" => s.chars().filter(|c| !c.is_control() || *c == '\n').collect(),
+            "非可见字符" => s
+                .chars()
+                .filter(|c| !c.is_control() || *c == '\n')
+                .collect(),
             _ => s.chars().filter(|c| !c.is_whitespace()).collect(),
         };
         Ok(out_text(out))

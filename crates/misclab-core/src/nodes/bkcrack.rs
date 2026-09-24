@@ -55,7 +55,11 @@ fn parse_zip(data: &[u8]) -> Result<Vec<Entry>, CoreError> {
             let lower = start.saturating_sub(0xffff) as isize;
             while i >= lower {
                 let p = i as usize;
-                if data[p] == 0x50 && data[p + 1] == 0x4b && data[p + 2] == 0x05 && data[p + 3] == 0x06 {
+                if data[p] == 0x50
+                    && data[p + 1] == 0x4b
+                    && data[p + 2] == 0x05
+                    && data[p + 3] == 0x06
+                {
                     found = Some(p);
                     break;
                 }
@@ -81,7 +85,8 @@ fn parse_zip(data: &[u8]) -> Result<Vec<Entry>, CoreError> {
         let extra_len = u16le(data, i + 30) as usize;
         let comment_len = u16le(data, i + 32) as usize;
         let lho = u32le(data, i + 42) as usize;
-        let name = String::from_utf8_lossy(&data[i + 46..(i + 46 + name_len).min(data.len())]).into_owned();
+        let name = String::from_utf8_lossy(&data[i + 46..(i + 46 + name_len).min(data.len())])
+            .into_owned();
 
         // 解析本地文件头以定位真实数据起点（本地头的额外字段长度可能与中央目录不同）。
         if lho + 30 <= data.len()
@@ -118,7 +123,10 @@ fn resolve_plaintext(p: &serde_json::Value) -> Result<(Vec<u8>, i32), CoreError>
         return Ok((hex::decode(hexed).expect("内置模板 Hex 合法"), *off));
     }
     let offset = pnum(p, "offset", 0.0) as i32;
-    let cleaned: String = pstr(p, "plainHex", "").chars().filter(|c| c.is_ascii_hexdigit()).collect();
+    let cleaned: String = pstr(p, "plainHex", "")
+        .chars()
+        .filter(|c| c.is_ascii_hexdigit())
+        .collect();
     if !cleaned.is_empty() {
         let bytes = hex::decode(&cleaned)
             .map_err(|_| CoreError::Parse("已知明文 Hex 不合法（需偶数个十六进制字符）".into()))?;
@@ -153,13 +161,21 @@ impl Node for N {
                 .find(|e| e.name == want)
                 .ok_or_else(|| CoreError::Other(format!("ZIP 中没有条目「{want}」")))?
         } else {
-            entries.iter().find(|e| e.encrypted && !e.name.ends_with('/')).ok_or_else(|| {
-                CoreError::Other("未指定密文条目，且未找到加密条目（是否为 ZipCrypto 加密？）".into())
-            })?
+            entries
+                .iter()
+                .find(|e| e.encrypted && !e.name.ends_with('/'))
+                .ok_or_else(|| {
+                    CoreError::Other(
+                        "未指定密文条目，且未找到加密条目（是否为 ZipCrypto 加密？）".into(),
+                    )
+                })?
         };
 
         if !entry.encrypted {
-            return Err(CoreError::Other(format!("条目「{}」未加密，无需攻击", entry.name)));
+            return Err(CoreError::Other(format!(
+                "条目「{}」未加密，无需攻击",
+                entry.name
+            )));
         }
         if entry.method == 99 {
             return Err(CoreError::Other(
@@ -188,7 +204,11 @@ impl Node for N {
             "密文条目：{}（{}，密文 {} 字节）\n",
             entry.name, method_str, entry.comp_size
         ));
-        report.push_str(&format!("已知明文：{} 字节 @ 偏移 {}\n", plain.len(), offset));
+        report.push_str(&format!(
+            "已知明文：{} 字节 @ 偏移 {}\n",
+            plain.len(),
+            offset
+        ));
         if entry.method != 0 && template != "自定义" {
             report.push_str(
                 "提示：该条目为压缩条目，文件头模板通常只适用于 Stored 条目；\
@@ -201,7 +221,12 @@ impl Node for N {
         }
         ctx.log(
             LogLevel::Info,
-            format!("密文条目：{}（{}），已知明文 {} 字节", entry.name, method_str, plain.len()),
+            format!(
+                "密文条目：{}（{}），已知明文 {} 字节",
+                entry.name,
+                method_str,
+                plain.len()
+            ),
         );
         ctx.log(
             LogLevel::Info,
@@ -228,16 +253,16 @@ impl Node for N {
         };
         let is_cancelled = || cancel.is_cancelled();
 
-        let keys = engine::recover_keys(ciphertext, plain, offset, on_progress, is_cancelled, on_log)
-            .map_err(|e| match e {
-                engine::AttackError::Data(s) => CoreError::Other(s),
-                engine::AttackError::Cancelled => CoreError::Cancelled,
-                engine::AttackError::NoSolution => CoreError::Other(format!(
-                    "未能求得密钥：明文/偏移可能不对，或条目 {} 的已知明文与压缩流不匹配。\n{}",
-                    entry.name, report
-                )),
-            },
-        )?;
+        let keys =
+            engine::recover_keys(ciphertext, plain, offset, on_progress, is_cancelled, on_log)
+                .map_err(|e| match e {
+                    engine::AttackError::Data(s) => CoreError::Other(s),
+                    engine::AttackError::Cancelled => CoreError::Cancelled,
+                    engine::AttackError::NoSolution => CoreError::Other(format!(
+                        "未能求得密钥：明文/偏移可能不对，或条目 {} 的已知明文与压缩流不匹配。\n{}",
+                        entry.name, report
+                    )),
+                })?;
 
         ctx.progress(0.96);
         let keys_str = format!("{:08x} {:08x} {:08x}", keys.x, keys.y, keys.z);
@@ -252,7 +277,8 @@ impl Node for N {
             // Deflate 条目解密得到的是压缩流，尝试 Inflate 还原真实文件。
             let (bytes, note) = if entry.method == 8 {
                 let mut inflated = Vec::new();
-                match flate2::read::DeflateDecoder::new(&deciphered[..]).read_to_end(&mut inflated) {
+                match flate2::read::DeflateDecoder::new(&deciphered[..]).read_to_end(&mut inflated)
+                {
                     Ok(_) if !inflated.is_empty() => (inflated, "已解密并 Inflate 还原"),
                     _ => (deciphered, "已解密（Inflate 失败，输出为压缩流）"),
                 }
@@ -261,7 +287,10 @@ impl Node for N {
             };
             report.push_str(&format!("{note}：{} 字节\n", bytes.len()));
             ctx.log(LogLevel::Info, format!("{note}，{} 字节", bytes.len()));
-            out.insert("data".into(), PortValue::Bytes(Arc::from(bytes.into_boxed_slice())));
+            out.insert(
+                "data".into(),
+                PortValue::Bytes(Arc::from(bytes.into_boxed_slice())),
+            );
         }
 
         ctx.progress(1.0);
@@ -396,7 +425,10 @@ mod tests {
         let zip = make_encrypted_zip("flag.txt", password, data);
 
         let mut inputs = PortMap::new();
-        inputs.insert("archive".into(), PortValue::Bytes(Arc::from(zip.into_boxed_slice())));
+        inputs.insert(
+            "archive".into(),
+            PortValue::Bytes(Arc::from(zip.into_boxed_slice())),
+        );
         let params = serde_json::json!({
             "cipherEntry": "flag.txt",
             "template": "自定义",
@@ -429,7 +461,11 @@ mod tests {
     fn templates_are_valid_and_sufficient() {
         for (name, hexed, _) in TEMPLATES {
             let bytes = hex::decode(hexed).unwrap_or_else(|_| panic!("template {name} hex"));
-            assert!(bytes.len() >= 12, "template {name} needs >= 12 bytes, got {}", bytes.len());
+            assert!(
+                bytes.len() >= 12,
+                "template {name} needs >= 12 bytes, got {}",
+                bytes.len()
+            );
         }
     }
 
@@ -437,7 +473,10 @@ mod tests {
     fn resolves_template_and_custom() {
         let p = serde_json::json!({ "template": "PNG 图片" });
         let (bytes, off) = resolve_plaintext(&p).unwrap();
-        assert_eq!(bytes, hex::decode("89504e470d0a1a0a0000000d49484452").unwrap());
+        assert_eq!(
+            bytes,
+            hex::decode("89504e470d0a1a0a0000000d49484452").unwrap()
+        );
         assert_eq!(off, 0);
 
         let p = serde_json::json!({ "template": "自定义", "plainText": "flag{demo}", "offset": 4 });

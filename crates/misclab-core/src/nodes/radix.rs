@@ -6,7 +6,10 @@ const DIGITS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 
 fn digit_val(c: char) -> Option<u32> {
     let c = c.to_ascii_lowercase();
-    DIGITS.iter().position(|&d| d as char == c).map(|p| p as u32)
+    DIGITS
+        .iter()
+        .position(|&d| d as char == c)
+        .map(|p| p as u32)
 }
 
 /// Parse `s` (base `from`) into a little-endian base-256 bignum.

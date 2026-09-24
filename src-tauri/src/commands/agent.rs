@@ -47,8 +47,13 @@ const TOOL_RESULT_TRANSCRIPT_MAX: usize = 3000;
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum AgentEvent {
     #[serde(rename_all = "camelCase")]
-    Started { job: String, steps_max: u32 },
-    Thinking { text: String },
+    Started {
+        job: String,
+        steps_max: u32,
+    },
+    Thinking {
+        text: String,
+    },
     #[serde(rename_all = "camelCase")]
     AddNode {
         key: String,
@@ -66,13 +71,32 @@ pub enum AgentEvent {
         to_port: String,
         reason: String,
     },
-    SetParam { key: String, name: String, value: Value, reason: String },
-    RunStart { keys: Vec<String> },
-    NodeResult { key: String, ok: bool, summary: String },
-    ToolError { tool: String, message: String },
+    SetParam {
+        key: String,
+        name: String,
+        value: Value,
+        reason: String,
+    },
+    RunStart {
+        keys: Vec<String>,
+    },
+    NodeResult {
+        key: String,
+        ok: bool,
+        summary: String,
+    },
+    ToolError {
+        tool: String,
+        message: String,
+    },
     #[serde(rename_all = "camelCase")]
-    Done { notes: String, steps_used: u32 },
-    Error { message: String },
+    Done {
+        notes: String,
+        steps_used: u32,
+    },
+    Error {
+        message: String,
+    },
 }
 
 // ---- the agent's authoritative (key-addressed) graph ------------------------
@@ -184,7 +208,10 @@ fn compact_string_for_transcript(s: &str) -> String {
         return s.to_string();
     }
     let head: String = s.chars().take(TRANSCRIPT_STRING_MAX).collect();
-    format!("{head}…（已为上下文省略 {} 字，实际工具调用使用完整值）", len.saturating_sub(TRANSCRIPT_STRING_MAX))
+    format!(
+        "{head}…（已为上下文省略 {} 字，实际工具调用使用完整值）",
+        len.saturating_sub(TRANSCRIPT_STRING_MAX)
+    )
 }
 
 fn compact_value_for_transcript(v: &Value) -> Value {
@@ -240,7 +267,10 @@ fn compact_assistant_msg_for_transcript(mut raw: Value, calls: &[ToolCall]) -> V
 }
 
 fn compact_tool_result_for_transcript(result: &Value) -> String {
-    truncate(&compact_value_for_transcript(result).to_string(), TOOL_RESULT_TRANSCRIPT_MAX)
+    truncate(
+        &compact_value_for_transcript(result).to_string(),
+        TOOL_RESULT_TRANSCRIPT_MAX,
+    )
 }
 
 fn system_prompt(catalog: &str) -> String {
@@ -304,7 +334,10 @@ fn resolve_ref(
                     Ok((key, p, o.port_type))
                 } else {
                     let opts: Vec<&str> = d.outputs.iter().map(|o| o.name.as_str()).collect();
-                    Err(format!("节点「{key}」没有输出端口「{p}」；可选: {}", opts.join(", ")))
+                    Err(format!(
+                        "节点「{key}」没有输出端口「{p}」；可选: {}",
+                        opts.join(", ")
+                    ))
                 }
             } else if let Some(i) = d.inputs.iter().find(|i| i.name == p) {
                 Ok((key, p, i.port_type))
@@ -313,7 +346,10 @@ fn resolve_ref(
             } else {
                 let mut opts: Vec<&str> = d.inputs.iter().map(|i| i.name.as_str()).collect();
                 opts.extend(d.params.iter().map(|pp| pp.name.as_str()));
-                Err(format!("节点「{key}」没有输入端口/参数「{p}」；可选: {}", opts.join(", ")))
+                Err(format!(
+                    "节点「{key}」没有输入端口/参数「{p}」；可选: {}",
+                    opts.join(", ")
+                ))
             }
         }
         None => {
@@ -375,12 +411,17 @@ fn tool_run_partial(
     }
     ctx.runs_left -= 1;
 
-    let subset: Option<Vec<String>> = args
-        .get("keys")
-        .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|k| k.as_str().map(str::to_string)).collect());
+    let subset: Option<Vec<String>> = args.get("keys").and_then(|v| v.as_array()).map(|arr| {
+        arr.iter()
+            .filter_map(|k| k.as_str().map(str::to_string))
+            .collect()
+    });
     let include: Vec<&AgentNode> = match &subset {
-        Some(keys) => graph.nodes.iter().filter(|n| keys.contains(&n.key)).collect(),
+        Some(keys) => graph
+            .nodes
+            .iter()
+            .filter(|n| keys.contains(&n.key))
+            .collect(),
         None => graph.nodes.iter().collect(),
     };
     if include.is_empty() {
@@ -401,10 +442,18 @@ fn tool_run_partial(
     let edges: Vec<misclab_core::graph::model::Edge> = graph
         .edges
         .iter()
-        .filter(|(f, _, t, _)| include_keys.contains(f.as_str()) && include_keys.contains(t.as_str()))
+        .filter(|(f, _, t, _)| {
+            include_keys.contains(f.as_str()) && include_keys.contains(t.as_str())
+        })
         .map(|(f, fp, t, tp)| misclab_core::graph::model::Edge {
-            from: PortRef { node: f.clone(), port: fp.clone() },
-            to: PortRef { node: t.clone(), port: tp.clone() },
+            from: PortRef {
+                node: f.clone(),
+                port: fp.clone(),
+            },
+            to: PortRef {
+                node: t.clone(),
+                port: tp.clone(),
+            },
         })
         .collect();
     let sgraph = SerializedGraph { nodes, edges };
@@ -433,7 +482,10 @@ fn tool_run_partial(
                     .get(n.descriptor_id.as_str())
                     .and_then(|d| d.outputs.iter().find_map(|o| pm.get(&o.name)))
                     .or_else(|| pm.values().next());
-                (true, val.map(preview_port).unwrap_or_else(|| "（无输出）".into()))
+                (
+                    true,
+                    val.map(preview_port).unwrap_or_else(|| "（无输出）".into()),
+                )
             }
             None => (false, "（未产出/失败）".into()),
         };
@@ -461,13 +513,29 @@ fn dispatch(
             if key.is_empty() || ty.is_empty() {
                 tool_err(on_event, "add_node", "缺少 key 或 type".into())
             } else if !ctx.by_id.contains_key(ty.as_str()) {
-                tool_err(on_event, "add_node", format!("未知节点 id「{ty}」，只能用目录里的 id"))
+                tool_err(
+                    on_event,
+                    "add_node",
+                    format!("未知节点 id「{ty}」，只能用目录里的 id"),
+                )
             } else if graph.has(&key) {
-                tool_err(on_event, "add_node", format!("key「{key}」已存在，请换一个"))
+                tool_err(
+                    on_event,
+                    "add_node",
+                    format!("key「{key}」已存在，请换一个"),
+                )
             } else if graph.nodes.len() >= NODES_MAX {
-                tool_err(on_event, "add_node", format!("节点数量已达上限({NODES_MAX})"))
+                tool_err(
+                    on_event,
+                    "add_node",
+                    format!("节点数量已达上限({NODES_MAX})"),
+                )
             } else {
-                let params = a.get("params").filter(|v| v.is_object()).cloned().unwrap_or_else(|| json!({}));
+                let params = a
+                    .get("params")
+                    .filter(|v| v.is_object())
+                    .cloned()
+                    .unwrap_or_else(|| json!({}));
                 graph.nodes.push(AgentNode {
                     key: key.clone(),
                     descriptor_id: ty.clone(),
@@ -503,7 +571,9 @@ fn dispatch(
                             ),
                         )
                     } else {
-                        graph.edges.push((fk.clone(), fp.clone(), tk.clone(), tp.clone()));
+                        graph
+                            .edges
+                            .push((fk.clone(), fp.clone(), tk.clone(), tp.clone()));
                         let _ = on_event.send(AgentEvent::Connect {
                             from_key: fk,
                             from_port: fp,
@@ -543,7 +613,11 @@ fn dispatch(
         }
         "run_partial" => tool_run_partial(graph, ctx, a, on_event),
         "finish" => {
-            let notes = a.get("notes").and_then(|v| v.as_str()).unwrap_or("完成").to_string();
+            let notes = a
+                .get("notes")
+                .and_then(|v| v.as_str())
+                .unwrap_or("完成")
+                .to_string();
             return (Outcome::Finish(notes), json!({ "ok": true }));
         }
         other => tool_err(on_event, other, format!("未知工具「{other}」")),
@@ -562,7 +636,9 @@ fn fallback(
     on_event: &Channel<AgentEvent>,
     reason: &str,
 ) {
-    let _ = on_event.send(AgentEvent::Thinking { text: reason.into() });
+    let _ = on_event.send(AgentEvent::Thinking {
+        text: reason.into(),
+    });
     match generate(registry, cfg, prompt) {
         Ok(g) => {
             for n in &g.nodes {
@@ -588,7 +664,9 @@ fn fallback(
             });
         }
         Err(e) => {
-            let _ = on_event.send(AgentEvent::Error { message: e.to_string() });
+            let _ = on_event.send(AgentEvent::Error {
+                message: e.to_string(),
+            });
         }
     }
 }
@@ -611,7 +689,10 @@ fn run_agent(
         descriptors.iter().map(|d| (d.id.as_str(), d)).collect();
     let catalog = build_catalog(&descriptors);
     let tools = tool_defs();
-    let mut graph = AgentGraph { nodes: Vec::new(), edges: Vec::new() };
+    let mut graph = AgentGraph {
+        nodes: Vec::new(),
+        edges: Vec::new(),
+    };
     let mut ctx = AgentCtx {
         registry,
         by_id: &by_id,
@@ -633,16 +714,26 @@ fn run_agent(
 
     for step in 0..STEPS_MAX {
         if cancel.is_cancelled() {
-            let _ = on_event.send(AgentEvent::Error { message: "已取消".into() });
+            let _ = on_event.send(AgentEvent::Error {
+                message: "已取消".into(),
+            });
             return;
         }
         let (turn, usage) = match ai::chat_step(cfg, &messages, &tools) {
             Ok(t) => t,
             Err(e) => {
                 if step == 0 {
-                    fallback(registry, cfg, prompt, on_event, "当前模型不支持工具调用，已回退到一次性生成");
+                    fallback(
+                        registry,
+                        cfg,
+                        prompt,
+                        on_event,
+                        "当前模型不支持工具调用，已回退到一次性生成",
+                    );
                 } else {
-                    let _ = on_event.send(AgentEvent::Error { message: e.to_string() });
+                    let _ = on_event.send(AgentEvent::Error {
+                        message: e.to_string(),
+                    });
                 }
                 return;
             }
@@ -650,15 +741,34 @@ fn run_agent(
         match turn {
             AssistantTurn::Content(text) => {
                 if step == 0 {
-                    fallback(registry, cfg, prompt, on_event, "模型未使用工具，已回退到一次性生成");
+                    fallback(
+                        registry,
+                        cfg,
+                        prompt,
+                        on_event,
+                        "模型未使用工具，已回退到一次性生成",
+                    );
                 } else {
-                    let notes = if text.trim().is_empty() { "完成".into() } else { text };
-                    let _ = on_event.send(AgentEvent::Done { notes, steps_used: step });
+                    let notes = if text.trim().is_empty() {
+                        "完成".into()
+                    } else {
+                        text
+                    };
+                    let _ = on_event.send(AgentEvent::Done {
+                        notes,
+                        steps_used: step,
+                    });
                 }
                 return;
             }
-            AssistantTurn::ToolCalls { raw_assistant_msg, calls } => {
-                messages.push(compact_assistant_msg_for_transcript(raw_assistant_msg, &calls));
+            AssistantTurn::ToolCalls {
+                raw_assistant_msg,
+                calls,
+            } => {
+                messages.push(compact_assistant_msg_for_transcript(
+                    raw_assistant_msg,
+                    &calls,
+                ));
                 for call in calls {
                     let (outcome, result) = dispatch(&mut graph, &mut ctx, &call, on_event);
                     messages.push(json!({
@@ -667,7 +777,10 @@ fn run_agent(
                         "content": compact_tool_result_for_transcript(&result),
                     }));
                     if let Outcome::Finish(notes) = outcome {
-                        let _ = on_event.send(AgentEvent::Done { notes, steps_used: step + 1 });
+                        let _ = on_event.send(AgentEvent::Done {
+                            notes,
+                            steps_used: step + 1,
+                        });
                         return;
                     }
                 }
@@ -711,7 +824,16 @@ pub async fn agent_run(
     let job = state.jobs.start(cancel.clone());
     let job_for_run = job.clone();
     let res = tauri::async_runtime::spawn_blocking(move || {
-        run_agent(&registry, &cfg, &env, &cache, &prompt, &on_event, &job_for_run, &cancel);
+        run_agent(
+            &registry,
+            &cfg,
+            &env,
+            &cache,
+            &prompt,
+            &on_event,
+            &job_for_run,
+            &cancel,
+        );
     })
     .await;
     state.jobs.finish(&job);

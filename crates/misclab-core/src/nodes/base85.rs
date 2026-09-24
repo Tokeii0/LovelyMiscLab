@@ -60,7 +60,10 @@ pub fn register(reg: &mut NodeRegistry) {
             BLUE,
             vec![req("data", "输入", PortType::Any)],
             vec![t_out()],
-            vec![variant(), ParamSpec::toggle("delim", "包含 <~ ~> 分隔符", false)],
+            vec![
+                variant(),
+                ParamSpec::toggle("delim", "包含 <~ ~> 分隔符", false),
+            ],
         ),
         Arc::new(|| Arc::new(Enc)),
     );
@@ -75,7 +78,10 @@ pub fn register(reg: &mut NodeRegistry) {
                 req("text", "文本", PortType::Text),
                 opt("bytes", "字节", PortType::Bytes),
             ],
-            vec![variant(), ParamSpec::toggle("strip", "去除非码表字符", true)],
+            vec![
+                variant(),
+                ParamSpec::toggle("strip", "去除非码表字符", true),
+            ],
         ),
         Arc::new(|| Arc::new(Dec)),
     );

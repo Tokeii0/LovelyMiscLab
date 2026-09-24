@@ -31,7 +31,12 @@ fn delim(p: &serde_json::Value) -> &'static str {
 
 struct ToCharcode;
 impl Node for ToCharcode {
-    fn run(&self, inputs: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let text = in_text(inputs, "text")?;
         let base = radix(p);
         let parts: Vec<String> = text.chars().map(|c| fmt(c as u32, base)).collect();
@@ -41,7 +46,12 @@ impl Node for ToCharcode {
 
 struct FromCharcode;
 impl Node for FromCharcode {
-    fn run(&self, inputs: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let text = in_text(inputs, "text")?;
         let base = radix(p);
         let mut s = String::new();
@@ -64,17 +74,38 @@ impl Node for FromCharcode {
 fn params() -> Vec<ParamSpec> {
     vec![
         ParamSpec::select("base", "进制", &["16", "10", "8", "2"], "16"),
-        ParamSpec::select("delimiter", "分隔符", &["空格", "逗号", "换行", "分号"], "空格"),
+        ParamSpec::select(
+            "delimiter",
+            "分隔符",
+            &["空格", "逗号", "换行", "分号"],
+            "空格",
+        ),
     ]
 }
 
 pub fn register(reg: &mut NodeRegistry) {
     reg.register(
-        desc("to_charcode", RADIX, "字符转码点", INDIGO, vec![t_in()], vec![t_out()], params()),
+        desc(
+            "to_charcode",
+            RADIX,
+            "字符转码点",
+            INDIGO,
+            vec![t_in()],
+            vec![t_out()],
+            params(),
+        ),
         Arc::new(|| Arc::new(ToCharcode)),
     );
     reg.register(
-        desc("from_charcode", RADIX, "码点转字符", INDIGO, vec![t_in()], vec![t_out()], params()),
+        desc(
+            "from_charcode",
+            RADIX,
+            "码点转字符",
+            INDIGO,
+            vec![t_in()],
+            vec![t_out()],
+            params(),
+        ),
         Arc::new(|| Arc::new(FromCharcode)),
     );
 }

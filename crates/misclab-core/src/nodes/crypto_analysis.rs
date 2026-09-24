@@ -120,7 +120,7 @@ fn crack_score(text: &str) -> f32 {
             score -= (ratio - 0.40).abs().min(0.4);
         }
     }
-    if text.contains('�') {
+    if text.contains('\u{FFFD}') {
         score -= 1.0;
     }
     if text

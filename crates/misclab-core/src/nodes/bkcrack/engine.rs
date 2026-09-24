@@ -61,7 +61,7 @@ struct Tables {
     keystreamtab: Vec<u8>, // len 1<<14
     /// keystreaminvfiltertab[ki][zi_10_16>>10] flattened as [ki*64 + slot].
     invfilter: Vec<Vec<u32>>, // len 256*64
-    invexists: Vec<bool>,     // len 256*64
+    invexists: Vec<bool>,  // len 256*64
 }
 
 fn tables() -> &'static Tables {
@@ -116,7 +116,15 @@ fn build_tables() -> Tables {
         z_2_16 += 4;
     }
 
-    Tables { crctab, crcinvtab, fiber2, fiber3, keystreamtab, invfilter, invexists }
+    Tables {
+        crctab,
+        crcinvtab,
+        fiber2,
+        fiber3,
+        keystreamtab,
+        invfilter,
+        invexists,
+    }
 }
 
 #[inline]
@@ -181,7 +189,11 @@ pub struct Keys {
 
 impl Default for Keys {
     fn default() -> Self {
-        Keys { x: 0x1234_5678, y: 0x2345_6789, z: 0x3456_7890 }
+        Keys {
+            x: 0x1234_5678,
+            y: 0x2345_6789,
+            z: 0x3456_7890,
+        }
     }
 }
 
@@ -204,14 +216,22 @@ impl Keys {
     #[inline]
     pub fn update(&mut self, p: u8) {
         self.x = crc32(self.x, p);
-        self.y = self.y.wrapping_add(lsb(self.x) as u32).wrapping_mul(MULT).wrapping_add(1);
+        self.y = self
+            .y
+            .wrapping_add(lsb(self.x) as u32)
+            .wrapping_mul(MULT)
+            .wrapping_add(1);
         self.z = crc32(self.z, msb(self.y));
     }
 
     #[inline]
     pub fn update_backward(&mut self, c: u8) {
         self.z = crc32inv(self.z, msb(self.y));
-        self.y = self.y.wrapping_sub(1).wrapping_mul(MULTINV).wrapping_sub(lsb(self.x) as u32);
+        self.y = self
+            .y
+            .wrapping_sub(1)
+            .wrapping_mul(MULTINV)
+            .wrapping_sub(lsb(self.x) as u32);
         let k = self.get_k();
         self.x = crc32inv(self.x, c ^ k);
     }
@@ -296,7 +316,12 @@ impl<'a> Data<'a> {
             .map(|(p, c)| p ^ c)
             .collect();
 
-        Ok(Data { ciphertext, plaintext, keystream, offset })
+        Ok(Data {
+            ciphertext,
+            plaintext,
+            keystream,
+            offset,
+        })
     }
 }
 
@@ -521,8 +546,7 @@ impl<'a> Attack<'a> {
                         .wrapping_sub(self.ylist[6] & mask(24, 32))
                         <= maxdiff(24)
                     {
-                        self.ylist[7] =
-                            (y7_0_8 as u32) | y7_8_24 | (self.ylist[7] & mask(24, 32));
+                        self.ylist[7] = (y7_0_8 as u32) | y7_8_24 | (self.ylist[7] & mask(24, 32));
                         self.explore_ylists(7);
                         if self.found.is_some() {
                             return;
@@ -742,7 +766,15 @@ where
     ));
 
     // Attack (progress 0.5..1.0), parallelized across cores.
-    match attack_over_candidates(&data, &zi_vector, index, &on_progress, &is_cancelled, 0.5, 1.0)? {
+    match attack_over_candidates(
+        &data,
+        &zi_vector,
+        index,
+        &on_progress,
+        &is_cancelled,
+        0.5,
+        1.0,
+    )? {
         Some(keys) => Ok(keys),
         None => Err(AttackError::NoSolution),
     }
@@ -752,7 +784,11 @@ where
 /// keys, returning the plaintext data **without** the encryption header.
 pub fn decipher(ciphertext_incl_header: &[u8], keys: Keys) -> Vec<u8> {
     let mut k = keys;
-    let mut out = Vec::with_capacity(ciphertext_incl_header.len().saturating_sub(ENCRYPTION_HEADER_SIZE));
+    let mut out = Vec::with_capacity(
+        ciphertext_incl_header
+            .len()
+            .saturating_sub(ENCRYPTION_HEADER_SIZE),
+    );
     for (i, &c) in ciphertext_incl_header.iter().enumerate() {
         let p = c ^ k.get_k();
         k.update(p);
@@ -774,7 +810,11 @@ mod tests {
         0x3e, 0xb4, 0xc5, 0x92, 0x58, 0x40, 0x9a, 0x6c, 0xed, 0x99, 0x65, 0x81, 0x66, 0x1b, 0x1d,
         0xda, 0x5d, 0x8a, 0x8c, 0x30, 0x07, 0x76, 0x50, 0xbb,
     ];
-    const EXPECTED: Keys = Keys { x: 0xea9b_4e4d, y: 0xba78_9085, z: 0x5ff8_707d };
+    const EXPECTED: Keys = Keys {
+        x: 0xea9b_4e4d,
+        y: 0xba78_9085,
+        z: 0x5ff8_707d,
+    };
 
     #[test]
     fn keys_from_password_matches() {
@@ -798,7 +838,14 @@ mod tests {
         for &p in b"test" {
             k.update(p);
         }
-        assert_eq!(k, Keys { x: 0x382b_d98d, y: 0x5ad5_5f3b, z: 0x04f8_d2f6 });
+        assert_eq!(
+            k,
+            Keys {
+                x: 0x382b_d98d,
+                y: 0x5ad5_5f3b,
+                z: 0x04f8_d2f6
+            }
+        );
         for &c in [0x2cu8, 0x40, 0x6b, 0x9a].iter() {
             k.update_backward(c);
         }
@@ -811,9 +858,22 @@ mod tests {
         // index 7 and check the recovered initial keys.
         let z7: u32 = 0x7493_0e66;
         let candidates: Vec<u32> = vec![
-            0x0000_0000, 0x1000_0000, 0x2000_0000, 0x3000_0000, 0x4000_0000, 0x5000_0000,
-            0x6000_0000, z7 & mask(2, 32), 0x8000_0000, 0x9000_0000, 0xa000_0000, 0xb000_0000,
-            0xc000_0000, 0xd000_0000, 0xe000_0000, 0xf000_0000,
+            0x0000_0000,
+            0x1000_0000,
+            0x2000_0000,
+            0x3000_0000,
+            0x4000_0000,
+            0x5000_0000,
+            0x6000_0000,
+            z7 & mask(2, 32),
+            0x8000_0000,
+            0x9000_0000,
+            0xa000_0000,
+            0xb000_0000,
+            0xc000_0000,
+            0xd000_0000,
+            0xe000_0000,
+            0xf000_0000,
         ];
         let data = Data::new(&CIPHERTEXT, PLAINTEXT.to_vec(), 0).unwrap();
         let found = attack_over_candidates(&data, &candidates, 7, &|_| {}, &|| false, 0.0, 1.0)

@@ -50,12 +50,18 @@ impl Node for N {
             "原始数字" => delays_str.clone(),
             "二进制" => {
                 let thr = pnum(p, "threshold", 5.0).round() as u32;
-                let bits: String = cs.iter().map(|&v| if v >= thr { '1' } else { '0' }).collect();
+                let bits: String = cs
+                    .iter()
+                    .map(|&v| if v >= thr { '1' } else { '0' })
+                    .collect();
                 let bytes: Vec<u8> = bits
                     .as_bytes()
                     .chunks(8)
                     .filter(|c| c.len() == 8)
-                    .map(|c| c.iter().fold(0u8, |acc, &b| (acc << 1) | u8::from(b == b'1')))
+                    .map(|c| {
+                        c.iter()
+                            .fold(0u8, |acc, &b| (acc << 1) | u8::from(b == b'1'))
+                    })
                     .collect();
                 format!("{bits}\n→ {}", String::from_utf8_lossy(&bytes))
             }

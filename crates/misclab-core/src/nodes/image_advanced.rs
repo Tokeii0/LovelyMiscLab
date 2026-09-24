@@ -14,7 +14,11 @@ use super::prelude::*;
 fn binarize(img: &RgbaImage, thr: u8) -> GrayImage {
     let g = image::imageops::grayscale(img);
     GrayImage::from_fn(g.width(), g.height(), |x, y| {
-        if g.get_pixel(x, y).0[0] > thr { Luma([255]) } else { Luma([0]) }
+        if g.get_pixel(x, y).0[0] > thr {
+            Luma([255])
+        } else {
+            Luma([0])
+        }
     })
 }
 fn gray_to_rgba(g: &GrayImage) -> RgbaImage {
@@ -32,14 +36,30 @@ fn label_color(l: u32) -> Rgba<u8> {
 
 struct Connected;
 impl Node for Connected {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
-        let bin = binarize(&load_image(i, "data")?, pnum(p, "threshold", 128.0).clamp(0.0, 255.0) as u8);
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
+        let bin = binarize(
+            &load_image(i, "data")?,
+            pnum(p, "threshold", 128.0).clamp(0.0, 255.0) as u8,
+        );
         let labels = connected_components(&bin, Connectivity::Eight, Luma([0u8]));
         let count = labels.pixels().map(|px| px.0[0]).max().unwrap_or(0);
         let mut out = RgbaImage::new(labels.width(), labels.height());
         for (x, y, px) in labels.enumerate_pixels() {
             let l = px.0[0];
-            out.put_pixel(x, y, if l == 0 { Rgba([0, 0, 0, 255]) } else { label_color(l) });
+            out.put_pixel(
+                x,
+                y,
+                if l == 0 {
+                    Rgba([0, 0, 0, 255])
+                } else {
+                    label_color(l)
+                },
+            );
         }
         let mut m = image_out(&out)?;
         m.insert("count".to_string(), PortValue::Number(count as f64));
@@ -49,8 +69,16 @@ impl Node for Connected {
 
 struct Morphology;
 impl Node for Morphology {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
-        let bin = binarize(&load_image(i, "data")?, pnum(p, "threshold", 128.0).clamp(0.0, 255.0) as u8);
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
+        let bin = binarize(
+            &load_image(i, "data")?,
+            pnum(p, "threshold", 128.0).clamp(0.0, 255.0) as u8,
+        );
         let k = pnum(p, "size", 1.0).clamp(0.0, 50.0) as u8;
         let res = match pstr(p, "op", "膨胀") {
             "腐蚀" => erode(&bin, Norm::LInf, k),
@@ -64,7 +92,12 @@ impl Node for Morphology {
 
 struct TemplateMatch;
 impl Node for TemplateMatch {
-    fn run(&self, i: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let img = load_image(i, "image")?;
         let tmpl = load_image(i, "template")?;
         let ig = image::imageops::grayscale(&img);
@@ -82,7 +115,13 @@ impl Node for TemplateMatch {
             Rgba([255, 0, 0, 255]),
         );
         let mut m = image_out(&marked)?;
-        m.insert("text".to_string(), PortValue::Text(format!("匹配位置: ({mx}, {my})  相似度: {:.3}", ext.max_value)));
+        m.insert(
+            "text".to_string(),
+            PortValue::Text(format!(
+                "匹配位置: ({mx}, {my})  相似度: {:.3}",
+                ext.max_value
+            )),
+        );
         m.insert("x".to_string(), PortValue::Number(mx as f64));
         m.insert("y".to_string(), PortValue::Number(my as f64));
         Ok(m)
@@ -90,7 +129,12 @@ impl Node for TemplateMatch {
 }
 
 pub fn register(reg: &mut NodeRegistry) {
-    let dout = || vec![req("image", "图片", PortType::Image), opt("bytes", "字节", PortType::Bytes)];
+    let dout = || {
+        vec![
+            req("image", "图片", PortType::Image),
+            opt("bytes", "字节", PortType::Bytes),
+        ]
+    };
     reg.register(
         desc(
             "connected_components",
@@ -98,8 +142,19 @@ pub fn register(reg: &mut NodeRegistry) {
             "连通域标记",
             FUCHSIA,
             vec![req("data", "图片", PortType::Any)],
-            vec![req("image", "标记图", PortType::Image), opt("bytes", "字节", PortType::Bytes), opt("count", "区域数", PortType::Number)],
-            vec![ParamSpec::number("threshold", "二值阈值", 0.0, 255.0, 1.0, 128.0)],
+            vec![
+                req("image", "标记图", PortType::Image),
+                opt("bytes", "字节", PortType::Bytes),
+                opt("count", "区域数", PortType::Number),
+            ],
+            vec![ParamSpec::number(
+                "threshold",
+                "二值阈值",
+                0.0,
+                255.0,
+                1.0,
+                128.0,
+            )],
         ),
         Arc::new(|| Arc::new(Connected)),
     );
@@ -125,7 +180,10 @@ pub fn register(reg: &mut NodeRegistry) {
             IMG,
             "模板匹配",
             TEAL,
-            vec![req("image", "图片", PortType::Any), req("template", "模板", PortType::Any)],
+            vec![
+                req("image", "图片", PortType::Any),
+                req("template", "模板", PortType::Any),
+            ],
             vec![
                 req("image", "标记图", PortType::Image),
                 opt("text", "结果", PortType::Text),

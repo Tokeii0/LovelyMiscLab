@@ -3,13 +3,19 @@ use super::prelude::*;
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let s = in_text(inputs, "text")?;
         let pattern = pstr(params, "pattern", "");
         if pattern.is_empty() {
             return Ok(out_text(s.to_string()));
         }
-        let re = regex::Regex::new(pattern).map_err(|e| CoreError::Parse(format!("正则错误: {e}")))?;
+        let re =
+            regex::Regex::new(pattern).map_err(|e| CoreError::Parse(format!("正则错误: {e}")))?;
         let rep = pstr(params, "replacement", "");
         let out = if pbool(params, "global", true) {
             re.replace_all(s, rep).into_owned()

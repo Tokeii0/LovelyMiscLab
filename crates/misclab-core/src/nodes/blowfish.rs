@@ -36,10 +36,18 @@ fn ecb(enc: bool, key: &[u8], data: &[u8]) -> Result<Vec<u8>, CoreError> {
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let key = parse_bytes(pstr(params, "key", ""), pstr(params, "keyFormat", "Hex"))?;
         let iv = parse_bytes(pstr(params, "iv", ""), pstr(params, "ivFormat", "Hex"))?;
-        let data = parse_bytes(in_text(inputs, "text")?, pstr(params, "inputFormat", "UTF8"))?;
+        let data = parse_bytes(
+            in_text(inputs, "text")?,
+            pstr(params, "inputFormat", "UTF8"),
+        )?;
         let enc = pstr(params, "operation", "加密") != "解密";
         let out = if pstr(params, "mode", "CBC") == "ECB" {
             ecb(enc, &key, &data)?
@@ -49,7 +57,10 @@ impl Node for N {
         let text = format_bytes(&out, pstr(params, "outputFormat", "Hex"));
         let mut m = PortMap::new();
         m.insert("text".to_string(), PortValue::Text(text));
-        m.insert("bytes".to_string(), PortValue::Bytes(Arc::from(out.into_boxed_slice())));
+        m.insert(
+            "bytes".to_string(),
+            PortValue::Bytes(Arc::from(out.into_boxed_slice())),
+        );
         Ok(m)
     }
 }
@@ -73,8 +84,18 @@ pub fn register(reg: &mut NodeRegistry) {
                 ParamSpec::select("keyFormat", "密钥格式", &["Hex", "UTF8", "Base64"], "Hex"),
                 ParamSpec::text("iv", "IV", "", false),
                 ParamSpec::select("ivFormat", "IV 格式", &["Hex", "UTF8", "Base64"], "Hex"),
-                ParamSpec::select("inputFormat", "输入格式", &["UTF8", "Hex", "Base64"], "UTF8"),
-                ParamSpec::select("outputFormat", "输出格式", &["Hex", "Base64", "UTF8"], "Hex"),
+                ParamSpec::select(
+                    "inputFormat",
+                    "输入格式",
+                    &["UTF8", "Hex", "Base64"],
+                    "UTF8",
+                ),
+                ParamSpec::select(
+                    "outputFormat",
+                    "输出格式",
+                    &["Hex", "Base64", "UTF8"],
+                    "Hex",
+                ),
             ],
         ),
         Arc::new(|| Arc::new(N)),

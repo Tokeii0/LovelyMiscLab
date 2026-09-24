@@ -64,7 +64,9 @@ pub fn register(reg: &mut NodeRegistry) {
                 vec![req("image", "图片", PortType::Image)],
                 vec![],
             );
-            d.description = "把上游图片直接在节点上展示（接受图片/字节/data:URL），并原样输出以便继续连接。".into();
+            d.description =
+                "把上游图片直接在节点上展示（接受图片/字节/data:URL），并原样输出以便继续连接。"
+                    .into();
             d
         },
         Arc::new(|| Arc::new(N)),
@@ -84,7 +86,10 @@ mod tests {
         // Minimal PNG signature → detected as image/png and wrapped as a data URL.
         let png = [0x89u8, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4];
         let mut inputs = PortMap::new();
-        inputs.insert("image".into(), PortValue::Bytes(Arc::from(png.to_vec().into_boxed_slice())));
+        inputs.insert(
+            "image".into(),
+            PortValue::Bytes(Arc::from(png.to_vec().into_boxed_slice())),
+        );
         let out = GraphExecutor::run_node(
             &default_registry(),
             "image_view",
@@ -103,7 +108,10 @@ mod tests {
     #[test]
     fn image_url_passes_through() {
         let mut inputs = PortMap::new();
-        inputs.insert("image".into(), PortValue::Image("data:image/gif;base64,AAAA".into()));
+        inputs.insert(
+            "image".into(),
+            PortValue::Image("data:image/gif;base64,AAAA".into()),
+        );
         let out = GraphExecutor::run_node(
             &default_registry(),
             "image_view",
@@ -113,6 +121,8 @@ mod tests {
             &CancellationToken::new(),
         )
         .unwrap();
-        assert!(matches!(out.get("image"), Some(PortValue::Image(u)) if u == "data:image/gif;base64,AAAA"));
+        assert!(
+            matches!(out.get("image"), Some(PortValue::Image(u)) if u == "data:image/gif;base64,AAAA")
+        );
     }
 }

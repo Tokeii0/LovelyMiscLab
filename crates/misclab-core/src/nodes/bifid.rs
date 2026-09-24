@@ -32,10 +32,19 @@ fn clean_coords(sq: &[char], text: &str) -> Vec<(usize, usize)> {
 
 struct Enc;
 impl Node for Enc {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let sq = square(pstr(params, "keyword", ""));
         let cs = clean_coords(&sq, in_text(inputs, "text")?);
-        let combined: Vec<usize> = cs.iter().map(|c| c.0).chain(cs.iter().map(|c| c.1)).collect();
+        let combined: Vec<usize> = cs
+            .iter()
+            .map(|c| c.0)
+            .chain(cs.iter().map(|c| c.1))
+            .collect();
         let out: String = combined
             .chunks(2)
             .filter(|ch| ch.len() == 2)
@@ -47,7 +56,12 @@ impl Node for Enc {
 
 struct Dec;
 impl Node for Dec {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let sq = square(pstr(params, "keyword", ""));
         let cs = clean_coords(&sq, in_text(inputs, "text")?);
         let seq: Vec<usize> = cs.iter().flat_map(|&(r, c)| [r, c]).collect();
@@ -60,11 +74,27 @@ impl Node for Dec {
 pub fn register(reg: &mut NodeRegistry) {
     let kw = || ParamSpec::text("keyword", "关键词", "", false);
     reg.register(
-        desc("bifid_encode", CRYPTO, "Bifid 加密", ROSE, vec![t_in()], vec![t_out()], vec![kw()]),
+        desc(
+            "bifid_encode",
+            CRYPTO,
+            "Bifid 加密",
+            ROSE,
+            vec![t_in()],
+            vec![t_out()],
+            vec![kw()],
+        ),
         Arc::new(|| Arc::new(Enc)),
     );
     reg.register(
-        desc("bifid_decode", CRYPTO, "Bifid 解密", ROSE, vec![t_in()], vec![t_out()], vec![kw()]),
+        desc(
+            "bifid_decode",
+            CRYPTO,
+            "Bifid 解密",
+            ROSE,
+            vec![t_in()],
+            vec![t_out()],
+            vec![kw()],
+        ),
         Arc::new(|| Arc::new(Dec)),
     );
 }

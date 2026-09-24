@@ -34,8 +34,12 @@ impl Node for N {
     ) -> Result<PortMap, CoreError> {
         let input = in_text(inputs, "text")?;
         let pattern = resolve_pattern(params);
-        let re = regex::Regex::new(&pattern).map_err(|e| CoreError::Parse(format!("正则错误: {e}")))?;
-        let matches: Vec<String> = re.find_iter(input).map(|m| m.as_str().to_string()).collect();
+        let re =
+            regex::Regex::new(&pattern).map_err(|e| CoreError::Parse(format!("正则错误: {e}")))?;
+        let matches: Vec<String> = re
+            .find_iter(input)
+            .map(|m| m.as_str().to_string())
+            .collect();
         let first = matches.first().cloned().unwrap_or_default();
         let mut out = PortMap::new();
         out.insert("text".to_string(), PortValue::Text(first));
@@ -60,7 +64,17 @@ pub fn register(reg: &mut NodeRegistry) {
                 ParamSpec::select(
                     "preset",
                     "预设",
-                    &["自定义", "flag", "MD5", "SHA1", "IPv4", "邮箱", "URL", "Base64块", "Hex串"],
+                    &[
+                        "自定义",
+                        "flag",
+                        "MD5",
+                        "SHA1",
+                        "IPv4",
+                        "邮箱",
+                        "URL",
+                        "Base64块",
+                        "Hex串",
+                    ],
                     "flag",
                 ),
                 ParamSpec::text("pattern", "自定义正则", r"flag\{[^}]*\}", false),

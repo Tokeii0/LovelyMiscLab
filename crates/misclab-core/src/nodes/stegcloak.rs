@@ -118,8 +118,8 @@ fn conceal_to_data(expanded: &str) -> Result<Concealed, CoreError> {
     };
     let mut bits = String::new();
     for c in it {
-        let idx = zwc_index(c)
-            .ok_or_else(|| CoreError::Parse("StegCloak 数据流含非法字符。".into()))?;
+        let idx =
+            zwc_index(c).ok_or_else(|| CoreError::Parse("StegCloak 数据流含非法字符。".into()))?;
         bits.push(if idx & 2 != 0 { '1' } else { '0' });
         bits.push(if idx & 1 != 0 { '1' } else { '0' });
     }
@@ -394,7 +394,12 @@ pub fn register(reg: &mut NodeRegistry) {
             vec![req("text", "秘密信息", PortType::Text)],
             vec![req("text", "结果", PortType::Text)],
             vec![
-                ParamSpec::text("cover", "载体文本(≥2词)", "This is a confidential message", false),
+                ParamSpec::text(
+                    "cover",
+                    "载体文本(≥2词)",
+                    "This is a confidential message",
+                    false,
+                ),
                 ParamSpec::text("password", "密码", "", false),
                 ParamSpec::toggle("encrypt", "加密 (AES-256-CTR)", true),
                 ParamSpec::toggle("integrity", "HMAC 完整性校验", false),

@@ -3,7 +3,12 @@ use super::prelude::*;
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let data = in_bytes(inputs, "data")?;
         let reader = exif::Reader::new();
         let mut cur = std::io::Cursor::new(&data);
@@ -11,7 +16,10 @@ impl Node for N {
             Ok(e) => e,
             Err(exif::Error::NotFound(_)) => {
                 let mut m = PortMap::new();
-                m.insert("text".to_string(), PortValue::Text("未找到 EXIF 数据".to_string()));
+                m.insert(
+                    "text".to_string(),
+                    PortValue::Text("未找到 EXIF 数据".to_string()),
+                );
                 m.insert("fields".to_string(), PortValue::StringList(Vec::new()));
                 m.insert("count".to_string(), PortValue::Number(0.0));
                 return Ok(m);

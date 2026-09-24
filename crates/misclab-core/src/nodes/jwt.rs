@@ -20,11 +20,18 @@ fn pretty(json: &str) -> String {
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let jwt = in_text(inputs, "text")?.trim();
         let parts: Vec<&str> = jwt.split('.').collect();
         if parts.len() < 2 {
-            return Err(CoreError::Parse("不是有效的 JWT（应为 header.payload.signature）".into()));
+            return Err(CoreError::Parse(
+                "不是有效的 JWT（应为 header.payload.signature）".into(),
+            ));
         }
         let header = pretty(&b64url(parts[0]));
         let payload = pretty(&b64url(parts[1]));

@@ -4,14 +4,29 @@ use super::prelude::*;
 
 struct Enc;
 impl Node for Enc {
-    fn run(&self, inputs: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let data = in_bytes(inputs, "data")?;
         let mut out = String::new();
         for (i, chunk) in data.chunks(16).enumerate() {
-            let hex = chunk.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" ");
+            let hex = chunk
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<Vec<_>>()
+                .join(" ");
             let ascii: String = chunk
                 .iter()
-                .map(|&b| if (0x20..0x7f).contains(&b) { b as char } else { '.' })
+                .map(|&b| {
+                    if (0x20..0x7f).contains(&b) {
+                        b as char
+                    } else {
+                        '.'
+                    }
+                })
                 .collect();
             out.push_str(&format!("{:08x}  {:<47}  {}\n", i * 16, hex, ascii));
         }
@@ -21,14 +36,20 @@ impl Node for Enc {
 
 struct Dec;
 impl Node for Dec {
-    fn run(&self, inputs: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let mut out = Vec::new();
         for line in in_text(inputs, "text")?.lines() {
             let mut toks = line.split_whitespace().peekable();
             // Skip a leading offset token (long hex, or ends with ':').
             if let Some(first) = toks.peek() {
                 let f = first.trim_end_matches(':');
-                if (f.len() > 2 || first.ends_with(':')) && f.chars().all(|c| c.is_ascii_hexdigit()) {
+                if (f.len() > 2 || first.ends_with(':')) && f.chars().all(|c| c.is_ascii_hexdigit())
+                {
                     toks.next();
                 }
             }

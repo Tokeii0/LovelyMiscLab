@@ -93,7 +93,10 @@ mod tests {
 
     #[test]
     fn shortest_and_longest() {
-        assert_eq!(zip(&["u1", "u2"], &["p1", "p2", "p3"], "最短"), vec!["u1:p1", "u2:p2"]);
+        assert_eq!(
+            zip(&["u1", "u2"], &["p1", "p2", "p3"], "最短"),
+            vec!["u1:p1", "u2:p2"]
+        );
         assert_eq!(
             zip(&["u1"], &["p1", "p2"], "最长"),
             vec!["u1:p1", ":p2"] // padded with empty

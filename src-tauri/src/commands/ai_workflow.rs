@@ -128,7 +128,11 @@ fn catalog_line(d: &NodeDescriptor) -> String {
     let params = if d.params.is_empty() {
         "-".to_string()
     } else {
-        d.params.iter().map(param_str).collect::<Vec<_>>().join(", ")
+        d.params
+            .iter()
+            .map(param_str)
+            .collect::<Vec<_>>()
+            .join(", ")
     };
     format!(
         "{} | {} | in:{} | out:{} | params:{}\n",
@@ -223,18 +227,31 @@ fn layout(keys: &[String], edges: &[(String, String)]) -> HashMap<String, Pos> {
     }
     let mut by_level: BTreeMap<usize, Vec<String>> = BTreeMap::new();
     for k in keys {
-        by_level.entry(*level.get(k).unwrap_or(&0)).or_default().push(k.clone());
+        by_level
+            .entry(*level.get(k).unwrap_or(&0))
+            .or_default()
+            .push(k.clone());
     }
     let mut pos = HashMap::new();
     for (lvl, ks) in by_level {
         for (i, k) in ks.into_iter().enumerate() {
-            pos.insert(k, Pos { x: 40.0 + lvl as f64 * 260.0, y: 60.0 + i as f64 * 150.0 });
+            pos.insert(
+                k,
+                Pos {
+                    x: 40.0 + lvl as f64 * 260.0,
+                    y: 60.0 + i as f64 * 150.0,
+                },
+            );
         }
     }
     pos
 }
 
-pub(crate) fn generate(registry: &NodeRegistry, cfg: &ModelConfig, prompt: &str) -> Result<GeneratedGraph, AppError> {
+pub(crate) fn generate(
+    registry: &NodeRegistry,
+    cfg: &ModelConfig,
+    prompt: &str,
+) -> Result<GeneratedGraph, AppError> {
     let descriptors = registry.descriptors();
     let catalog = build_catalog(&descriptors);
 
@@ -254,8 +271,12 @@ pub(crate) fn generate(registry: &NodeRegistry, cfg: &ModelConfig, prompt: &str)
     );
 
     let raw = ai::chat(cfg, &system, prompt)?;
-    let json = extract_json(&raw)
-        .ok_or_else(|| AppError::new("ai_parse", format!("AI 未返回 JSON：{}", truncate(&raw, 200))))?;
+    let json = extract_json(&raw).ok_or_else(|| {
+        AppError::new(
+            "ai_parse",
+            format!("AI 未返回 JSON：{}", truncate(&raw, 200)),
+        )
+    })?;
     let llm: LlmGraph = serde_json::from_str(json)
         .map_err(|e| AppError::new("ai_parse", format!("解析 AI 结果失败: {e}")))?;
 
@@ -283,15 +304,19 @@ pub(crate) fn generate(registry: &NodeRegistry, cfg: &ModelConfig, prompt: &str)
         }
     }
     if raw_nodes.is_empty() {
-        return Err(AppError::new("ai_empty", "AI 未生成任何有效节点，请换个描述再试。"));
+        return Err(AppError::new(
+            "ai_empty",
+            "AI 未生成任何有效节点，请换个描述再试。",
+        ));
     }
 
     let mut edge_pairs: Vec<(String, String)> = Vec::new();
     let mut edges: Vec<GenEdge> = Vec::new();
     for e in &llm.edges {
-        if let (Some((fk, fp)), Some((tk, tp))) =
-            (resolve(&e.from, &node_desc, true), resolve(&e.to, &node_desc, false))
-        {
+        if let (Some((fk, fp)), Some((tk, tp))) = (
+            resolve(&e.from, &node_desc, true),
+            resolve(&e.to, &node_desc, false),
+        ) {
             edge_pairs.push((fk.clone(), tk.clone()));
             edges.push(GenEdge {
                 from: GenRef { node: fk, port: fp },
@@ -304,15 +329,30 @@ pub(crate) fn generate(registry: &NodeRegistry, cfg: &ModelConfig, prompt: &str)
     let nodes = raw_nodes
         .into_iter()
         .map(|(key, descriptor_id, params)| {
-            let p = pos.get(&key).map(|p| Pos { x: p.x, y: p.y }).unwrap_or(Pos { x: 40.0, y: 60.0 });
-            GenNode { key, descriptor_id, params, position: p }
+            let p = pos
+                .get(&key)
+                .map(|p| Pos { x: p.x, y: p.y })
+                .unwrap_or(Pos { x: 40.0, y: 60.0 });
+            GenNode {
+                key,
+                descriptor_id,
+                params,
+                position: p,
+            }
         })
         .collect();
 
-    Ok(GeneratedGraph { nodes, edges, notes })
+    Ok(GeneratedGraph {
+        nodes,
+        edges,
+        notes,
+    })
 }
 
-fn graph_summary(registry: &NodeRegistry, graph: &misclab_core::graph::model::SerializedGraph) -> String {
+fn graph_summary(
+    registry: &NodeRegistry,
+    graph: &misclab_core::graph::model::SerializedGraph,
+) -> String {
     let descriptors = registry.descriptors();
     let by_id: HashMap<&str, &NodeDescriptor> =
         descriptors.iter().map(|d| (d.id.as_str(), d)).collect();
@@ -346,7 +386,13 @@ pub async fn generate_workflow(
     if prompt.trim().is_empty() {
         return Err(AppError::new("ai_input", "请先描述你要做的任务。"));
     }
-    let cfg = state.settings.lock().expect("settings mutex").ai.llm.clone();
+    let cfg = state
+        .settings
+        .lock()
+        .expect("settings mutex")
+        .ai
+        .llm
+        .clone();
     let registry = state.registry.clone();
     tauri::async_runtime::spawn_blocking(move || generate(&registry, &cfg, &prompt))
         .await
@@ -362,7 +408,13 @@ pub async fn explain_workflow(
     if graph.nodes.is_empty() {
         return Err(AppError::new("ai_input", "当前画布为空，无法解释流程。"));
     }
-    let cfg = state.settings.lock().expect("settings mutex").ai.llm.clone();
+    let cfg = state
+        .settings
+        .lock()
+        .expect("settings mutex")
+        .ai
+        .llm
+        .clone();
     let registry = state.registry.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let summary = graph_summary(&registry, &graph);
@@ -398,7 +450,9 @@ pub(crate) fn param_port_type(w: &ParamWidget) -> PortType {
 fn port_compatible(d: &NodeDescriptor, pt: PortType, dir_out: bool) -> bool {
     if dir_out {
         d.inputs.iter().any(|i| i.port_type.accepts(pt))
-            || d.params.iter().any(|p| param_port_type(&p.widget).accepts(pt))
+            || d.params
+                .iter()
+                .any(|p| param_port_type(&p.widget).accepts(pt))
     } else {
         d.outputs.iter().any(|o| pt.accepts(o.port_type))
     }
@@ -431,7 +485,11 @@ pub struct Suggestion {
     reason: String,
 }
 
-fn suggest(registry: &NodeRegistry, cfg: &ModelConfig, ctx: &SuggestCtx) -> Result<Vec<Suggestion>, AppError> {
+fn suggest(
+    registry: &NodeRegistry,
+    cfg: &ModelConfig,
+    ctx: &SuggestCtx,
+) -> Result<Vec<Suggestion>, AppError> {
     let pt: PortType = serde_json::from_value(serde_json::Value::String(ctx.port_type.clone()))
         .unwrap_or(PortType::Any);
     let dir_out = ctx.direction != "in";
@@ -445,7 +503,11 @@ fn suggest(registry: &NodeRegistry, cfg: &ModelConfig, ctx: &SuggestCtx) -> Resu
         return Ok(vec![]);
     }
     let catalog = build_catalog_filtered(&descriptors, &compatible_ids);
-    let dir_desc = if dir_out { "下游（消费该输出）" } else { "上游（产生该输入）" };
+    let dir_desc = if dir_out {
+        "下游（消费该输出）"
+    } else {
+        "上游（产生该输入）"
+    };
     let system = format!(
         "你是 LovelyMiscLab 的节点推荐助手。用户想在某节点的一个端口上接一个{dir_desc}节点。\n\n\
 【候选节点】格式: id | 名称 | 输入 | 输出 | 参数\n{catalog}\n\
@@ -483,7 +545,13 @@ pub async fn suggest_next_nodes(
     state: State<'_, AppState>,
     ctx: SuggestCtx,
 ) -> Result<Vec<Suggestion>, AppError> {
-    let cfg = state.settings.lock().expect("settings mutex").ai.llm.clone();
+    let cfg = state
+        .settings
+        .lock()
+        .expect("settings mutex")
+        .ai
+        .llm
+        .clone();
     let registry = state.registry.clone();
     tauri::async_runtime::spawn_blocking(move || suggest(&registry, &cfg, &ctx))
         .await

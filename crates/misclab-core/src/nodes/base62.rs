@@ -17,7 +17,11 @@ impl Node for Enc {
         params: &serde_json::Value,
         _ctx: &mut NodeCtx,
     ) -> Result<PortMap, CoreError> {
-        Ok(out_text(radix_encode(&in_bytes(inputs, "data")?, &alpha(params)?, false)))
+        Ok(out_text(radix_encode(
+            &in_bytes(inputs, "data")?,
+            &alpha(params)?,
+            false,
+        )))
     }
 }
 

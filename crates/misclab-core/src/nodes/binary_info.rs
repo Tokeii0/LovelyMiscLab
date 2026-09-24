@@ -153,7 +153,10 @@ mod tests {
 
     fn run(data: &[u8]) -> Result<PortMap, CoreError> {
         let mut i = PortMap::new();
-        i.insert("data".into(), PortValue::Bytes(Arc::from(data.to_vec().into_boxed_slice())));
+        i.insert(
+            "data".into(),
+            PortValue::Bytes(Arc::from(data.to_vec().into_boxed_slice())),
+        );
         GraphExecutor::run_node(
             &default_registry(),
             "binary_info",

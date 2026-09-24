@@ -35,15 +35,27 @@ struct Platform {
 }
 
 #[cfg(target_os = "windows")]
-const PLATFORM: Platform = Platform { key: "windows", magic: b"MZ", self_update: true };
+const PLATFORM: Platform = Platform {
+    key: "windows",
+    magic: b"MZ",
+    self_update: true,
+};
 #[cfg(target_os = "linux")]
-const PLATFORM: Platform = Platform { key: "linux", magic: b"\x7fELF", self_update: true };
+const PLATFORM: Platform = Platform {
+    key: "linux",
+    magic: b"\x7fELF",
+    self_update: true,
+};
 // macOS ships a universal (FAT) `.dmg`, not a swappable single binary, so
 // `self_update` is false and `download()`/the magic check never run here — the
 // magic is left empty rather than pinning one arch (Intel `0xCF…`, ARM, or the
 // FAT `0xCAFEBABE` header a universal build actually produces).
 #[cfg(target_os = "macos")]
-const PLATFORM: Platform = Platform { key: "macos", magic: b"", self_update: false };
+const PLATFORM: Platform = Platform {
+    key: "macos",
+    magic: b"",
+    self_update: false,
+};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,7 +84,10 @@ fn version_gt(a: &str, b: &str) -> bool {
     };
     let (pa, pb) = (parse(a), parse(b));
     for i in 0..pa.len().max(pb.len()) {
-        let (x, y) = (pa.get(i).copied().unwrap_or(0), pb.get(i).copied().unwrap_or(0));
+        let (x, y) = (
+            pa.get(i).copied().unwrap_or(0),
+            pb.get(i).copied().unwrap_or(0),
+        );
         if x != y {
             return x > y;
         }
@@ -187,8 +202,11 @@ fn swap_in_place(download_url: &str) -> AppResult<()> {
     }
 
     let _ = std::fs::remove_file(&old_path); // clear any stale leftover
-    std::fs::rename(&exe, &old_path)
-        .map_err(|e| err(format!("重命名当前程序失败（目录可能只读或无写入权限）：{e}")))?;
+    std::fs::rename(&exe, &old_path).map_err(|e| {
+        err(format!(
+            "重命名当前程序失败（目录可能只读或无写入权限）：{e}"
+        ))
+    })?;
     if let Err(e) = std::fs::rename(&new_path, &exe) {
         let _ = std::fs::rename(&old_path, &exe); // roll back
         return Err(err(format!("替换程序失败：{e}")));
@@ -199,7 +217,9 @@ fn swap_in_place(download_url: &str) -> AppResult<()> {
 #[tauri::command]
 pub async fn install_update(app: tauri::AppHandle, download_url: String) -> AppResult<()> {
     if !PLATFORM.self_update {
-        return Err(err("此平台不支持应用内自动更新，请到发布页下载新版本手动安装。"));
+        return Err(err(
+            "此平台不支持应用内自动更新，请到发布页下载新版本手动安装。",
+        ));
     }
     if download_url.is_empty() {
         return Err(err("没有可用的下载地址。"));

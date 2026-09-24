@@ -29,7 +29,12 @@ pub fn register(reg: &mut NodeRegistry) {
             AMBER,
             vec![req("list", "列表", PortType::StringList)],
             vec![req("text", "文本", PortType::Text)],
-            vec![ParamSpec::select("sep", "分隔符", &["换行", "逗号", "空格", "无"], "换行")],
+            vec![ParamSpec::select(
+                "sep",
+                "分隔符",
+                &["换行", "逗号", "空格", "无"],
+                "换行",
+            )],
         ),
         Arc::new(|| Arc::new(N)),
     );

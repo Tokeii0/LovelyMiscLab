@@ -103,7 +103,10 @@ fn password_crack_drives_cloacked_pixel() {
     // 正则命中判据：只有正确口令解出的内容才含 flag{（cloacked 填充校验弱，用输出内容判定更稳）。
     let out = run(
         "password_crack",
-        &[("data", raw(&stego)), ("wordlist", wl(&["a", "letmein", "swordfish", "z"]))],
+        &[
+            ("data", raw(&stego)),
+            ("wordlist", wl(&["a", "letmein", "swordfish", "z"])),
+        ],
         json!({ "node": "cloacked_pixel_extract", "success": "正则命中", "pattern": "flag\\{" }),
     );
     assert_eq!(text_of(&out, "password"), "swordfish");
@@ -144,8 +147,16 @@ fn cloacked_pixel_wrong_password() {
     // A wrong password never recovers the real payload: usually the padding check
     // errors; occasionally (weak 32-byte pad) it "succeeds" with garbage — but that
     // garbage is never the original. (Random IV makes an is_err()-only assert flaky.)
-    if let Ok(out) = try_run("cloacked_pixel_extract", &[("data", raw(&stego))], json!({ "password": "wrong" })) {
-        assert_ne!(bytes_of(&out, "bytes"), payload.to_vec(), "wrong password must not recover the payload");
+    if let Ok(out) = try_run(
+        "cloacked_pixel_extract",
+        &[("data", raw(&stego))],
+        json!({ "password": "wrong" }),
+    ) {
+        assert_ne!(
+            bytes_of(&out, "bytes"),
+            payload.to_vec(),
+            "wrong password must not recover the payload"
+        );
     }
 }
 

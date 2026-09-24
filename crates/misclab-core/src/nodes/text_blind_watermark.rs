@@ -134,7 +134,9 @@ fn seed_str(password: &str) -> Mt {
 }
 
 const ZW: [char; 5] = ['\u{1d}', '\u{200b}', '\u{200c}', '\u{200d}', '\u{feff}'];
-const SPECIAL: [char; 6] = ['\u{1d}', '\u{7f}', '\u{200b}', '\u{200c}', '\u{200d}', '\u{feff}'];
+const SPECIAL: [char; 6] = [
+    '\u{1d}', '\u{7f}', '\u{200b}', '\u{200c}', '\u{200d}', '\u{feff}',
+];
 
 /// v1: `DEL` after a char = `1` bit. Returns the raw watermark bit string.
 fn bits_v1(chars: &[char]) -> Option<String> {
@@ -179,7 +181,11 @@ fn bits_v2(chars: &[char]) -> Option<String> {
     distinct.sort_unstable();
     distinct.dedup();
     let one = *distinct.last()?; // larger codepoint = '1'
-    Some(run.iter().map(|&c| if c == one { '1' } else { '0' }).collect())
+    Some(
+        run.iter()
+            .map(|&c| if c == one { '1' } else { '0' })
+            .collect(),
+    )
 }
 
 fn deobfuscate(bits: &str, mt: &mut Mt) -> Option<String> {
@@ -259,7 +265,12 @@ pub fn register(reg: &mut NodeRegistry) {
             vec![
                 ParamSpec::text("password", "密码", "", false),
                 ParamSpec::select("pwType", "密码类型", &["自动", "整数", "字符串"], "自动"),
-                ParamSpec::select("variant", "变体", &["自动", "DEL(chr127)", "零宽字符"], "自动"),
+                ParamSpec::select(
+                    "variant",
+                    "变体",
+                    &["自动", "DEL(chr127)", "零宽字符"],
+                    "自动",
+                ),
             ],
         ),
         Arc::new(|| Arc::new(N)),
@@ -283,7 +294,11 @@ mod tests {
     fn extract(text: &str, pw: &str) -> Option<String> {
         let chars: Vec<char> = text.chars().collect();
         let is_zw = chars.iter().any(|c| ZW.contains(c));
-        let bits = if is_zw { bits_v2(&chars) } else { bits_v1(&chars) }?;
+        let bits = if is_zw {
+            bits_v2(&chars)
+        } else {
+            bits_v1(&chars)
+        }?;
         let mut mt = seed_int(pw)?;
         deobfuscate(&bits, &mut mt)
     }

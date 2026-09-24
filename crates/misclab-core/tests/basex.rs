@@ -10,7 +10,12 @@ use misclab_core::nodes::default_registry;
 use misclab_core::progress::NullSink;
 use serde_json::{json, Value};
 
-fn run_in(descriptor: &str, port: &str, val: PortValue, params: Value) -> HashMap<String, PortValue> {
+fn run_in(
+    descriptor: &str,
+    port: &str,
+    val: PortValue,
+    params: Value,
+) -> HashMap<String, PortValue> {
     let reg = default_registry();
     let mut inputs = HashMap::new();
     inputs.insert(port.to_string(), val);
@@ -34,38 +39,80 @@ fn text_of(m: &HashMap<String, PortValue>, port: &str) -> String {
 
 /// Encode: feed text on the `data` (Any) input.
 fn enc(descriptor: &str, text: &str, params: Value) -> String {
-    text_of(&run_in(descriptor, "data", PortValue::Text(text.to_string()), params), "text")
+    text_of(
+        &run_in(
+            descriptor,
+            "data",
+            PortValue::Text(text.to_string()),
+            params,
+        ),
+        "text",
+    )
 }
 
 /// Decode: feed the encoded string on `text`, read the decoded text back.
 fn dec(descriptor: &str, text: &str, params: Value) -> String {
-    text_of(&run_in(descriptor, "text", PortValue::Text(text.to_string()), params), "text")
+    text_of(
+        &run_in(
+            descriptor,
+            "text",
+            PortValue::Text(text.to_string()),
+            params,
+        ),
+        "text",
+    )
 }
 
 #[test]
 fn base58_known_vector_and_roundtrip() {
     // From CyberChef's To Base58 description.
-    assert_eq!(enc("base58_encode", "hello world", json!({})), "StV1DL6CwTryKyV");
-    assert_eq!(dec("base58_decode", "StV1DL6CwTryKyV", json!({})), "hello world");
+    assert_eq!(
+        enc("base58_encode", "hello world", json!({})),
+        "StV1DL6CwTryKyV"
+    );
+    assert_eq!(
+        dec("base58_decode", "StV1DL6CwTryKyV", json!({})),
+        "hello world"
+    );
 }
 
 #[test]
 fn base58_ripple_roundtrip() {
-    let e = enc("base58_encode", "flag{ripple}", json!({ "variant": "Ripple" }));
-    assert_eq!(dec("base58_decode", &e, json!({ "variant": "Ripple" })), "flag{ripple}");
+    let e = enc(
+        "base58_encode",
+        "flag{ripple}",
+        json!({ "variant": "Ripple" }),
+    );
+    assert_eq!(
+        dec("base58_decode", &e, json!({ "variant": "Ripple" })),
+        "flag{ripple}"
+    );
 }
 
 #[test]
 fn base85_known_vector_and_roundtrip() {
     // From CyberChef's To Base85 description.
-    assert_eq!(enc("base85_encode", "hello world", json!({})), "BOu!rD]j7BEbo7");
-    assert_eq!(dec("base85_decode", "BOu!rD]j7BEbo7", json!({})), "hello world");
+    assert_eq!(
+        enc("base85_encode", "hello world", json!({})),
+        "BOu!rD]j7BEbo7"
+    );
+    assert_eq!(
+        dec("base85_decode", "BOu!rD]j7BEbo7", json!({})),
+        "hello world"
+    );
 }
 
 #[test]
 fn base85_z85_roundtrip() {
-    let e = enc("base85_encode", "flag{z85_works}", json!({ "variant": "Z85" }));
-    assert_eq!(dec("base85_decode", &e, json!({ "variant": "Z85" })), "flag{z85_works}");
+    let e = enc(
+        "base85_encode",
+        "flag{z85_works}",
+        json!({ "variant": "Z85" }),
+    );
+    assert_eq!(
+        dec("base85_decode", &e, json!({ "variant": "Z85" })),
+        "flag{z85_works}"
+    );
 }
 
 #[test]
@@ -90,8 +137,15 @@ fn base45_known_vector_and_roundtrip() {
 fn base32_roundtrip_both_alphabets() {
     let e = enc("base32_encode", "flag{base32}", json!({}));
     assert_eq!(dec("base32_decode", &e, json!({})), "flag{base32}");
-    let h = enc("base32_encode", "flag{hex32}", json!({ "variant": "Hex 扩展" }));
-    assert_eq!(dec("base32_decode", &h, json!({ "variant": "Hex 扩展" })), "flag{hex32}");
+    let h = enc(
+        "base32_encode",
+        "flag{hex32}",
+        json!({ "variant": "Hex 扩展" }),
+    );
+    assert_eq!(
+        dec("base32_decode", &h, json!({ "variant": "Hex 扩展" })),
+        "flag{hex32}"
+    );
 }
 
 #[test]
@@ -109,5 +163,8 @@ fn base92_roundtrip() {
 #[test]
 fn decode_ignores_whitespace_and_junk() {
     // Non-alphabet chars are stripped by default.
-    assert_eq!(dec("base58_decode", "StV1DL6C wTryKyV", json!({})), "hello world");
+    assert_eq!(
+        dec("base58_decode", "StV1DL6C wTryKyV", json!({})),
+        "hello world"
+    );
 }

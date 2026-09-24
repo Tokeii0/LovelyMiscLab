@@ -66,18 +66,34 @@ fn qp_decode(s: &str) -> Vec<u8> {
 
 struct Enc;
 impl Node for Enc {
-    fn run(&self, inputs: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         Ok(out_text(qp_encode(&in_bytes(inputs, "data")?)))
     }
 }
 
 struct Dec;
 impl Node for Dec {
-    fn run(&self, inputs: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let bytes = qp_decode(in_text(inputs, "text")?);
         let mut m = PortMap::new();
-        m.insert("text".to_string(), PortValue::Text(String::from_utf8_lossy(&bytes).into_owned()));
-        m.insert("bytes".to_string(), PortValue::Bytes(Arc::from(bytes.into_boxed_slice())));
+        m.insert(
+            "text".to_string(),
+            PortValue::Text(String::from_utf8_lossy(&bytes).into_owned()),
+        );
+        m.insert(
+            "bytes".to_string(),
+            PortValue::Bytes(Arc::from(bytes.into_boxed_slice())),
+        );
         Ok(m)
     }
 }
@@ -102,7 +118,10 @@ pub fn register(reg: &mut NodeRegistry) {
             "Quoted-Printable 解码",
             INDIGO,
             vec![t_in()],
-            vec![req("text", "文本", PortType::Text), opt("bytes", "字节", PortType::Bytes)],
+            vec![
+                req("text", "文本", PortType::Text),
+                opt("bytes", "字节", PortType::Bytes),
+            ],
             vec![],
         ),
         Arc::new(|| Arc::new(Dec)),

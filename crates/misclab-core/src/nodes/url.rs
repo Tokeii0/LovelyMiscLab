@@ -22,17 +22,35 @@ impl Node for Encode {
         _params: &serde_json::Value,
         _ctx: &mut NodeCtx,
     ) -> Result<PortMap, CoreError> {
-        Ok(out_text(urlencoding::encode(in_text(inputs, "text")?).into_owned()))
+        Ok(out_text(
+            urlencoding::encode(in_text(inputs, "text")?).into_owned(),
+        ))
     }
 }
 
 pub fn register(reg: &mut NodeRegistry) {
     reg.register(
-        desc("url_decode", ENC, "URL 解码", BLUE, vec![t_in()], vec![t_out()], vec![]),
+        desc(
+            "url_decode",
+            ENC,
+            "URL 解码",
+            BLUE,
+            vec![t_in()],
+            vec![t_out()],
+            vec![],
+        ),
         Arc::new(|| Arc::new(Decode)),
     );
     reg.register(
-        desc("url_encode", ENC, "URL 编码", BLUE, vec![t_in()], vec![t_out()], vec![]),
+        desc(
+            "url_encode",
+            ENC,
+            "URL 编码",
+            BLUE,
+            vec![t_in()],
+            vec![t_out()],
+            vec![],
+        ),
         Arc::new(|| Arc::new(Encode)),
     );
 }

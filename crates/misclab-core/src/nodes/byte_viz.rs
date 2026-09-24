@@ -75,7 +75,10 @@ impl Node for Histogram {
             fill_col(&mut img, x0, x0 + 2, h - bar, byte_color(b as u8));
         }
         let mut m = image_out(&img)?;
-        m.insert("json".into(), PortValue::Json(serde_json::json!(hist.to_vec())));
+        m.insert(
+            "json".into(),
+            PortValue::Json(serde_json::json!(hist.to_vec())),
+        );
         Ok(m)
     }
 }
@@ -145,10 +148,17 @@ impl Node for ByteMap {
         let mut img = RgbaImage::from_pixel(w as u32, h as u32, Rgba([0, 0, 0, 255]));
         for (idx, &b) in shown.iter().enumerate() {
             let c = byte_color(b);
-            img.put_pixel((idx % w) as u32, (idx / w) as u32, Rgba([c[0], c[1], c[2], 255]));
+            img.put_pixel(
+                (idx % w) as u32,
+                (idx / w) as u32,
+                Rgba([c[0], c[1], c[2], 255]),
+            );
         }
         let mut m = image_out(&img)?;
-        m.insert("text".into(), PortValue::Text(format!("{w}×{h} 像素{note}")));
+        m.insert(
+            "text".into(),
+            PortValue::Text(format!("{w}×{h} 像素{note}")),
+        );
         Ok(m)
     }
 }
@@ -183,7 +193,14 @@ pub fn register(reg: &mut NodeRegistry) {
                 opt("text", "概要", PortType::Text),
                 opt("json", "各段熵", PortType::Json),
             ],
-            vec![ParamSpec::number("window", "窗口(字节)", 16.0, 65536.0, 16.0, 256.0)],
+            vec![ParamSpec::number(
+                "window",
+                "窗口(字节)",
+                16.0,
+                65536.0,
+                16.0,
+                256.0,
+            )],
         ),
         Arc::new(|| Arc::new(EntropyCurve)),
     );
@@ -199,7 +216,14 @@ pub fn register(reg: &mut NodeRegistry) {
                 opt("bytes", "PNG", PortType::Bytes),
                 opt("text", "尺寸", PortType::Text),
             ],
-            vec![ParamSpec::number("width", "宽度(像素)", 1.0, 4096.0, 1.0, 256.0)],
+            vec![ParamSpec::number(
+                "width",
+                "宽度(像素)",
+                1.0,
+                4096.0,
+                1.0,
+                256.0,
+            )],
         ),
         Arc::new(|| Arc::new(ByteMap)),
     );
@@ -215,7 +239,10 @@ mod tests {
 
     fn run_img(id: &str, data: &[u8], params: serde_json::Value) -> String {
         let mut i = PortMap::new();
-        i.insert("data".into(), PortValue::Bytes(Arc::from(data.to_vec().into_boxed_slice())));
+        i.insert(
+            "data".into(),
+            PortValue::Bytes(Arc::from(data.to_vec().into_boxed_slice())),
+        );
         let out = GraphExecutor::run_node(
             &default_registry(),
             id,
@@ -243,7 +270,10 @@ mod tests {
     #[test]
     fn empty_input_errors() {
         let mut i = PortMap::new();
-        i.insert("data".into(), PortValue::Bytes(Arc::from(Vec::new().into_boxed_slice())));
+        i.insert(
+            "data".into(),
+            PortValue::Bytes(Arc::from(Vec::new().into_boxed_slice())),
+        );
         assert!(GraphExecutor::run_node(
             &default_registry(),
             "byte_histogram",

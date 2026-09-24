@@ -19,8 +19,14 @@ fn node(id: &str, descriptor: &str, params: serde_json::Value) -> NodeInstance {
 }
 fn edge(fnode: &str, fport: &str, tnode: &str, tport: &str) -> Edge {
     Edge {
-        from: PortRef { node: fnode.into(), port: fport.into() },
-        to: PortRef { node: tnode.into(), port: tport.into() },
+        from: PortRef {
+            node: fnode.into(),
+            port: fport.into(),
+        },
+        to: PortRef {
+            node: tnode.into(),
+            port: tport.into(),
+        },
     }
 }
 
@@ -46,7 +52,10 @@ fn text_param_driven_by_input_overrides_static() {
     match out.get("h").and_then(|m| m.get("text")) {
         // SHA256("hello"), not MD5.
         Some(PortValue::Text(s)) => {
-            assert_eq!(s, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")
+            assert_eq!(
+                s,
+                "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+            )
         }
         other => panic!("got {other:?}"),
     }

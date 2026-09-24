@@ -3,7 +3,12 @@ use super::prelude::*;
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let s = in_text(inputs, "text")?;
         let out = if pstr(params, "operation", "defang") == "refang" {
             s.replace("[.]", ".")
@@ -30,7 +35,12 @@ pub fn register(reg: &mut NodeRegistry) {
             AMBER,
             vec![t_in()],
             vec![t_out()],
-            vec![ParamSpec::select("operation", "操作", &["defang", "refang"], "defang")],
+            vec![ParamSpec::select(
+                "operation",
+                "操作",
+                &["defang", "refang"],
+                "defang",
+            )],
         ),
         Arc::new(|| Arc::new(N)),
     );

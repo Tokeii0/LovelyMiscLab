@@ -184,7 +184,10 @@ fn crc_brute(w0: u32, h0: u32, max: u32, target: u32, tail: &[u8; 5]) -> Option<
 
 fn out(bytes: &[u8], report: &str) -> PortMap {
     let mut m = PortMap::new();
-    m.insert("image".into(), PortValue::Image(data_url(bytes, "image/png")));
+    m.insert(
+        "image".into(),
+        PortValue::Image(data_url(bytes, "image/png")),
+    );
     m.insert(
         "bytes".into(),
         PortValue::Bytes(Arc::from(bytes.to_vec().into_boxed_slice())),
@@ -230,7 +233,10 @@ impl Node for N {
             let w = if w == 0 { stored_w } else { w };
             let h = if h == 0 { stored_h } else { h };
             patch(&mut data, w, h, &tail);
-            return Ok(out(&data, &format!("手动设置为 {w}×{h}（已重算 IHDR CRC）。")));
+            return Ok(out(
+                &data,
+                &format!("手动设置为 {w}×{h}（已重算 IHDR CRC）。"),
+            ));
         }
 
         // CRC 爆破: pure CRC match (exact only when the CRC was left intact).
@@ -276,7 +282,9 @@ impl Node for N {
         if ihdr_crc(stored_w, stored_h, &tail) == stored_crc {
             return Ok(out(
                 &data,
-                &format!("IHDR CRC 正确（{stored_w}×{stored_h}），且无法从数据流推断，视为无需修复。"),
+                &format!(
+                    "IHDR CRC 正确（{stored_w}×{stored_h}），且无法从数据流推断，视为无需修复。"
+                ),
             ));
         }
         match crc_brute(stored_w, stored_h, 8192, stored_crc, &tail) {
@@ -414,6 +422,10 @@ mod tests {
         let (w, h, _) = recover_from_data(&png).expect("should recover");
         patch(&mut png, w, h, &tail);
         assert_eq!(dims(&png), (40, 30));
-        assert_eq!(be32(&png[29..33]), ihdr_crc(40, 30, &tail), "CRC must be valid");
+        assert_eq!(
+            be32(&png[29..33]),
+            ihdr_crc(40, 30, &tail),
+            "CRC must be valid"
+        );
     }
 }

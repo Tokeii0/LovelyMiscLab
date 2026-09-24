@@ -71,7 +71,10 @@ impl Node for N {
             PortValue::Bytes(Arc::from(out.clone().into_boxed_slice())),
         );
         m.insert("text".into(), PortValue::Text(preview));
-        m.insert("hex".into(), PortValue::Text(hex::encode(&out[..out.len().min(4096)])));
+        m.insert(
+            "hex".into(),
+            PortValue::Text(hex::encode(&out[..out.len().min(4096)])),
+        );
         Ok(m)
     }
 }

@@ -20,9 +20,19 @@ impl Node for Extract {
         let ch = pstr(p, "channel", "灰度");
         let hex = pstr(p, "base", "十进制") == "十六进制";
         let rows = pbool(p, "rows", true);
-        let sep = if pstr(p, "sep", "空格") == "逗号" { "," } else { " " };
+        let sep = if pstr(p, "sep", "空格") == "逗号" {
+            ","
+        } else {
+            " "
+        };
 
-        let fmt = |v: u8| if hex { format!("{v:02x}") } else { v.to_string() };
+        let fmt = |v: u8| {
+            if hex {
+                format!("{v:02x}")
+            } else {
+                v.to_string()
+            }
+        };
         let row_strs: Vec<String> = (0..h)
             .map(|y| {
                 let mut toks: Vec<String> = Vec::with_capacity(w as usize);
@@ -41,7 +51,11 @@ impl Node for Extract {
                 toks.join(sep)
             })
             .collect();
-        let text = if rows { row_strs.join("\n") } else { row_strs.join(sep) };
+        let text = if rows {
+            row_strs.join("\n")
+        } else {
+            row_strs.join(sep)
+        };
 
         let mut m = PortMap::new();
         m.insert("text".into(), PortValue::Text(text));
@@ -61,7 +75,11 @@ impl Node for FromValues {
         _c: &mut NodeCtx,
     ) -> Result<PortMap, CoreError> {
         let input = in_text(i, "text")?;
-        let radix = if pstr(p, "base", "十进制") == "十六进制" { 16 } else { 10 };
+        let radix = if pstr(p, "base", "十进制") == "十六进制" {
+            16
+        } else {
+            10
+        };
         let channels: usize = match pstr(p, "channels", "灰度(1)") {
             "RGB(3)" => 3,
             "RGBA(4)" => 4,
@@ -120,7 +138,12 @@ pub fn register(reg: &mut NodeRegistry) {
                 opt("height", "高", PortType::Number),
             ],
             vec![
-                ParamSpec::select("channel", "通道", &["灰度", "R", "G", "B", "A", "RGB", "RGBA"], "灰度"),
+                ParamSpec::select(
+                    "channel",
+                    "通道",
+                    &["灰度", "R", "G", "B", "A", "RGB", "RGBA"],
+                    "灰度",
+                ),
                 ParamSpec::select("base", "进制", &["十进制", "十六进制"], "十进制"),
                 ParamSpec::select("sep", "分隔符", &["空格", "逗号"], "空格"),
                 ParamSpec::toggle("rows", "按行换行", true),
@@ -135,9 +158,17 @@ pub fn register(reg: &mut NodeRegistry) {
             "像素值转图像",
             CYAN,
             vec![req("text", "数值", PortType::Text)],
-            vec![req("image", "图片", PortType::Image), opt("bytes", "字节", PortType::Bytes)],
             vec![
-                ParamSpec::select("channels", "通道数", &["灰度(1)", "RGB(3)", "RGBA(4)"], "灰度(1)"),
+                req("image", "图片", PortType::Image),
+                opt("bytes", "字节", PortType::Bytes),
+            ],
+            vec![
+                ParamSpec::select(
+                    "channels",
+                    "通道数",
+                    &["灰度(1)", "RGB(3)", "RGBA(4)"],
+                    "灰度(1)",
+                ),
                 ParamSpec::number("width", "宽度(0=自动)", 0.0, 100000.0, 1.0, 0.0),
                 ParamSpec::select("base", "进制", &["十进制", "十六进制"], "十进制"),
             ],

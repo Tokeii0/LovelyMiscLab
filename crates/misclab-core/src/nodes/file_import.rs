@@ -18,7 +18,10 @@ impl Node for N {
         let size = bytes.len();
 
         let mut out = PortMap::new();
-        out.insert("bytes".to_string(), PortValue::Bytes(Arc::from(bytes.into_boxed_slice())));
+        out.insert(
+            "bytes".to_string(),
+            PortValue::Bytes(Arc::from(bytes.into_boxed_slice())),
+        );
         out.insert("text".to_string(), PortValue::Text(text));
         out.insert("path".to_string(), PortValue::Text(path.to_string()));
         out.insert("size".to_string(), PortValue::Number(size as f64));

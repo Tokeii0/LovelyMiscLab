@@ -2,8 +2,19 @@
 use super::prelude::*;
 
 const VALS: [(u32, &str); 13] = [
-    (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"),
-    (50, "L"), (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
+    (1000, "M"),
+    (900, "CM"),
+    (500, "D"),
+    (400, "CD"),
+    (100, "C"),
+    (90, "XC"),
+    (50, "L"),
+    (40, "XL"),
+    (10, "X"),
+    (9, "IX"),
+    (5, "V"),
+    (4, "IV"),
+    (1, "I"),
 ];
 
 fn to_roman(mut n: u32) -> String {
@@ -60,7 +71,9 @@ impl Node for N {
                 .ok_or_else(|| CoreError::Parse("不是有效的罗马数字".into()))?
                 .to_string()
         } else {
-            let n: u32 = text.parse().map_err(|_| CoreError::Parse("请输入整数".into()))?;
+            let n: u32 = text
+                .parse()
+                .map_err(|_| CoreError::Parse("请输入整数".into()))?;
             if n == 0 || n > 3999 {
                 return Err(CoreError::Parse("罗马数字范围 1..3999".into()));
             }
@@ -79,7 +92,12 @@ pub fn register(reg: &mut NodeRegistry) {
             BLUE,
             vec![t_in()],
             vec![t_out()],
-            vec![ParamSpec::select("operation", "操作", &["数字→罗马", "罗马→数字"], "数字→罗马")],
+            vec![ParamSpec::select(
+                "operation",
+                "操作",
+                &["数字→罗马", "罗马→数字"],
+                "数字→罗马",
+            )],
         ),
         Arc::new(|| Arc::new(N)),
     );

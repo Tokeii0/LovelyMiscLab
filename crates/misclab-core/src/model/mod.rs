@@ -59,12 +59,29 @@ pub struct Fingerprint {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "kind", content = "data")]
 pub enum Evidence {
-    Bytes { offset: u64, len: u64, sample: Vec<u8> },
-    Text { value: String },
-    Kv { pairs: Vec<(String, String)> },
-    Histogram { channel: String, bins: Vec<u32> },
-    EntropyRegion { start: u64, end: u64, value: f32 },
-    Image { artifact: ArtifactId },
+    Bytes {
+        offset: u64,
+        len: u64,
+        sample: Vec<u8>,
+    },
+    Text {
+        value: String,
+    },
+    Kv {
+        pairs: Vec<(String, String)>,
+    },
+    Histogram {
+        channel: String,
+        bins: Vec<u32>,
+    },
+    EntropyRegion {
+        start: u64,
+        end: u64,
+        value: f32,
+    },
+    Image {
+        artifact: ArtifactId,
+    },
     None,
 }
 

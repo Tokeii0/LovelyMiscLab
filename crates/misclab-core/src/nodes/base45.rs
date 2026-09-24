@@ -10,7 +10,10 @@ impl Node for Enc {
         _ctx: &mut NodeCtx,
     ) -> Result<PortMap, CoreError> {
         let alphabet = expand_alph_range(B45_ALPHABET);
-        Ok(out_text(base45_encode(&in_bytes(inputs, "data")?, &alphabet)))
+        Ok(out_text(base45_encode(
+            &in_bytes(inputs, "data")?,
+            &alphabet,
+        )))
     }
 }
 
@@ -24,7 +27,11 @@ impl Node for Dec {
     ) -> Result<PortMap, CoreError> {
         let alphabet = expand_alph_range(B45_ALPHABET);
         let strip = pbool(params, "strip", true);
-        Ok(decoded(base45_decode(in_text(inputs, "text")?, &alphabet, strip)?))
+        Ok(decoded(base45_decode(
+            in_text(inputs, "text")?,
+            &alphabet,
+            strip,
+        )?))
     }
 }
 

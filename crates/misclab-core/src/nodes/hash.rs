@@ -61,7 +61,10 @@ impl Node for HashNode {
         _ctx: &mut NodeCtx,
     ) -> Result<PortMap, CoreError> {
         let data = in_bytes(inputs, "data")?;
-        Ok(out_text(hash_hex(pstr(params, "algorithm", "SHA256"), &data)?))
+        Ok(out_text(hash_hex(
+            pstr(params, "algorithm", "SHA256"),
+            &data,
+        )?))
     }
 }
 
@@ -99,9 +102,23 @@ pub fn register(reg: &mut NodeRegistry) {
                 "algorithm",
                 "算法",
                 &[
-                    "MD5", "MD4", "SHA1", "SHA224", "SHA256", "SHA384", "SHA512", "SHA3-256",
-                    "SHA3-512", "Keccak-256", "RIPEMD-160", "BLAKE2b", "BLAKE2s", "Whirlpool",
-                    "SM3", "CRC32", "Adler-32",
+                    "MD5",
+                    "MD4",
+                    "SHA1",
+                    "SHA224",
+                    "SHA256",
+                    "SHA384",
+                    "SHA512",
+                    "SHA3-256",
+                    "SHA3-512",
+                    "Keccak-256",
+                    "RIPEMD-160",
+                    "BLAKE2b",
+                    "BLAKE2s",
+                    "Whirlpool",
+                    "SM3",
+                    "CRC32",
+                    "Adler-32",
                 ],
                 "SHA256",
             )],
@@ -117,7 +134,12 @@ pub fn register(reg: &mut NodeRegistry) {
             vec![req("data", "输入", PortType::Any)],
             vec![req("text", "摘要(hex)", PortType::Text)],
             vec![
-                ParamSpec::select("algorithm", "算法", &["SHA256", "SHA1", "MD5", "SHA512"], "SHA256"),
+                ParamSpec::select(
+                    "algorithm",
+                    "算法",
+                    &["SHA256", "SHA1", "MD5", "SHA512"],
+                    "SHA256",
+                ),
                 ParamSpec::text("key", "密钥", "", false),
                 ParamSpec::select("keyFormat", "密钥格式", &["UTF8", "Hex", "Base64"], "UTF8"),
             ],

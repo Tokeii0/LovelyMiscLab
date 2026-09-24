@@ -13,7 +13,10 @@ impl Node for N {
         let re = regex::Regex::new(pstr(params, "pattern", "."))
             .map_err(|e| CoreError::Parse(format!("正则错误: {e}")))?;
         let keep = pstr(params, "mode", "保留匹配") == "保留匹配";
-        let out: Vec<String> = list.into_iter().filter(|s| re.is_match(s) == keep).collect();
+        let out: Vec<String> = list
+            .into_iter()
+            .filter(|s| re.is_match(s) == keep)
+            .collect();
         let count = out.len() as f64;
         let mut m = PortMap::new();
         m.insert("list".to_string(), PortValue::StringList(out));

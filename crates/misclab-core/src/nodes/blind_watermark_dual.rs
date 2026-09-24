@@ -52,7 +52,13 @@ fn u8_wrap(v: f32) -> u8 {
     (v as i64).rem_euclid(256) as u8
 }
 
-fn chishaxie_decode(a: &RgbaImage, b: &RgbaImage, seed: u64, alpha: f32, oldseed: bool) -> RgbaImage {
+fn chishaxie_decode(
+    a: &RgbaImage,
+    b: &RgbaImage,
+    seed: u64,
+    alpha: f32,
+    oldseed: bool,
+) -> RgbaImage {
     let (w, h) = a.dimensions();
     let (wu, hu, cu) = (w as usize, h as usize, 3usize);
 
@@ -131,8 +137,15 @@ impl Node for N {
                 let amp = pnum(p, "amplify", 8.0) as f32;
                 let mut out = RgbaImage::new(w, h);
                 for (px, (pa, pb)) in out.pixels_mut().zip(a.pixels().zip(b.pixels())) {
-                    let d = |x: u8, y: u8| (((x as i32 - y as i32).abs() as f32) * amp).clamp(0.0, 255.0) as u8;
-                    *px = Rgba([d(pa.0[0], pb.0[0]), d(pa.0[1], pb.0[1]), d(pa.0[2], pb.0[2]), 255]);
+                    let d = |x: u8, y: u8| {
+                        (((x as i32 - y as i32).abs() as f32) * amp).clamp(0.0, 255.0) as u8
+                    };
+                    *px = Rgba([
+                        d(pa.0[0], pb.0[0]),
+                        d(pa.0[1], pb.0[1]),
+                        d(pa.0[2], pb.0[2]),
+                        255,
+                    ]);
                 }
                 out
             }
@@ -155,14 +168,29 @@ pub fn register(reg: &mut NodeRegistry) {
             IMG,
             "两图盲水印",
             INDIGO,
-            vec![req("a", "原图", PortType::Any), req("b", "含水印图", PortType::Any)],
+            vec![
+                req("a", "原图", PortType::Any),
+                req("b", "含水印图", PortType::Any),
+            ],
             vec![
                 req("image", "水印", PortType::Image),
                 opt("bytes", "字节", PortType::Bytes),
             ],
             vec![
-                ParamSpec::select("mode", "模式", &["频率盲水印", "异或(XOR)", "差值(放大)"], "频率盲水印"),
-                ParamSpec::number("seed", "随机种子(频率)", 0.0, 4_294_967_295.0, 1.0, 20160930.0),
+                ParamSpec::select(
+                    "mode",
+                    "模式",
+                    &["频率盲水印", "异或(XOR)", "差值(放大)"],
+                    "频率盲水印",
+                ),
+                ParamSpec::number(
+                    "seed",
+                    "随机种子(频率)",
+                    0.0,
+                    4_294_967_295.0,
+                    1.0,
+                    20160930.0,
+                ),
                 ParamSpec::number("alpha", "alpha(频率)", 0.1, 100.0, 0.1, 3.0),
                 ParamSpec::toggle("oldseed", "Python2 随机(oldseed)", false),
                 ParamSpec::number("amplify", "放大倍数(差值)", 1.0, 64.0, 1.0, 8.0),
@@ -212,7 +240,10 @@ mod tests {
             }
             s as f64 / n as f64
         };
-        assert!(nmean(30, 30, 60, 40) > 40.0, "wrong seed should not give a clean black background");
+        assert!(
+            nmean(30, 30, 60, 40) > 40.0,
+            "wrong seed should not give a clean black background"
+        );
     }
 
     #[test]

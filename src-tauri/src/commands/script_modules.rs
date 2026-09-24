@@ -12,12 +12,18 @@ use crate::state::AppState;
 const SUBDIR: &str = "script_modules";
 
 fn data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, AppError> {
-    app.path().app_data_dir().map_err(|e| AppError::new("path", e.to_string()))
+    app.path()
+        .app_data_dir()
+        .map_err(|e| AppError::new("path", e.to_string()))
 }
 
 #[tauri::command]
 pub fn list_script_modules(state: State<'_, AppState>) -> Vec<ScriptModule> {
-    state.scripts.lock().expect("scripts mutex poisoned").clone()
+    state
+        .scripts
+        .lock()
+        .expect("scripts mutex poisoned")
+        .clone()
 }
 
 #[tauri::command]
@@ -27,7 +33,8 @@ pub fn save_script_module(
     module: ScriptModule,
 ) -> Result<(), AppError> {
     let dir = data_dir(&app)?;
-    crate::modules::save_one(&dir, SUBDIR, &module.id, &module).map_err(|e| AppError::new("io", e.to_string()))?;
+    crate::modules::save_one(&dir, SUBDIR, &module.id, &module)
+        .map_err(|e| AppError::new("io", e.to_string()))?;
     let mut scripts = state.scripts.lock().expect("scripts mutex poisoned");
     scripts.retain(|m| m.id != module.id); // upsert by id
     scripts.push(module);
@@ -42,7 +49,12 @@ pub fn delete_script_module(
     id: String,
 ) -> Result<(), AppError> {
     let dir = data_dir(&app)?;
-    crate::modules::delete_one(&dir, SUBDIR, &id).map_err(|e| AppError::new("io", e.to_string()))?;
-    state.scripts.lock().expect("scripts mutex poisoned").retain(|m| m.id != id);
+    crate::modules::delete_one(&dir, SUBDIR, &id)
+        .map_err(|e| AppError::new("io", e.to_string()))?;
+    state
+        .scripts
+        .lock()
+        .expect("scripts mutex poisoned")
+        .retain(|m| m.id != id);
     Ok(())
 }

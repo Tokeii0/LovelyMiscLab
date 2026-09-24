@@ -4,10 +4,18 @@ use super::prelude::*;
 
 struct Info;
 impl Node for Info {
-    fn run(&self, i: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let bytes = input_bytes(i, "data")?;
-        let fmt = image::guess_format(&bytes).map(|f| format!("{f:?}")).unwrap_or_else(|_| "未知".into());
-        let img = image::load_from_memory(&bytes).map_err(|e| CoreError::Parse(format!("图片解码失败: {e}")))?;
+        let fmt = image::guess_format(&bytes)
+            .map(|f| format!("{f:?}"))
+            .unwrap_or_else(|_| "未知".into());
+        let img = image::load_from_memory(&bytes)
+            .map_err(|e| CoreError::Parse(format!("图片解码失败: {e}")))?;
         let (w, h) = (img.width(), img.height());
         let text = format!(
             "尺寸: {w}×{h}\n格式: {fmt}\n颜色模式: {:?}\n文件大小: {} 字节",
@@ -24,7 +32,12 @@ impl Node for Info {
 
 struct Convert;
 impl Node for Convert {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let dynimg = image::DynamicImage::ImageRgba8(load_image(i, "data")?);
         let (fmt, mime) = match pstr(p, "format", "PNG") {
             "JPEG" => (image::ImageFormat::Jpeg, "image/jpeg"),
@@ -35,14 +48,19 @@ impl Node for Convert {
         let mut buf: Vec<u8> = Vec::new();
         let res = if matches!(fmt, image::ImageFormat::Jpeg) {
             // JPEG has no alpha channel.
-            dynimg.to_rgb8().write_to(&mut std::io::Cursor::new(&mut buf), fmt)
+            dynimg
+                .to_rgb8()
+                .write_to(&mut std::io::Cursor::new(&mut buf), fmt)
         } else {
             dynimg.write_to(&mut std::io::Cursor::new(&mut buf), fmt)
         };
         res.map_err(|e| CoreError::Other(format!("编码失败: {e}")))?;
         let mut m = PortMap::new();
         m.insert("image".to_string(), PortValue::Image(data_url(&buf, mime)));
-        m.insert("bytes".to_string(), PortValue::Bytes(Arc::from(buf.into_boxed_slice())));
+        m.insert(
+            "bytes".to_string(),
+            PortValue::Bytes(Arc::from(buf.into_boxed_slice())),
+        );
         Ok(m)
     }
 }
@@ -71,8 +89,16 @@ pub fn register(reg: &mut NodeRegistry) {
             "格式转换",
             TEAL,
             vec![req("data", "图片", PortType::Any)],
-            vec![req("image", "图片", PortType::Image), opt("bytes", "字节", PortType::Bytes)],
-            vec![ParamSpec::select("format", "格式", &["PNG", "JPEG", "BMP", "GIF"], "PNG")],
+            vec![
+                req("image", "图片", PortType::Image),
+                opt("bytes", "字节", PortType::Bytes),
+            ],
+            vec![ParamSpec::select(
+                "format",
+                "格式",
+                &["PNG", "JPEG", "BMP", "GIF"],
+                "PNG",
+            )],
         ),
         Arc::new(|| Arc::new(Convert)),
     );

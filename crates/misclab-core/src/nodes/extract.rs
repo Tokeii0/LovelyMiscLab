@@ -9,7 +9,10 @@ const KINDS: &[(&str, &str)] = &[
     ("邮箱", r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"),
     ("URL", r#"[A-Za-z][A-Za-z0-9+.\-]*://[^\s"'<>]+"#),
     ("MAC地址", r"\b(?:[0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}\b"),
-    ("域名", r"\b(?:[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}\b"),
+    (
+        "域名",
+        r"\b(?:[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}\b",
+    ),
     ("flag", r"[A-Za-z0-9_]+\{[^}]*\}"),
     ("Base64块", r"[A-Za-z0-9+/]{16,}={0,2}"),
     ("Hex串", r"\b[A-Fa-f0-9]{8,}\b"),
@@ -17,7 +20,12 @@ const KINDS: &[(&str, &str)] = &[
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let input = in_text(inputs, "text")?;
         let kind = pstr(params, "kind", "IPv4");
         let pat = KINDS

@@ -29,7 +29,11 @@ fn coerce_param(value: &PortValue, widget: &ParamWidget) -> Value {
         ParamWidget::Number { .. } | ParamWidget::Slider { .. } => match value {
             PortValue::Number(n) => json!(n),
             PortValue::Bool(b) => json!(if *b { 1.0 } else { 0.0 }),
-            PortValue::Text(t) => t.trim().parse::<f64>().map(|n| json!(n)).unwrap_or(Value::Null),
+            PortValue::Text(t) => t
+                .trim()
+                .parse::<f64>()
+                .map(|n| json!(n))
+                .unwrap_or(Value::Null),
             _ => Value::Null,
         },
         ParamWidget::Toggle => match value {
@@ -266,7 +270,9 @@ impl<'a> GraphExecutor<'a> {
             return params;
         };
         let desc = &entry.descriptor;
-        let obj = params.as_object_mut().expect("params ensured to be an object");
+        let obj = params
+            .as_object_mut()
+            .expect("params ensured to be an object");
         for spec in &desc.params {
             // A declared input port with the same name wins over param injection.
             if desc.inputs.iter().any(|p| p.name == spec.name) {

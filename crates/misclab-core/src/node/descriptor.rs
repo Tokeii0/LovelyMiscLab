@@ -43,10 +43,22 @@ impl PortSpec {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ParamWidget {
-    Text { multiline: bool },
-    Number { min: f64, max: f64, step: f64 },
-    Slider { min: f64, max: f64, step: f64 },
-    Select { options: Vec<String> },
+    Text {
+        multiline: bool,
+    },
+    Number {
+        min: f64,
+        max: f64,
+        step: f64,
+    },
+    Slider {
+        min: f64,
+        max: f64,
+        step: f64,
+    },
+    Select {
+        options: Vec<String>,
+    },
     Toggle,
     /// A file picker; the param value is the chosen path.
     File,

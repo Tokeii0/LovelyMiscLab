@@ -41,7 +41,9 @@ impl Node for N {
             QrCode::with_error_correction_level(text.as_bytes(), ec)
         }
         .map_err(|e| {
-            CoreError::Other(format!("生成二维码失败: {e}（数据可能超出所选版本/纠错等级容量）"))
+            CoreError::Other(format!(
+                "生成二维码失败: {e}（数据可能超出所选版本/纠错等级容量）"
+            ))
         })?;
 
         let dark = parse_rgb(pstr(params, "dark", "#000000"), [0, 0, 0]);
@@ -51,8 +53,11 @@ impl Node for N {
         let modules = code.width();
         let colors = code.to_colors();
         let dim = (modules as u32 + margin * 2) * scale;
-        let mut img =
-            image::RgbaImage::from_pixel(dim, dim, image::Rgba([light[0], light[1], light[2], 255]));
+        let mut img = image::RgbaImage::from_pixel(
+            dim,
+            dim,
+            image::Rgba([light[0], light[1], light[2], 255]),
+        );
         for y in 0..modules {
             for x in 0..modules {
                 if colors[y * modules + x] == qrcode::Color::Dark {

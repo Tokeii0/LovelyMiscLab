@@ -18,7 +18,11 @@ fn shift_char(c: char, delta: i32, wrap: bool) -> char {
                 n
             };
             let nc = row.as_bytes()[np as usize] as char;
-            return if c.is_ascii_uppercase() { nc.to_ascii_uppercase() } else { nc };
+            return if c.is_ascii_uppercase() {
+                nc.to_ascii_uppercase()
+            } else {
+                nc
+            };
         }
     }
     c
@@ -32,9 +36,16 @@ impl Node for N {
         p: &serde_json::Value,
         _c: &mut NodeCtx,
     ) -> Result<PortMap, CoreError> {
-        let delta = if pstr(p, "direction", "右移") == "左移" { -1 } else { 1 };
+        let delta = if pstr(p, "direction", "右移") == "左移" {
+            -1
+        } else {
+            1
+        };
         let wrap = pbool(p, "wrap", false);
-        let s: String = in_text(i, "text")?.chars().map(|c| shift_char(c, delta, wrap)).collect();
+        let s: String = in_text(i, "text")?
+            .chars()
+            .map(|c| shift_char(c, delta, wrap))
+            .collect();
         Ok(out_text(s))
     }
 }

@@ -14,7 +14,11 @@ impl Node for N {
         _c: &mut NodeCtx,
     ) -> Result<PortMap, CoreError> {
         let text = in_text(i, "text")?;
-        let alpha = if pstr(p, "alphabet", "标准") == "URL" { URL } else { STD };
+        let alpha = if pstr(p, "alphabet", "标准") == "URL" {
+            URL
+        } else {
+            STD
+        };
 
         let mut bits: Vec<u8> = Vec::new();
         for line in text.lines() {
@@ -48,10 +52,16 @@ impl Node for N {
             .collect();
 
         let mut m = PortMap::new();
-        m.insert("text".into(), PortValue::Text(String::from_utf8_lossy(&bytes).into_owned()));
+        m.insert(
+            "text".into(),
+            PortValue::Text(String::from_utf8_lossy(&bytes).into_owned()),
+        );
         m.insert("hex".into(), PortValue::Text(hex::encode(&bytes)));
         m.insert("bits".into(), PortValue::Number(bits.len() as f64));
-        m.insert("bytes".into(), PortValue::Bytes(Arc::from(bytes.into_boxed_slice())));
+        m.insert(
+            "bytes".into(),
+            PortValue::Bytes(Arc::from(bytes.into_boxed_slice())),
+        );
         Ok(m)
     }
 }
@@ -70,7 +80,12 @@ pub fn register(reg: &mut NodeRegistry) {
                 opt("bits", "位数", PortType::Number),
                 opt("bytes", "字节", PortType::Bytes),
             ],
-            vec![ParamSpec::select("alphabet", "码表", &["标准", "URL"], "标准")],
+            vec![ParamSpec::select(
+                "alphabet",
+                "码表",
+                &["标准", "URL"],
+                "标准",
+            )],
         ),
         Arc::new(|| Arc::new(N)),
     );

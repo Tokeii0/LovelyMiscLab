@@ -24,7 +24,12 @@ fn find_eocd(d: &[u8]) -> Option<usize> {
 
 struct N;
 impl Node for N {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let mut d = in_bytes(i, "data")?;
         if !(d.starts_with(b"PK\x03\x04")
             || d.starts_with(b"PK\x05\x06")
@@ -32,8 +37,9 @@ impl Node for N {
         {
             return Err(CoreError::Parse("不是 ZIP 文件（缺少 PK 头）。".into()));
         }
-        let eocd = find_eocd(&d)
-            .ok_or_else(|| CoreError::Parse("找不到 ZIP 中央目录（EOCD），文件可能截断。".into()))?;
+        let eocd = find_eocd(&d).ok_or_else(|| {
+            CoreError::Parse("找不到 ZIP 中央目录（EOCD），文件可能截断。".into())
+        })?;
         let count = u16le(&d, eocd + 10);
         let cd_off = u32le(&d, eocd + 16);
 
@@ -78,7 +84,10 @@ impl Node for N {
             if set_strong { "（含强加密位 bit6）" } else { "" }
         );
         let mut out = PortMap::new();
-        out.insert("bytes".into(), PortValue::Bytes(Arc::from(d.into_boxed_slice())));
+        out.insert(
+            "bytes".into(),
+            PortValue::Bytes(Arc::from(d.into_boxed_slice())),
+        );
         out.insert("report".into(), PortValue::Text(report));
         Ok(out)
     }
@@ -96,7 +105,11 @@ pub fn register(reg: &mut NodeRegistry) {
                 req("bytes", "伪加密后字节", PortType::Bytes),
                 opt("report", "分析", PortType::Text),
             ],
-            vec![ParamSpec::toggle("setStrong", "同时置强加密位(bit6)", false)],
+            vec![ParamSpec::toggle(
+                "setStrong",
+                "同时置强加密位(bit6)",
+                false,
+            )],
         ),
         Arc::new(|| Arc::new(N)),
     );
@@ -139,7 +152,10 @@ mod tests {
 
         // Pseudo-encrypt it → the zip now reports "encrypted".
         let mut inputs = PortMap::new();
-        inputs.insert("data".into(), PortValue::Bytes(Arc::from(plain.into_boxed_slice())));
+        inputs.insert(
+            "data".into(),
+            PortValue::Bytes(Arc::from(plain.into_boxed_slice())),
+        );
         let reg = default_registry();
         let out = GraphExecutor::run_node(
             &reg,
@@ -162,7 +178,10 @@ mod tests {
 
         // zip_repair undoes it — the inverse round-trips cleanly.
         let mut ins2 = PortMap::new();
-        ins2.insert("data".into(), PortValue::Bytes(Arc::from(faked.into_boxed_slice())));
+        ins2.insert(
+            "data".into(),
+            PortValue::Bytes(Arc::from(faked.into_boxed_slice())),
+        );
         let out2 = GraphExecutor::run_node(
             &reg,
             "zip_repair",

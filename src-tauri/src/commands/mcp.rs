@@ -61,7 +61,10 @@ pub fn sync_canvas(state: State<'_, AppState>, snapshot: CanvasSnapshot) {
 }
 
 #[tauri::command]
-pub fn mcp_status(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<McpStatus, AppError> {
+pub fn mcp_status(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<McpStatus, AppError> {
     let cfg = load_config(&data_dir(&app)?);
     let guard = state.mcp.lock().expect("mcp mutex poisoned");
     match guard.as_ref() {
@@ -92,7 +95,11 @@ pub fn mcp_start(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Mc
         return Ok(status(true, &cfg));
     }
     let mcp_state = McpState::from_app(state.inner(), app.clone(), cfg.token.clone());
-    let host = if cfg.bind_all { [0, 0, 0, 0] } else { [127, 0, 0, 1] };
+    let host = if cfg.bind_all {
+        [0, 0, 0, 0]
+    } else {
+        [127, 0, 0, 1]
+    };
     let addr = std::net::SocketAddr::from((host, cfg.port));
     let handle = crate::mcp::start(mcp_state, addr).map_err(AppError::from)?;
     *guard = Some(handle);

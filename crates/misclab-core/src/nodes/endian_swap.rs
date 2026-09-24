@@ -22,7 +22,10 @@ impl Node for N {
         }
         let mut m = PortMap::new();
         m.insert("hex".into(), PortValue::Text(hex::encode(&out)));
-        m.insert("bytes".into(), PortValue::Bytes(Arc::from(out.into_boxed_slice())));
+        m.insert(
+            "bytes".into(),
+            PortValue::Bytes(Arc::from(out.into_boxed_slice())),
+        );
         Ok(m)
     }
 }
@@ -39,7 +42,12 @@ pub fn register(reg: &mut NodeRegistry) {
                 req("bytes", "字节", PortType::Bytes),
                 opt("hex", "Hex", PortType::Text),
             ],
-            vec![ParamSpec::select("groupSize", "分组", &["2", "4", "8", "整个"], "4")],
+            vec![ParamSpec::select(
+                "groupSize",
+                "分组",
+                &["2", "4", "8", "整个"],
+                "4",
+            )],
         ),
         Arc::new(|| Arc::new(N)),
     );
@@ -56,7 +64,10 @@ mod tests {
     #[test]
     fn swaps_in_groups_of_four() {
         let mut i = PortMap::new();
-        i.insert("data".into(), PortValue::Bytes(Arc::from(vec![1u8, 2, 3, 4, 5, 6, 7, 8].into_boxed_slice())));
+        i.insert(
+            "data".into(),
+            PortValue::Bytes(Arc::from(vec![1u8, 2, 3, 4, 5, 6, 7, 8].into_boxed_slice())),
+        );
         let out = GraphExecutor::run_node(
             &default_registry(),
             "endian_swap",

@@ -134,7 +134,10 @@ mod tests {
 
     fn strings_of(data: &[u8], enc: &str, min: f64) -> Vec<String> {
         let mut i = PortMap::new();
-        i.insert("data".into(), PortValue::Bytes(Arc::from(data.to_vec().into_boxed_slice())));
+        i.insert(
+            "data".into(),
+            PortValue::Bytes(Arc::from(data.to_vec().into_boxed_slice())),
+        );
         let out = GraphExecutor::run_node(
             &default_registry(),
             "strings",
@@ -152,7 +155,10 @@ mod tests {
 
     #[test]
     fn ascii_runs() {
-        assert_eq!(strings_of(b"AB\x00hello\x00\x01world!", "ASCII", 4.0), vec!["hello", "world!"]);
+        assert_eq!(
+            strings_of(b"AB\x00hello\x00\x01world!", "ASCII", 4.0),
+            vec!["hello", "world!"]
+        );
         // "AB" (len 2) filtered out by min 4
         assert!(strings_of(b"AB\x00", "ASCII", 4.0).is_empty());
     }

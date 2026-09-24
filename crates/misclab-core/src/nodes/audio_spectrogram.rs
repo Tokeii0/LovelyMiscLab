@@ -48,7 +48,13 @@ fn magma(t: f32) -> [u8; 3] {
 }
 
 /// STFT → image. `signal` is mono; `hop` is the frame advance in samples.
-fn render(signal: &[f32], fft_size: usize, hop: usize, dynamic_range: f32, grayscale: bool) -> Option<RgbaImage> {
+fn render(
+    signal: &[f32],
+    fft_size: usize,
+    hop: usize,
+    dynamic_range: f32,
+    grayscale: bool,
+) -> Option<RgbaImage> {
     let n = fft_size;
     if signal.len() < n || hop == 0 {
         return None;
@@ -159,7 +165,10 @@ impl Node for N {
         );
 
         let mut m = PortMap::new();
-        m.insert("image".into(), PortValue::Image(data_url(&png, "image/png")));
+        m.insert(
+            "image".into(),
+            PortValue::Image(data_url(&png, "image/png")),
+        );
         m.insert(
             "bytes".into(),
             PortValue::Bytes(Arc::from(png.into_boxed_slice())),
@@ -184,7 +193,12 @@ pub fn register(reg: &mut NodeRegistry) {
             ],
             vec![
                 ParamSpec::select("channel", "声道", &["混合", "左声道", "右声道"], "混合"),
-                ParamSpec::select("fftSize", "FFT 窗口", &["512", "1024", "2048", "4096"], "1024"),
+                ParamSpec::select(
+                    "fftSize",
+                    "FFT 窗口",
+                    &["512", "1024", "2048", "4096"],
+                    "1024",
+                ),
                 ParamSpec::select("overlap", "重叠", &["50%", "75%", "87.5%"], "75%"),
                 ParamSpec::select("colormap", "配色", &["彩色", "灰度"], "彩色"),
                 ParamSpec::number("dynamicRange", "动态范围(dB)", 30.0, 120.0, 5.0, 80.0),
@@ -222,6 +236,9 @@ mod tests {
             }
         }
         // bin 128 → row from bottom 128 → y = 512-1-128 = 383
-        assert!((best_row as i32 - 383).abs() <= 4, "peak row {best_row}, expected ~383");
+        assert!(
+            (best_row as i32 - 383).abs() <= 4,
+            "peak row {best_row}, expected ~383"
+        );
     }
 }

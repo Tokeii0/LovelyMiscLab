@@ -85,7 +85,11 @@ impl Node for N {
                     (x, y)
                 };
                 let m = mags[sy * w + sx];
-                let v = if normalize { m / maxv * 255.0 } else { m * mult };
+                let v = if normalize {
+                    m / maxv * 255.0
+                } else {
+                    m * mult
+                };
                 let v = v.clamp(0.0, 255.0) as u8;
                 out.put_pixel(x as u32, y as u32, Rgba([v, v, v, 255]));
             }
@@ -120,7 +124,14 @@ pub fn register(reg: &mut NodeRegistry) {
                     "Java-BlindWatermark",
                 ),
                 ParamSpec::select("channel", "通道", &["灰度", "R", "G", "B"], "灰度"),
-                ParamSpec::number("multiplier", "乘数(Multiplier 模式)", 0.0, 100000.0, 0.1, 1.0),
+                ParamSpec::number(
+                    "multiplier",
+                    "乘数(Multiplier 模式)",
+                    0.0,
+                    100000.0,
+                    0.1,
+                    1.0,
+                ),
             ],
         ),
         Arc::new(|| Arc::new(N)),

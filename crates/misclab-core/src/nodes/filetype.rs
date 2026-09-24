@@ -21,7 +21,11 @@ pub(crate) const MAGICS: &[(&[u8], &str, &str)] = &[
     (&[0x49, 0x44, 0x33], "MP3 (ID3)", "mp3"),
     (&[0x66, 0x4C, 0x61, 0x43], "FLAC 音频", "flac"),
     (&[0x4F, 0x67, 0x67, 0x53], "OGG 音频", "ogg"),
-    (&[0x53, 0x51, 0x4C, 0x69, 0x74, 0x65], "SQLite 数据库", "sqlite"),
+    (
+        &[0x53, 0x51, 0x4C, 0x69, 0x74, 0x65],
+        "SQLite 数据库",
+        "sqlite",
+    ),
     (&[0xCA, 0xFE, 0xBA, 0xBE], "Java class", "class"),
     (&[0x49, 0x49, 0x2A, 0x00], "TIFF (小端)", "tif"),
     (&[0x4D, 0x4D, 0x00, 0x2A], "TIFF (大端)", "tif"),
@@ -29,7 +33,11 @@ pub(crate) const MAGICS: &[(&[u8], &str, &str)] = &[
     (&[0x1A, 0x45, 0xDF, 0xA3], "Matroska / WebM", "mkv"),
     (&[0x00, 0x00, 0x01, 0x00], "ICO 图标", "ico"),
     (&[0x25, 0x21, 0x50, 0x53], "PostScript", "ps"),
-    (&[0xD0, 0xCF, 0x11, 0xE0], "MS Office 旧格式 (doc/xls/ppt)", "doc"),
+    (
+        &[0xD0, 0xCF, 0x11, 0xE0],
+        "MS Office 旧格式 (doc/xls/ppt)",
+        "doc",
+    ),
     (&[0x38, 0x42, 0x50, 0x53], "PSD (Photoshop)", "psd"),
 ];
 
@@ -61,17 +69,30 @@ pub(crate) fn detect(data: &[u8]) -> (String, &'static str) {
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let data = in_bytes(inputs, "data")?;
         let (ty, ext) = detect(&data);
-        let head = data.iter().take(8).map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" ");
+        let head = data
+            .iter()
+            .take(8)
+            .map(|b| format!("{b:02x}"))
+            .collect::<Vec<_>>()
+            .join(" ");
         let ext_line = if ext.is_empty() {
             "后缀名: (未知)".to_string()
         } else {
             format!("后缀名: {ext}")
         };
         let mut m = PortMap::new();
-        m.insert("text".to_string(), PortValue::Text(format!("{ty}\n{ext_line}\n幻数: {head}")));
+        m.insert(
+            "text".to_string(),
+            PortValue::Text(format!("{ty}\n{ext_line}\n幻数: {head}")),
+        );
         m.insert("type".to_string(), PortValue::Text(ty));
         m.insert("ext".to_string(), PortValue::Text(ext.to_string()));
         Ok(m)

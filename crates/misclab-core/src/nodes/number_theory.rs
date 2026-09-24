@@ -2,7 +2,7 @@
 //! `factorize`(整数分解：试除 + Fermat + Pollard rho，攻弱/小 n)、`crt`(中国剩余定理)。
 use num_bigint::{BigInt, BigUint};
 use num_integer::Integer;
-use num_traits::{One, Num, Signed, Zero};
+use num_traits::{Num, One, Signed, Zero};
 
 use super::prelude::*;
 
@@ -53,7 +53,9 @@ impl Node for NumberTheory {
         _c: &mut NodeCtx,
     ) -> Result<PortMap, CoreError> {
         let a = read_int(i, "a").ok_or_else(|| CoreError::Parse("需要输入 a（整数）".into()))?;
-        let need = |name: &str| read_int(i, name).ok_or_else(|| CoreError::Parse(format!("需要输入 {name}")));
+        let need = |name: &str| {
+            read_int(i, name).ok_or_else(|| CoreError::Parse(format!("需要输入 {name}")))
+        };
 
         let result = match pstr(p, "op", "gcd") {
             "gcd" => egcd(&a, &need("b")?).0.abs().to_string(),
@@ -72,9 +74,12 @@ impl Node for NumberTheory {
             "modpow" => {
                 let (b, m) = (need("b")?, need("m")?);
                 let (au, bu, mu) = (
-                    a.to_biguint().ok_or_else(|| CoreError::Parse("a 需非负".into()))?,
-                    b.to_biguint().ok_or_else(|| CoreError::Parse("b 需非负".into()))?,
-                    m.to_biguint().ok_or_else(|| CoreError::Parse("m 需非负".into()))?,
+                    a.to_biguint()
+                        .ok_or_else(|| CoreError::Parse("a 需非负".into()))?,
+                    b.to_biguint()
+                        .ok_or_else(|| CoreError::Parse("b 需非负".into()))?,
+                    m.to_biguint()
+                        .ok_or_else(|| CoreError::Parse("m 需非负".into()))?,
                 );
                 au.modpow(&bu, &mu).to_string()
             }
@@ -199,7 +204,11 @@ impl Node for Factorize {
             return Err(CoreError::Parse("n 需大于 1".into()));
         }
         let factors = factorize(&n, ctx)?;
-        let text = factors.iter().map(|f| f.to_string()).collect::<Vec<_>>().join(" × ");
+        let text = factors
+            .iter()
+            .map(|f| f.to_string())
+            .collect::<Vec<_>>()
+            .join(" × ");
         let list: Vec<String> = factors.iter().map(|f| f.to_string()).collect();
 
         let mut m = PortMap::new();
@@ -251,9 +260,13 @@ impl Node for Crt {
         if rs.is_empty() || rs.len() != ms.len() {
             return Err(CoreError::Parse("余数与模数数量需相等且非空".into()));
         }
-        let (x, m) = crt(&rs, &ms).ok_or_else(|| CoreError::Parse("无解（模数不互质且不一致）".into()))?;
+        let (x, m) =
+            crt(&rs, &ms).ok_or_else(|| CoreError::Parse("无解（模数不互质且不一致）".into()))?;
         let mut out = PortMap::new();
-        out.insert("text".into(), PortValue::Text(format!("x = {x}  (mod {m})")));
+        out.insert(
+            "text".into(),
+            PortValue::Text(format!("x = {x}  (mod {m})")),
+        );
         out.insert("x".into(), PortValue::Text(x.to_string()));
         out.insert("modulus".into(), PortValue::Text(m.to_string()));
         Ok(out)
@@ -375,7 +388,9 @@ mod tests {
             &CancellationToken::new(),
         )
         .unwrap();
-        assert!(matches!(out.get("factors"), Some(PortValue::StringList(v)) if *v == vec!["83".to_string(), "97".to_string()]));
+        assert!(
+            matches!(out.get("factors"), Some(PortValue::StringList(v)) if *v == vec!["83".to_string(), "97".to_string()])
+        );
     }
 
     #[test]

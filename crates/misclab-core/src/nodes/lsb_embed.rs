@@ -9,7 +9,12 @@ use super::prelude::*;
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let cover = in_bytes(inputs, "cover")?;
         let mut img = image::load_from_memory(&cover)
             .map_err(|e| CoreError::Other(format!("封面图解码失败: {e}")))?
@@ -52,7 +57,11 @@ impl Node for N {
                     break 'outer;
                 }
                 let byte = payload[bit_idx / 8];
-                let shift = if msb_first { 7 - (bit_idx % 8) } else { bit_idx % 8 };
+                let shift = if msb_first {
+                    7 - (bit_idx % 8)
+                } else {
+                    bit_idx % 8
+                };
                 let b = (byte >> shift) & 1;
                 px.0[ch] = (px.0[ch] & !(1 << bit)) | (b << bit);
                 bit_idx += 1;
@@ -70,7 +79,10 @@ impl Node for N {
 
         let mut out = PortMap::new();
         out.insert("image".to_string(), PortValue::Image(url));
-        out.insert("bytes".to_string(), PortValue::Bytes(Arc::from(png.into_boxed_slice())));
+        out.insert(
+            "bytes".to_string(),
+            PortValue::Bytes(Arc::from(png.into_boxed_slice())),
+        );
         Ok(out)
     }
 }
@@ -124,9 +136,20 @@ mod tests {
         let params = serde_json::json!({ "channels": "RGB", "bit": 0, "msbFirst": true });
 
         let mut ins = PortMap::new();
-        ins.insert("cover".into(), PortValue::Bytes(Arc::from(cover_png().into_boxed_slice())));
+        ins.insert(
+            "cover".into(),
+            PortValue::Bytes(Arc::from(cover_png().into_boxed_slice())),
+        );
         ins.insert("payload".into(), PortValue::Text("HI".into()));
-        let out = GraphExecutor::run_node(&reg, "lsb_embed", &ins, &params, &NullSink, &CancellationToken::new()).unwrap();
+        let out = GraphExecutor::run_node(
+            &reg,
+            "lsb_embed",
+            &ins,
+            &params,
+            &NullSink,
+            &CancellationToken::new(),
+        )
+        .unwrap();
         let stego = match out.get("bytes") {
             Some(PortValue::Bytes(b)) => b.to_vec(),
             o => panic!("{o:?}"),
@@ -134,8 +157,19 @@ mod tests {
 
         // Extracting with the same params yields the payload at the start.
         let mut ins2 = PortMap::new();
-        ins2.insert("data".into(), PortValue::Bytes(Arc::from(stego.into_boxed_slice())));
-        let out2 = GraphExecutor::run_node(&reg, "lsb_extract", &ins2, &params, &NullSink, &CancellationToken::new()).unwrap();
+        ins2.insert(
+            "data".into(),
+            PortValue::Bytes(Arc::from(stego.into_boxed_slice())),
+        );
+        let out2 = GraphExecutor::run_node(
+            &reg,
+            "lsb_extract",
+            &ins2,
+            &params,
+            &NullSink,
+            &CancellationToken::new(),
+        )
+        .unwrap();
         let bytes = match out2.get("bytes") {
             Some(PortValue::Bytes(b)) => b.to_vec(),
             o => panic!("{o:?}"),

@@ -128,7 +128,12 @@ pub fn register(reg: &mut NodeRegistry) {
             vec![
                 ParamSpec::text("password", "口令", "", false),
                 ParamSpec::select("keySize", "密钥长度", &["128", "192", "256"], "256"),
-                ParamSpec::select("outputFormat", "输出格式", &["UTF8", "Hex", "Base64"], "UTF8"),
+                ParamSpec::select(
+                    "outputFormat",
+                    "输出格式",
+                    &["UTF8", "Hex", "Base64"],
+                    "UTF8",
+                ),
             ],
         ),
         Arc::new(|| Arc::new(N)),

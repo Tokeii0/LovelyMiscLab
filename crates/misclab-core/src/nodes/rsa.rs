@@ -35,22 +35,35 @@ fn mod_inverse(a: &BigUint, m: &BigUint) -> Option<BigUint> {
 fn derive_d(p: &BigUint, q: &BigUint, e: &BigUint) -> Result<(BigUint, BigUint), CoreError> {
     let one = BigUint::one();
     let phi = (p - &one) * (q - &one);
-    let d = mod_inverse(e, &phi).ok_or_else(|| CoreError::Parse("e 与 φ(n) 不互质，无法求 d".into()))?;
+    let d = mod_inverse(e, &phi)
+        .ok_or_else(|| CoreError::Parse("e 与 φ(n) 不互质，无法求 d".into()))?;
     Ok((p * q, d))
 }
 
 struct Params;
 impl Node for Params {
-    fn run(&self, _in: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
-        let p = parse_uint(pstr(params, "p", "")).ok_or_else(|| CoreError::Parse("p 无效".into()))?;
-        let q = parse_uint(pstr(params, "q", "")).ok_or_else(|| CoreError::Parse("q 无效".into()))?;
-        let e = parse_uint(pstr(params, "e", "65537")).ok_or_else(|| CoreError::Parse("e 无效".into()))?;
+    fn run(
+        &self,
+        _in: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
+        let p =
+            parse_uint(pstr(params, "p", "")).ok_or_else(|| CoreError::Parse("p 无效".into()))?;
+        let q =
+            parse_uint(pstr(params, "q", "")).ok_or_else(|| CoreError::Parse("q 无效".into()))?;
+        let e = parse_uint(pstr(params, "e", "65537"))
+            .ok_or_else(|| CoreError::Parse("e 无效".into()))?;
         let one = BigUint::one();
         let n = &p * &q;
         let phi = (&p - &one) * (&q - &one);
-        let d = mod_inverse(&e, &phi).ok_or_else(|| CoreError::Parse("e 与 φ(n) 不互质，无法求 d".into()))?;
+        let d = mod_inverse(&e, &phi)
+            .ok_or_else(|| CoreError::Parse("e 与 φ(n) 不互质，无法求 d".into()))?;
         let mut m = PortMap::new();
-        m.insert("text".to_string(), PortValue::Text(format!("n = {n}\nphi = {phi}\nd = {d}")));
+        m.insert(
+            "text".to_string(),
+            PortValue::Text(format!("n = {n}\nphi = {phi}\nd = {d}")),
+        );
         m.insert("n".to_string(), PortValue::Text(n.to_string()));
         m.insert("phi".to_string(), PortValue::Text(phi.to_string()));
         m.insert("d".to_string(), PortValue::Text(d.to_string()));
@@ -60,7 +73,12 @@ impl Node for Params {
 
 struct Decrypt;
 impl Node for Decrypt {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let c = parse_uint(in_text(inputs, "text")?)
             .ok_or_else(|| CoreError::Parse("密文 c 无效（需十进制或 0x 十六进制整数）".into()))?;
 
@@ -75,8 +93,10 @@ impl Node for Decrypt {
             } else {
                 let p = parse_uint(pstr(params, "p", ""))
                     .ok_or_else(|| CoreError::Parse("需要 (n,d) 或 (p,q,e)".into()))?;
-                let q = parse_uint(pstr(params, "q", "")).ok_or_else(|| CoreError::Parse("需要 q".into()))?;
-                let e = parse_uint(pstr(params, "e", "65537")).ok_or_else(|| CoreError::Parse("需要 e".into()))?;
+                let q = parse_uint(pstr(params, "q", ""))
+                    .ok_or_else(|| CoreError::Parse("需要 q".into()))?;
+                let e = parse_uint(pstr(params, "e", "65537"))
+                    .ok_or_else(|| CoreError::Parse("需要 e".into()))?;
                 derive_d(&p, &q, &e)?
             }
         };
@@ -84,10 +104,16 @@ impl Node for Decrypt {
         let m = c.modpow(&d, &n);
         let bytes = m.to_bytes_be();
         let mut out = PortMap::new();
-        out.insert("text".to_string(), PortValue::Text(String::from_utf8_lossy(&bytes).into_owned()));
+        out.insert(
+            "text".to_string(),
+            PortValue::Text(String::from_utf8_lossy(&bytes).into_owned()),
+        );
         out.insert("int".to_string(), PortValue::Text(m.to_string()));
         out.insert("hex".to_string(), PortValue::Text(hex::encode(&bytes)));
-        out.insert("bytes".to_string(), PortValue::Bytes(Arc::from(bytes.into_boxed_slice())));
+        out.insert(
+            "bytes".to_string(),
+            PortValue::Bytes(Arc::from(bytes.into_boxed_slice())),
+        );
         Ok(out)
     }
 }

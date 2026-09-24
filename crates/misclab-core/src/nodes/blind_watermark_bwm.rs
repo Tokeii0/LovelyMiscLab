@@ -47,7 +47,13 @@ fn dwt_haar_ca(chan: &[f32], h: usize, w: usize) -> (Vec<f32>, usize, usize) {
 /// Orthonormal 2-D DCT-II of a 4×4 block (matches `cv2.dct`).
 fn dct4(block: &[f32; 16]) -> [f32; 16] {
     let n = 4usize;
-    let cf = |k: usize| if k == 0 { (1.0f32 / n as f32).sqrt() } else { (2.0f32 / n as f32).sqrt() };
+    let cf = |k: usize| {
+        if k == 0 {
+            (1.0f32 / n as f32).sqrt()
+        } else {
+            (2.0f32 / n as f32).sqrt()
+        }
+    };
     let mut cos = [[0f32; 4]; 4];
     for (k, row) in cos.iter_mut().enumerate() {
         for (i, cell) in row.iter_mut().enumerate() {
@@ -273,7 +279,10 @@ impl Node for N {
 
         let mut m = PortMap::new();
         if mode == "图片" {
-            let (ww, wh) = (pnum(p, "wmWidth", 64.0) as usize, pnum(p, "wmHeight", 64.0) as usize);
+            let (ww, wh) = (
+                pnum(p, "wmWidth", 64.0) as usize,
+                pnum(p, "wmHeight", 64.0) as usize,
+            );
             let wm_size = ww * wh;
             if wm_size == 0 {
                 return Err(CoreError::Other("请设置水印宽高。".into()));
@@ -286,8 +295,14 @@ impl Node for N {
                 *px = Rgba([g, g, g, 255]);
             }
             let png = to_png(&out)?;
-            m.insert("image".into(), PortValue::Image(data_url(&png, "image/png")));
-            m.insert("report".into(), PortValue::Text(format!("图片水印 {ww}×{wh}")));
+            m.insert(
+                "image".into(),
+                PortValue::Image(data_url(&png, "image/png")),
+            );
+            m.insert(
+                "report".into(),
+                PortValue::Text(format!("图片水印 {ww}×{wh}")),
+            );
         } else {
             let wm_size = pnum(p, "wmLength", 0.0) as usize;
             if wm_size == 0 {
@@ -308,7 +323,10 @@ impl Node for N {
             }
             let text = String::from_utf8_lossy(&n.to_bytes_be()).into_owned();
             m.insert("text".into(), PortValue::Text(text));
-            m.insert("report".into(), PortValue::Text(format!("文本水印 {wm_size} 位")));
+            m.insert(
+                "report".into(),
+                PortValue::Text(format!("文本水印 {wm_size} 位")),
+            );
         }
         Ok(m)
     }
@@ -332,8 +350,22 @@ pub fn register(reg: &mut NodeRegistry) {
                 ParamSpec::number("wmLength", "水印位数(文本)", 0.0, 1_000_000.0, 1.0, 0.0),
                 ParamSpec::number("wmWidth", "水印宽(图片)", 0.0, 4096.0, 1.0, 64.0),
                 ParamSpec::number("wmHeight", "水印高(图片)", 0.0, 4096.0, 1.0, 64.0),
-                ParamSpec::number("pwWm", "水印密码 password_wm", 0.0, 4_294_967_295.0, 1.0, 1.0),
-                ParamSpec::number("pwImg", "图密码 password_img", 0.0, 4_294_967_295.0, 1.0, 1.0),
+                ParamSpec::number(
+                    "pwWm",
+                    "水印密码 password_wm",
+                    0.0,
+                    4_294_967_295.0,
+                    1.0,
+                    1.0,
+                ),
+                ParamSpec::number(
+                    "pwImg",
+                    "图密码 password_img",
+                    0.0,
+                    4_294_967_295.0,
+                    1.0,
+                    1.0,
+                ),
             ],
         ),
         Arc::new(|| Arc::new(N)),

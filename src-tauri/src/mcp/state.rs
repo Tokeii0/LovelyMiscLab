@@ -213,7 +213,11 @@ pub struct McpState {
 }
 
 impl McpState {
-    pub fn from_app(state: &crate::state::AppState, app: tauri::AppHandle, token: Option<String>) -> Self {
+    pub fn from_app(
+        state: &crate::state::AppState,
+        app: tauri::AppHandle,
+        token: Option<String>,
+    ) -> Self {
         Self {
             registry: state.registry.clone(),
             composites: state.composites.clone(),

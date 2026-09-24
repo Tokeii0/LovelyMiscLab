@@ -22,7 +22,15 @@ impl Node for N {
 
 pub fn register(reg: &mut NodeRegistry) {
     reg.register(
-        desc("rot13", ENC, "ROT13", BLUE, vec![t_in()], vec![t_out()], vec![]),
+        desc(
+            "rot13",
+            ENC,
+            "ROT13",
+            BLUE,
+            vec![t_in()],
+            vec![t_out()],
+            vec![],
+        ),
         Arc::new(|| Arc::new(N)),
     );
 }

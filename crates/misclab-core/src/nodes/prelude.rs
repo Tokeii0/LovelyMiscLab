@@ -270,9 +270,7 @@ pub fn base64_params() -> Vec<ParamSpec> {
 }
 
 /// Build a base64 engine honoring the node's code-table params.
-pub fn base64_engine(
-    p: &serde_json::Value,
-) -> Result<base64::engine::GeneralPurpose, CoreError> {
+pub fn base64_engine(p: &serde_json::Value) -> Result<base64::engine::GeneralPurpose, CoreError> {
     let alphabet = match pstr(p, "variant", "标准") {
         "URL安全" => base64::alphabet::URL_SAFE,
         "自定义" => base64::alphabet::Alphabet::new(pstr(p, "alphabet", ""))

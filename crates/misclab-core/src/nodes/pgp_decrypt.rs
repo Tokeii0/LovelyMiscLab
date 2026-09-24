@@ -8,27 +8,41 @@ use super::prelude::*;
 fn decrypt_pgp(key_armored: &str, msg_armored: &str, pw: &str) -> Result<Vec<u8>, CoreError> {
     let (skey, _) = SignedSecretKey::from_string(key_armored)
         .map_err(|e| CoreError::Other(format!("私钥解析失败: {e}")))?;
-    let (msg, _) =
-        Message::from_string(msg_armored).map_err(|e| CoreError::Other(format!("消息解析失败: {e}")))?;
+    let (msg, _) = Message::from_string(msg_armored)
+        .map_err(|e| CoreError::Other(format!("消息解析失败: {e}")))?;
     let password = Password::from(pw);
     let mut dec = msg
         .decrypt(&password, &skey)
         .map_err(|e| CoreError::Other(format!("解密失败（密钥/口令是否正确？）: {e}")))?;
     if dec.is_compressed() {
-        dec = dec.decompress().map_err(|e| CoreError::Other(format!("解压失败: {e}")))?;
+        dec = dec
+            .decompress()
+            .map_err(|e| CoreError::Other(format!("解压失败: {e}")))?;
     }
-    dec.as_data_vec().map_err(|e| CoreError::Other(format!("读取明文失败: {e}")))
+    dec.as_data_vec()
+        .map_err(|e| CoreError::Other(format!("读取明文失败: {e}")))
 }
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let msg = in_text(inputs, "text")?;
         let key = in_text(inputs, "key")?;
         let plain = decrypt_pgp(key, msg, pstr(params, "passphrase", ""))?;
         let mut m = PortMap::new();
-        m.insert("text".to_string(), PortValue::Text(String::from_utf8_lossy(&plain).into_owned()));
-        m.insert("bytes".to_string(), PortValue::Bytes(Arc::from(plain.clone().into_boxed_slice())));
+        m.insert(
+            "text".to_string(),
+            PortValue::Text(String::from_utf8_lossy(&plain).into_owned()),
+        );
+        m.insert(
+            "bytes".to_string(),
+            PortValue::Bytes(Arc::from(plain.clone().into_boxed_slice())),
+        );
         m.insert("hex".to_string(), PortValue::Text(hex::encode(&plain)));
         Ok(m)
     }
@@ -60,8 +74,8 @@ pub fn register(reg: &mut NodeRegistry) {
 mod tests {
     use super::*;
     use pgp::composed::{
-        ArmorOptions, EncryptionCaps, KeyType, MessageBuilder, SecretKeyParamsBuilder, SignedPublicKey,
-        SubkeyParamsBuilder,
+        ArmorOptions, EncryptionCaps, KeyType, MessageBuilder, SecretKeyParamsBuilder,
+        SignedPublicKey, SubkeyParamsBuilder,
     };
     use pgp::crypto::ecc_curve::ECCCurve;
     use pgp::crypto::sym::SymmetricKeyAlgorithm;
@@ -95,7 +109,9 @@ mod tests {
         let mut builder = MessageBuilder::from_bytes("", b"TOP SECRET FLAG".to_vec())
             .seipd_v1(thread_rng(), SymmetricKeyAlgorithm::AES256);
         builder.encrypt_to_key(thread_rng(), &enc_subkey).unwrap();
-        let msg_armored = builder.to_armored_string(thread_rng(), ArmorOptions::default()).unwrap();
+        let msg_armored = builder
+            .to_armored_string(thread_rng(), ArmorOptions::default())
+            .unwrap();
 
         let plain = decrypt_pgp(&key_armored, &msg_armored, "").unwrap();
         assert_eq!(plain, b"TOP SECRET FLAG");

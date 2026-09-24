@@ -26,7 +26,11 @@ struct Rotor {
 impl Rotor {
     fn thru(&self, c: usize, forward: bool) -> usize {
         let shift = (c + 26 + self.pos - self.ring) % 26;
-        let mapped = if forward { self.fwd[shift] } else { self.inv[shift] };
+        let mapped = if forward {
+            self.fwd[shift]
+        } else {
+            self.inv[shift]
+        };
         (mapped + 26 - self.pos + self.ring) % 26
     }
     fn at_notch(&self) -> bool {
@@ -57,7 +61,11 @@ fn build_rotor(name: &str, ring: u8, pos: u8) -> Result<Rotor, CoreError> {
 
 fn build_plugboard(s: &str) -> [usize; 26] {
     let mut pb: [usize; 26] = std::array::from_fn(|i| i);
-    let letters: Vec<u8> = s.bytes().filter(|b| b.is_ascii_alphabetic()).map(|b| b.to_ascii_uppercase()).collect();
+    let letters: Vec<u8> = s
+        .bytes()
+        .filter(|b| b.is_ascii_alphabetic())
+        .map(|b| b.to_ascii_uppercase())
+        .collect();
     for pair in letters.chunks(2) {
         if pair.len() == 2 {
             let (a, b) = ((pair[0] - b'A') as usize, (pair[1] - b'A') as usize);
@@ -69,8 +77,16 @@ fn build_plugboard(s: &str) -> [usize; 26] {
 }
 
 fn three(s: &str) -> [u8; 3] {
-    let v: Vec<u8> = s.bytes().filter(|b| b.is_ascii_alphabetic()).map(|b| b.to_ascii_uppercase()).collect();
-    [*v.first().unwrap_or(&b'A'), *v.get(1).unwrap_or(&b'A'), *v.get(2).unwrap_or(&b'A')]
+    let v: Vec<u8> = s
+        .bytes()
+        .filter(|b| b.is_ascii_alphabetic())
+        .map(|b| b.to_ascii_uppercase())
+        .collect();
+    [
+        *v.first().unwrap_or(&b'A'),
+        *v.get(1).unwrap_or(&b'A'),
+        *v.get(2).unwrap_or(&b'A'),
+    ]
 }
 
 fn step(rotors: &mut [Rotor; 3]) {
@@ -87,7 +103,12 @@ fn step(rotors: &mut [Rotor; 3]) {
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let text = in_text(inputs, "text")?;
         let names: Vec<&str> = pstr(p, "rotors", "I II III").split_whitespace().collect();
         if names.len() != 3 {

@@ -5,8 +5,15 @@ use super::prelude::*;
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
-        let from: Vec<char> = pstr(params, "from", "ABCDEFGHIJKLMNOPQRSTUVWXYZ").chars().collect();
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
+        let from: Vec<char> = pstr(params, "from", "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+            .chars()
+            .collect();
         let to: Vec<char> = pstr(params, "to", "").chars().collect();
         let map: HashMap<char, char> = from.iter().zip(to.iter()).map(|(&a, &b)| (a, b)).collect();
 
@@ -17,7 +24,11 @@ impl Node for N {
                     m
                 } else if let Some(&m) = map.get(&c.to_ascii_uppercase()) {
                     // Case-insensitive fallback: preserve the input's case.
-                    if c.is_lowercase() { m.to_ascii_lowercase() } else { m }
+                    if c.is_lowercase() {
+                        m.to_ascii_lowercase()
+                    } else {
+                        m
+                    }
                 } else {
                     c
                 }

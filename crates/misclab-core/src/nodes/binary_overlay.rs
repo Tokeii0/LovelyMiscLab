@@ -30,14 +30,25 @@ impl Node for N {
                 .map(|s| (s.pointer_to_raw_data + s.size_of_raw_data) as usize)
                 .max()
                 .unwrap_or(0),
-            _ => return Err(CoreError::Unsupported("仅支持 ELF/PE 的 overlay 检测".into())),
+            _ => {
+                return Err(CoreError::Unsupported(
+                    "仅支持 ELF/PE 的 overlay 检测".into(),
+                ))
+            }
         };
         let end = end.min(data.len());
-        let overlay = if end < data.len() { data[end..].to_vec() } else { Vec::new() };
+        let overlay = if end < data.len() {
+            data[end..].to_vec()
+        } else {
+            Vec::new()
+        };
         let size = overlay.len();
 
         let mut m = PortMap::new();
-        m.insert("bytes".into(), PortValue::Bytes(Arc::from(overlay.into_boxed_slice())));
+        m.insert(
+            "bytes".into(),
+            PortValue::Bytes(Arc::from(overlay.into_boxed_slice())),
+        );
         m.insert("offset".into(), PortValue::Number(end as f64));
         m.insert("size".into(), PortValue::Number(size as f64));
         Ok(m)
@@ -74,7 +85,10 @@ mod tests {
     #[test]
     fn non_executable_errors() {
         let mut i = PortMap::new();
-        i.insert("data".into(), PortValue::Bytes(Arc::from(vec![1u8, 2, 3, 4].into_boxed_slice())));
+        i.insert(
+            "data".into(),
+            PortValue::Bytes(Arc::from(vec![1u8, 2, 3, 4].into_boxed_slice())),
+        );
         assert!(GraphExecutor::run_node(
             &default_registry(),
             "binary_overlay",

@@ -2,17 +2,45 @@
 use super::prelude::*;
 
 const NAMED: &[(&str, char)] = &[
-    ("amp", '&'), ("lt", '<'), ("gt", '>'), ("quot", '"'), ("apos", '\''),
-    ("nbsp", '\u{a0}'), ("copy", '©'), ("reg", '®'), ("trade", '™'), ("hellip", '…'),
-    ("mdash", '—'), ("ndash", '–'), ("lsquo", '‘'), ("rsquo", '’'), ("ldquo", '“'),
-    ("rdquo", '”'), ("times", '×'), ("divide", '÷'), ("deg", '°'), ("plusmn", '±'),
-    ("cent", '¢'), ("pound", '£'), ("euro", '€'), ("yen", '¥'), ("sect", '§'),
-    ("para", '¶'), ("middot", '·'), ("laquo", '«'), ("raquo", '»'),
+    ("amp", '&'),
+    ("lt", '<'),
+    ("gt", '>'),
+    ("quot", '"'),
+    ("apos", '\''),
+    ("nbsp", '\u{a0}'),
+    ("copy", '©'),
+    ("reg", '®'),
+    ("trade", '™'),
+    ("hellip", '…'),
+    ("mdash", '—'),
+    ("ndash", '–'),
+    ("lsquo", '‘'),
+    ("rsquo", '’'),
+    ("ldquo", '“'),
+    ("rdquo", '”'),
+    ("times", '×'),
+    ("divide", '÷'),
+    ("deg", '°'),
+    ("plusmn", '±'),
+    ("cent", '¢'),
+    ("pound", '£'),
+    ("euro", '€'),
+    ("yen", '¥'),
+    ("sect", '§'),
+    ("para", '¶'),
+    ("middot", '·'),
+    ("laquo", '«'),
+    ("raquo", '»'),
 ];
 
 struct Enc;
 impl Node for Enc {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let all = pstr(params, "mode", "仅特殊字符") == "全部非ASCII";
         let mut out = String::new();
         for c in in_text(inputs, "text")?.chars() {
@@ -32,7 +60,12 @@ impl Node for Enc {
 
 struct Dec;
 impl Node for Dec {
-    fn run(&self, inputs: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let s = in_text(inputs, "text")?;
         let bytes = s.as_bytes();
         let mut out = String::new();
@@ -41,7 +74,9 @@ impl Node for Dec {
             if bytes[i] == b'&' {
                 if let Some(semi) = s[i..].find(';') {
                     let ent = &s[i + 1..i + semi];
-                    let decoded = if let Some(hex) = ent.strip_prefix("#x").or_else(|| ent.strip_prefix("#X")) {
+                    let decoded = if let Some(hex) =
+                        ent.strip_prefix("#x").or_else(|| ent.strip_prefix("#X"))
+                    {
                         u32::from_str_radix(hex, 16).ok().and_then(char::from_u32)
                     } else if let Some(dec) = ent.strip_prefix('#') {
                         dec.parse::<u32>().ok().and_then(char::from_u32)
@@ -71,12 +106,25 @@ pub fn register(reg: &mut NodeRegistry) {
             BLUE,
             vec![t_in()],
             vec![t_out()],
-            vec![ParamSpec::select("mode", "范围", &["仅特殊字符", "全部非ASCII"], "仅特殊字符")],
+            vec![ParamSpec::select(
+                "mode",
+                "范围",
+                &["仅特殊字符", "全部非ASCII"],
+                "仅特殊字符",
+            )],
         ),
         Arc::new(|| Arc::new(Enc)),
     );
     reg.register(
-        desc("html_entity_decode", ENC, "HTML 实体解码", BLUE, vec![t_in()], vec![t_out()], vec![]),
+        desc(
+            "html_entity_decode",
+            ENC,
+            "HTML 实体解码",
+            BLUE,
+            vec![t_in()],
+            vec![t_out()],
+            vec![],
+        ),
         Arc::new(|| Arc::new(Dec)),
     );
 }

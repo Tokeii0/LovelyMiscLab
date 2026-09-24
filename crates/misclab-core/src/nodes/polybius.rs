@@ -54,7 +54,11 @@ impl Node for Polybius {
                 .iter()
                 .map(|&(r, c)| {
                     if letters {
-                        format!("{}{}", (b'A' + r as u8 - 1) as char, (b'A' + c as u8 - 1) as char)
+                        format!(
+                            "{}{}",
+                            (b'A' + r as u8 - 1) as char,
+                            (b'A' + c as u8 - 1) as char
+                        )
                     } else {
                         format!("{r}{c}")
                     }
@@ -95,8 +99,10 @@ impl Node for TapCode {
             let coords: Vec<(usize, usize)> = text
                 .split(['/', '\n'])
                 .filter_map(|seg| {
-                    let runs: Vec<usize> =
-                        seg.split_whitespace().map(|g| g.chars().filter(|&c| c == '.').count()).collect();
+                    let runs: Vec<usize> = seg
+                        .split_whitespace()
+                        .map(|g| g.chars().filter(|&c| c == '.').count())
+                        .collect();
                     if runs.len() >= 2 && runs[0] >= 1 && runs[1] >= 1 {
                         Some((runs[0], runs[1]))
                     } else {
@@ -134,7 +140,12 @@ pub fn register(reg: &mut NodeRegistry) {
             ROSE,
             vec![t_in()],
             vec![t_out()],
-            vec![ParamSpec::select("operation", "操作", &["编码", "解码"], "编码")],
+            vec![ParamSpec::select(
+                "operation",
+                "操作",
+                &["编码", "解码"],
+                "编码",
+            )],
         ),
         Arc::new(|| Arc::new(TapCode)),
     );

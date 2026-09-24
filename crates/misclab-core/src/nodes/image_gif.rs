@@ -22,7 +22,12 @@ fn frames(bytes: &[u8]) -> Result<Vec<RgbaImage>, CoreError> {
 
 struct GifFrame;
 impl Node for GifFrame {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let fs = frames(&input_bytes(i, "data")?)?;
         let idx = (pnum(p, "index", 0.0).max(0.0) as usize).min(fs.len() - 1);
         let mut m = image_out(&fs[idx])?;
@@ -33,7 +38,12 @@ impl Node for GifFrame {
 
 struct GifSprite;
 impl Node for GifSprite {
-    fn run(&self, i: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        i: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let fs = frames(&input_bytes(i, "data")?)?;
         let cols = (pnum(p, "columns", 8.0).max(1.0) as u32).min(fs.len() as u32);
         let (fw, fh) = fs[0].dimensions();
@@ -66,7 +76,14 @@ pub fn register(reg: &mut NodeRegistry) {
             FUCHSIA,
             vec![req("data", "GIF", PortType::Any)],
             dout(),
-            vec![ParamSpec::number("index", "帧序号", 0.0, 100000.0, 1.0, 0.0)],
+            vec![ParamSpec::number(
+                "index",
+                "帧序号",
+                0.0,
+                100000.0,
+                1.0,
+                0.0,
+            )],
         ),
         Arc::new(|| Arc::new(GifFrame)),
     );
@@ -78,7 +95,14 @@ pub fn register(reg: &mut NodeRegistry) {
             FUCHSIA,
             vec![req("data", "GIF", PortType::Any)],
             dout(),
-            vec![ParamSpec::number("columns", "每行帧数", 1.0, 64.0, 1.0, 8.0)],
+            vec![ParamSpec::number(
+                "columns",
+                "每行帧数",
+                1.0,
+                64.0,
+                1.0,
+                8.0,
+            )],
         ),
         Arc::new(|| Arc::new(GifSprite)),
     );

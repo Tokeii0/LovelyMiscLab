@@ -6,7 +6,16 @@ use super::image_util::*;
 use super::prelude::*;
 
 const MODES: &[&str] = &[
-    "异或", "相加", "相减", "差值", "相乘", "变亮", "变暗", "叠加(alpha混合)", "屏幕", "溶解",
+    "异或",
+    "相加",
+    "相减",
+    "差值",
+    "相乘",
+    "变亮",
+    "变暗",
+    "叠加(alpha混合)",
+    "屏幕",
+    "溶解",
 ];
 
 fn blend_ch(mode: &str, a: u8, b: u8, alpha: f32) -> u8 {
@@ -18,7 +27,9 @@ fn blend_ch(mode: &str, a: u8, b: u8, alpha: f32) -> u8 {
         "变亮" => a.max(b),
         "变暗" => a.min(b),
         "屏幕" => 255 - (((255 - a) as u16 * (255 - b) as u16) / 255) as u8,
-        "叠加(alpha混合)" => (a as f32 * (1.0 - alpha) + b as f32 * alpha).round().clamp(0.0, 255.0) as u8,
+        "叠加(alpha混合)" => (a as f32 * (1.0 - alpha) + b as f32 * alpha)
+            .round()
+            .clamp(0.0, 255.0) as u8,
         _ => a ^ b, // 异或
     }
 }
@@ -36,7 +47,12 @@ fn pseudo(x: u32, y: u32) -> f32 {
 
 struct Blend;
 impl Node for Blend {
-    fn run(&self, inputs: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let a = load_image(inputs, "a")?;
         let b = load_image(inputs, "b")?;
         let (a, b) = align(a, b, pstr(p, "align", "裁剪到较小") == "缩放B到A");
@@ -71,7 +87,12 @@ impl Node for Blend {
 
 struct Concat;
 impl Node for Concat {
-    fn run(&self, inputs: &PortMap, p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let a = load_image(inputs, "a")?;
         let b = load_image(inputs, "b")?;
         let horizontal = pstr(p, "direction", "水平") == "水平";
@@ -92,8 +113,18 @@ impl Node for Concat {
 }
 
 pub fn register(reg: &mut NodeRegistry) {
-    let two = || vec![req("a", "图片 A", PortType::Any), req("b", "图片 B", PortType::Any)];
-    let out = || vec![req("image", "图片", PortType::Image), opt("bytes", "字节", PortType::Bytes)];
+    let two = || {
+        vec![
+            req("a", "图片 A", PortType::Any),
+            req("b", "图片 B", PortType::Any),
+        ]
+    };
+    let out = || {
+        vec![
+            req("image", "图片", PortType::Image),
+            opt("bytes", "字节", PortType::Bytes),
+        ]
+    };
     reg.register(
         desc(
             "image_blend",
@@ -105,7 +136,12 @@ pub fn register(reg: &mut NodeRegistry) {
             vec![
                 ParamSpec::select("mode", "模式", MODES, "异或"),
                 ParamSpec::number("alpha", "alpha (叠加/溶解)", 0.0, 1.0, 0.05, 0.5),
-                ParamSpec::select("align", "尺寸对齐", &["裁剪到较小", "缩放B到A"], "裁剪到较小"),
+                ParamSpec::select(
+                    "align",
+                    "尺寸对齐",
+                    &["裁剪到较小", "缩放B到A"],
+                    "裁剪到较小",
+                ),
             ],
         ),
         Arc::new(|| Arc::new(Blend)),
@@ -118,7 +154,12 @@ pub fn register(reg: &mut NodeRegistry) {
             FUCHSIA,
             two(),
             out(),
-            vec![ParamSpec::select("direction", "方向", &["水平", "垂直"], "水平")],
+            vec![ParamSpec::select(
+                "direction",
+                "方向",
+                &["水平", "垂直"],
+                "水平",
+            )],
         ),
         Arc::new(|| Arc::new(Concat)),
     );

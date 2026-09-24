@@ -30,18 +30,35 @@ fn combined_registry(state: &AppState) -> NodeRegistry {
 #[derive(Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ProgressMsg {
-    JobStarted { job: String },
-    NodeEntered { node: String },
-    NodeProgress { node: String, pct: f32 },
-    NodeDone { node: String },
-    NodeFailed { node: String, error: String },
+    JobStarted {
+        job: String,
+    },
+    NodeEntered {
+        node: String,
+    },
+    NodeProgress {
+        node: String,
+        pct: f32,
+    },
+    NodeDone {
+        node: String,
+    },
+    NodeFailed {
+        node: String,
+        error: String,
+    },
     Log {
         node: Option<String>,
         level: String,
         message: String,
     },
-    JobDone { job: String },
-    JobFailed { job: String, error: String },
+    JobDone {
+        job: String,
+    },
+    JobFailed {
+        job: String,
+        error: String,
+    },
 }
 
 fn level_str(level: LogLevel) -> String {
@@ -99,7 +116,11 @@ pub async fn run_node(
     params: serde_json::Value,
 ) -> Result<PortMap, AppError> {
     let registry = combined_registry(&state);
-    let env = state.settings.lock().expect("settings mutex poisoned").clone();
+    let env = state
+        .settings
+        .lock()
+        .expect("settings mutex poisoned")
+        .clone();
     let cancel = CancellationToken::new();
     let out = tauri::async_runtime::spawn_blocking(move || {
         GraphExecutor::run_node_with_env(
@@ -132,17 +153,27 @@ pub async fn run_node_streamed(
     on_event: Channel<ProgressMsg>,
 ) -> Result<PortMap, AppError> {
     let registry = combined_registry(&state);
-    let env = state.settings.lock().expect("settings mutex poisoned").clone();
+    let env = state
+        .settings
+        .lock()
+        .expect("settings mutex poisoned")
+        .clone();
     let cancel = CancellationToken::new();
     let job = state.jobs.start(cancel.clone());
     let _ = on_event.send(ProgressMsg::JobStarted { job: job.clone() });
-    let _ = on_event.send(ProgressMsg::NodeEntered { node: node_id.clone() });
+    let _ = on_event.send(ProgressMsg::NodeEntered {
+        node: node_id.clone(),
+    });
 
-    let sink = ChannelSink { channel: on_event.clone() };
+    let sink = ChannelSink {
+        channel: on_event.clone(),
+    };
     let did = descriptor_id;
     let nid = node_id.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        GraphExecutor::run_node_with_env_id(&registry, &did, &nid, &inputs, &params, &env, &sink, &cancel)
+        GraphExecutor::run_node_with_env_id(
+            &registry, &did, &nid, &inputs, &params, &env, &sink, &cancel,
+        )
     })
     .await;
     state.jobs.finish(&job);
@@ -158,11 +189,17 @@ pub async fn run_node_streamed(
                 node: node_id,
                 error: core_err.to_string(),
             });
-            let _ = on_event.send(ProgressMsg::JobFailed { job, error: core_err.to_string() });
+            let _ = on_event.send(ProgressMsg::JobFailed {
+                job,
+                error: core_err.to_string(),
+            });
             Err(core_err.into())
         }
         Err(join_err) => {
-            let _ = on_event.send(ProgressMsg::JobFailed { job, error: join_err.to_string() });
+            let _ = on_event.send(ProgressMsg::JobFailed {
+                job,
+                error: join_err.to_string(),
+            });
             Err(AppError::new("join", join_err.to_string()))
         }
     }
@@ -177,7 +214,11 @@ pub async fn run_graph(
 ) -> Result<GraphOutputs, AppError> {
     let registry = combined_registry(&state);
     let cache = state.cache.clone();
-    let env = state.settings.lock().expect("settings mutex poisoned").clone();
+    let env = state
+        .settings
+        .lock()
+        .expect("settings mutex poisoned")
+        .clone();
     let cancel = CancellationToken::new();
     let job = state.jobs.start(cancel.clone());
     let _ = on_event.send(ProgressMsg::JobStarted { job: job.clone() });

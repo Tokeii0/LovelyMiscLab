@@ -17,7 +17,8 @@ use crate::mcp::state::McpState;
 
 const TEXT_LIMIT: usize = 8192;
 const CAND_LIMIT: usize = 20;
-const B64: base64::engine::general_purpose::GeneralPurpose = base64::engine::general_purpose::STANDARD;
+const B64: base64::engine::general_purpose::GeneralPurpose =
+    base64::engine::general_purpose::STANDARD;
 
 // ---------------------------------------------------------------------------
 // JSON -> PortValue
@@ -33,9 +34,13 @@ pub fn port_value_in(v: &Value, state: &McpState) -> Result<PortValue, String> {
         Value::Bool(b) => Ok(PortValue::Bool(*b)),
         Value::Null => Ok(PortValue::None),
         Value::Object(map) => match map.get("type").and_then(|t| t.as_str()) {
-            Some("bytes") => Ok(PortValue::Bytes(decode_bytes(map.get("value"), state)?.into())),
+            Some("bytes") => Ok(PortValue::Bytes(
+                decode_bytes(map.get("value"), state)?.into(),
+            )),
             Some("image") => Ok(PortValue::Image(decode_image(map.get("value"), state)?)),
-            Some(_) => serde_json::from_value(v.clone()).map_err(|e| format!("invalid port value: {e}")),
+            Some(_) => {
+                serde_json::from_value(v.clone()).map_err(|e| format!("invalid port value: {e}"))
+            }
             None => Ok(PortValue::Json(v.clone())),
         },
         // arrays and anything else: treat as opaque JSON
@@ -76,11 +81,16 @@ fn decode_image(v: Option<&Value>, state: &McpState) -> Result<String, String> {
 
 fn image_from_path(path: &str, state: &McpState) -> Result<String, String> {
     let bytes = read_guarded(path, state)?;
-    Ok(format!("data:{};base64,{}", mime_from_ext(path), B64.encode(&bytes)))
+    Ok(format!(
+        "data:{};base64,{}",
+        mime_from_ext(path),
+        B64.encode(&bytes)
+    ))
 }
 
 fn b64_decode(s: &str) -> Result<Vec<u8>, String> {
-    B64.decode(s.trim()).map_err(|e| format!("base64 decode failed: {e}"))
+    B64.decode(s.trim())
+        .map_err(|e| format!("base64 decode failed: {e}"))
 }
 
 /// Read a file for an input. Minimal guard: it must exist and be a regular file.
@@ -135,7 +145,11 @@ fn image_out(url: &str, state: &McpState) -> Value {
     let (mime, bytes) = decode_data_url(url);
     let dir = out_dir(state);
     let _ = std::fs::create_dir_all(&dir);
-    let path = dir.join(format!("{}.{}", uuid::Uuid::new_v4().simple(), ext_from_mime(&mime)));
+    let path = dir.join(format!(
+        "{}.{}",
+        uuid::Uuid::new_v4().simple(),
+        ext_from_mime(&mime)
+    ));
     let (saved, len) = match &bytes {
         Some(b) => (std::fs::write(&path, b).is_ok(), b.len()),
         None => (false, 0),
@@ -152,7 +166,12 @@ fn image_out(url: &str, state: &McpState) -> Value {
 
 /// `<settings.output_dir>/mcp` if set, else `<app_data_dir>/mcp-out`.
 fn out_dir(state: &McpState) -> PathBuf {
-    let out = state.settings.lock().expect("settings mutex poisoned").output_dir.clone();
+    let out = state
+        .settings
+        .lock()
+        .expect("settings mutex poisoned")
+        .output_dir
+        .clone();
     if !out.trim().is_empty() {
         return Path::new(&out).join("mcp");
     }
@@ -166,7 +185,11 @@ fn out_dir(state: &McpState) -> PathBuf {
 fn decode_data_url(url: &str) -> (String, Option<Vec<u8>>) {
     if let Some(rest) = url.strip_prefix("data:") {
         if let Some((meta, data)) = rest.split_once(',') {
-            let mime = meta.split(';').next().unwrap_or("application/octet-stream").to_string();
+            let mime = meta
+                .split(';')
+                .next()
+                .unwrap_or("application/octet-stream")
+                .to_string();
             let bytes = if meta.contains("base64") {
                 B64.decode(data).ok()
             } else {
@@ -190,7 +213,12 @@ fn ext_from_mime(mime: &str) -> &'static str {
 }
 
 fn mime_from_ext(path: &str) -> &'static str {
-    match Path::new(path).extension().and_then(|e| e.to_str()).map(|s| s.to_ascii_lowercase()).as_deref() {
+    match Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .as_deref()
+    {
         Some("png") => "image/png",
         Some("jpg") | Some("jpeg") => "image/jpeg",
         Some("gif") => "image/gif",

@@ -69,7 +69,11 @@ impl Node for ToImage {
                 let v: u8 = if (bit == 1) ^ invert { 0 } else { 255 };
                 for dy in 0..scale {
                     for dx in 0..scale {
-                        img.put_pixel(x as u32 * scale + dx, y as u32 * scale + dy, Rgba([v, v, v, 255]));
+                        img.put_pixel(
+                            x as u32 * scale + dx,
+                            y as u32 * scale + dy,
+                            Rgba([v, v, v, 255]),
+                        );
                     }
                 }
             }
@@ -131,7 +135,10 @@ pub fn register(reg: &mut NodeRegistry) {
             "01 转图像",
             TEAL,
             vec![req("text", "0/1 文本", PortType::Text)],
-            vec![req("image", "图片", PortType::Image), opt("bytes", "字节", PortType::Bytes)],
+            vec![
+                req("image", "图片", PortType::Image),
+                opt("bytes", "字节", PortType::Bytes),
+            ],
             vec![
                 ParamSpec::select("mode", "布局", &["自动", "按行", "按宽度"], "自动"),
                 ParamSpec::number("width", "宽度(按宽度,0=自动)", 0.0, 100000.0, 1.0, 0.0),

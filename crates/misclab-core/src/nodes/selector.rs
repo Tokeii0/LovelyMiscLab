@@ -12,7 +12,10 @@ impl Node for N {
         params: &serde_json::Value,
         _ctx: &mut NodeCtx,
     ) -> Result<PortMap, CoreError> {
-        Ok(one("value", PortValue::Text(pstr(params, "value", "").to_string())))
+        Ok(one(
+            "value",
+            PortValue::Text(pstr(params, "value", "").to_string()),
+        ))
     }
 }
 

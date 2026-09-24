@@ -12,7 +12,13 @@ use misclab_core::progress::NullSink;
 use serde_json::json;
 
 fn text_in(name: &str, node: &str, port: &str) -> BoundaryPort {
-    BoundaryPort { name: name.into(), label: name.into(), port_type: PortType::Text, node: node.into(), port: port.into() }
+    BoundaryPort {
+        name: name.into(),
+        label: name.into(),
+        port_type: PortType::Text,
+        node: node.into(),
+        port: port.into(),
+    }
 }
 
 #[test]
@@ -46,7 +52,15 @@ fn composite_runs_inner_subgraph() {
     let reg = registry_with(&default_registry(), std::slice::from_ref(&module));
     let mut inputs = HashMap::new();
     inputs.insert("in".to_string(), PortValue::Text("HELLO".to_string()));
-    let out = GraphExecutor::run_node(&reg, "mod_test_caesar", &inputs, &json!({}), &NullSink, &CancellationToken::new()).unwrap();
+    let out = GraphExecutor::run_node(
+        &reg,
+        "mod_test_caesar",
+        &inputs,
+        &json!({}),
+        &NullSink,
+        &CancellationToken::new(),
+    )
+    .unwrap();
     assert_eq!(out.get("out").unwrap().as_text().unwrap(), "KHOOR");
 }
 
@@ -74,6 +88,13 @@ fn composite_depth_guard_terminates() {
     };
     let reg = registry_with(&default_registry(), std::slice::from_ref(&looped));
     // Completes (thanks to the depth guard) instead of hanging.
-    let out = GraphExecutor::run_node(&reg, "mod_loop", &HashMap::new(), &json!({}), &NullSink, &CancellationToken::new());
+    let out = GraphExecutor::run_node(
+        &reg,
+        "mod_loop",
+        &HashMap::new(),
+        &json!({}),
+        &NullSink,
+        &CancellationToken::new(),
+    );
     assert!(out.is_ok());
 }

@@ -33,7 +33,10 @@ pub fn register(reg: &mut NodeRegistry) {
             CTL,
             "数值比较",
             AMBER,
-            vec![req("a", "A", PortType::Number), req("b", "B", PortType::Number)],
+            vec![
+                req("a", "A", PortType::Number),
+                req("b", "B", PortType::Number),
+            ],
             vec![req("result", "结果", PortType::Bool)],
             vec![ParamSpec::select(
                 "op",

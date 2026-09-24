@@ -9,7 +9,8 @@ impl Node for Decode {
         _ctx: &mut NodeCtx,
     ) -> Result<PortMap, CoreError> {
         let cleaned: String = in_text(inputs, "text")?.split_whitespace().collect();
-        let bytes = hex::decode(&cleaned).map_err(|e| CoreError::Parse(format!("Hex 解码失败: {e}")))?;
+        let bytes =
+            hex::decode(&cleaned).map_err(|e| CoreError::Parse(format!("Hex 解码失败: {e}")))?;
         Ok(out_text(String::from_utf8_lossy(&bytes).into_owned()))
     }
 }
@@ -28,11 +29,27 @@ impl Node for Encode {
 
 pub fn register(reg: &mut NodeRegistry) {
     reg.register(
-        desc("hex_decode", ENC, "Hex 解码", BLUE, vec![t_in()], vec![t_out()], vec![]),
+        desc(
+            "hex_decode",
+            ENC,
+            "Hex 解码",
+            BLUE,
+            vec![t_in()],
+            vec![t_out()],
+            vec![],
+        ),
         Arc::new(|| Arc::new(Decode)),
     );
     reg.register(
-        desc("hex_encode", ENC, "Hex 编码", BLUE, vec![t_in()], vec![t_out()], vec![]),
+        desc(
+            "hex_encode",
+            ENC,
+            "Hex 编码",
+            BLUE,
+            vec![t_in()],
+            vec![t_out()],
+            vec![],
+        ),
         Arc::new(|| Arc::new(Encode)),
     );
 }

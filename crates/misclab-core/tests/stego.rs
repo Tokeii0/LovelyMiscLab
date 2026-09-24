@@ -35,7 +35,11 @@ fn text_of(m: &HashMap<String, PortValue>, port: &str) -> String {
 fn zero_width_roundtrip_auto() {
     let secret = "flag{zero_width_ftw}";
     let carrier = text_of(
-        &run1("zero_width_encode", secret, json!({ "cover": "hello world" })),
+        &run1(
+            "zero_width_encode",
+            secret,
+            json!({ "cover": "hello world" }),
+        ),
         "text",
     );
     // The cover text is still visible…
@@ -99,17 +103,27 @@ fn zero_width_decode_reports_when_absent() {
 fn zero_width_base4_roundtrip() {
     let secret = "flag{base4_2bit}";
     let carrier = text_of(
-        &run1("zero_width_encode", secret, json!({ "cover": "hi", "scheme": "四进制" })),
+        &run1(
+            "zero_width_encode",
+            secret,
+            json!({ "cover": "hi", "scheme": "四进制" }),
+        ),
         "text",
     );
     assert!(carrier.contains("hi"));
     assert_eq!(
-        text_of(&run1("zero_width_decode", &carrier, json!({ "scheme": "四进制" })), "text"),
+        text_of(
+            &run1("zero_width_decode", &carrier, json!({ "scheme": "四进制" })),
+            "text"
+        ),
         secret
     );
     // Auto-detection also recovers the base-4 payload.
     assert_eq!(
-        text_of(&run1("zero_width_decode", &carrier, json!({ "scheme": "自动" })), "text"),
+        text_of(
+            &run1("zero_width_decode", &carrier, json!({ "scheme": "自动" })),
+            "text"
+        ),
         secret
     );
 }
@@ -118,18 +132,32 @@ fn zero_width_base4_roundtrip() {
 fn zero_width_variation_selector_roundtrip() {
     let secret = "flag{vs_smuggle}";
     let carrier = text_of(
-        &run1("zero_width_encode", secret, json!({ "cover": "😀", "scheme": "变体选择符" })),
+        &run1(
+            "zero_width_encode",
+            secret,
+            json!({ "cover": "😀", "scheme": "变体选择符" }),
+        ),
         "text",
     );
     // The visible emoji is untouched…
     assert!(carrier.contains('😀'));
     // …and both explicit and auto decode recover the secret.
     assert_eq!(
-        text_of(&run1("zero_width_decode", &carrier, json!({ "scheme": "变体选择符" })), "text"),
+        text_of(
+            &run1(
+                "zero_width_decode",
+                &carrier,
+                json!({ "scheme": "变体选择符" })
+            ),
+            "text"
+        ),
         secret
     );
     assert_eq!(
-        text_of(&run1("zero_width_decode", &carrier, json!({ "scheme": "自动" })), "text"),
+        text_of(
+            &run1("zero_width_decode", &carrier, json!({ "scheme": "自动" })),
+            "text"
+        ),
         secret
     );
 }
@@ -138,16 +166,30 @@ fn zero_width_variation_selector_roundtrip() {
 fn zero_width_unicode_tags_roundtrip() {
     let secret = "flag{tag_smuggle}";
     let carrier = text_of(
-        &run1("zero_width_encode", secret, json!({ "cover": "see me", "scheme": "Unicode标签" })),
+        &run1(
+            "zero_width_encode",
+            secret,
+            json!({ "cover": "see me", "scheme": "Unicode标签" }),
+        ),
         "text",
     );
     assert!(carrier.contains("see me"));
     assert_eq!(
-        text_of(&run1("zero_width_decode", &carrier, json!({ "scheme": "Unicode标签" })), "text"),
+        text_of(
+            &run1(
+                "zero_width_decode",
+                &carrier,
+                json!({ "scheme": "Unicode标签" })
+            ),
+            "text"
+        ),
         secret
     );
     assert_eq!(
-        text_of(&run1("zero_width_decode", &carrier, json!({ "scheme": "自动" })), "text"),
+        text_of(
+            &run1("zero_width_decode", &carrier, json!({ "scheme": "自动" })),
+            "text"
+        ),
         secret
     );
 }
@@ -219,7 +261,10 @@ fn from_cps(cps: &[u32]) -> String {
 /// Reveal a real-tool vector woven between visible words.
 fn sc_reveal_vec(stream: &[u32], pw: &str) -> String {
     let carrier = format!("hello {}world foo", from_cps(stream));
-    text_of(&run1("stegcloak_reveal", &carrier, json!({ "password": pw })), "text")
+    text_of(
+        &run1("stegcloak_reveal", &carrier, json!({ "password": pw })),
+        "text",
+    )
 }
 
 #[test]
@@ -253,7 +298,14 @@ fn stegcloak_roundtrip_all_modes() {
         );
         assert!(carrier.contains("look"));
         assert_eq!(
-            text_of(&run1("stegcloak_reveal", &carrier, json!({ "password": "hunter2" })), "text"),
+            text_of(
+                &run1(
+                    "stegcloak_reveal",
+                    &carrier,
+                    json!({ "password": "hunter2" })
+                ),
+                "text"
+            ),
             secret,
             "roundtrip failed for enc={enc} intg={intg}"
         );
@@ -266,7 +318,11 @@ fn stegcloak_roundtrip_all_modes() {
 fn whitespace_roundtrip_and_scope() {
     let secret = "flag{snow}";
     let carrier = text_of(
-        &run1("whitespace_encode", secret, json!({ "cover": "nothing to see here" })),
+        &run1(
+            "whitespace_encode",
+            secret,
+            json!({ "cover": "nothing to see here" }),
+        ),
         "text",
     );
     // Visible text intact; only trailing space/tab added.
@@ -277,9 +333,15 @@ fn whitespace_roundtrip_and_scope() {
         secret
     );
     // "全部" scope reads every space/tab, so exercise it on a cover-less carrier.
-    let bare = text_of(&run1("whitespace_encode", secret, json!({ "cover": "" })), "text");
+    let bare = text_of(
+        &run1("whitespace_encode", secret, json!({ "cover": "" })),
+        "text",
+    );
     assert_eq!(
-        text_of(&run1("whitespace_decode", &bare, json!({ "scope": "全部" })), "text"),
+        text_of(
+            &run1("whitespace_decode", &bare, json!({ "scope": "全部" })),
+            "text"
+        ),
         secret
     );
 }
@@ -288,12 +350,20 @@ fn whitespace_roundtrip_and_scope() {
 fn whitespace_tab_is_zero() {
     let secret = "Hi";
     let carrier = text_of(
-        &run1("whitespace_encode", secret, json!({ "cover": "x", "zero": "制表符 (tab)" })),
+        &run1(
+            "whitespace_encode",
+            secret,
+            json!({ "cover": "x", "zero": "制表符 (tab)" }),
+        ),
         "text",
     );
     assert_eq!(
         text_of(
-            &run1("whitespace_decode", &carrier, json!({ "zero": "制表符 (tab)" })),
+            &run1(
+                "whitespace_decode",
+                &carrier,
+                json!({ "zero": "制表符 (tab)" })
+            ),
             "text"
         ),
         secret

@@ -43,8 +43,11 @@ impl Node for N {
                 match hit {
                     Some(s) => (s.pointer_to_raw_data as usize, s.size_of_raw_data as usize),
                     None => {
-                        let avail: Vec<String> =
-                            pe.sections.iter().map(|s| s.name().unwrap_or("").to_string()).collect();
+                        let avail: Vec<String> = pe
+                            .sections
+                            .iter()
+                            .map(|s| s.name().unwrap_or("").to_string())
+                            .collect();
                         return Err(CoreError::Other(format!(
                             "未找到节区「{want}」。可用：{}",
                             avail.join(", ")
@@ -61,7 +64,10 @@ impl Node for N {
         let bytes = data[start..end].to_vec();
 
         let mut m = PortMap::new();
-        m.insert("bytes".into(), PortValue::Bytes(Arc::from(bytes.into_boxed_slice())));
+        m.insert(
+            "bytes".into(),
+            PortValue::Bytes(Arc::from(bytes.into_boxed_slice())),
+        );
         m.insert("offset".into(), PortValue::Number(off as f64));
         m.insert("size".into(), PortValue::Number((end - start) as f64));
         Ok(m)
@@ -81,7 +87,12 @@ pub fn register(reg: &mut NodeRegistry) {
                 opt("offset", "文件偏移", PortType::Number),
                 opt("size", "大小", PortType::Number),
             ],
-            vec![ParamSpec::text("sectionName", "节区名(如 .text/.rodata)", ".rodata", false)],
+            vec![ParamSpec::text(
+                "sectionName",
+                "节区名(如 .text/.rodata)",
+                ".rodata",
+                false,
+            )],
         ),
         Arc::new(|| Arc::new(N)),
     );
@@ -107,7 +118,10 @@ mod tests {
         e[18..20].copy_from_slice(&0x3eu16.to_le_bytes());
         e[52..54].copy_from_slice(&64u16.to_le_bytes());
         let mut i = PortMap::new();
-        i.insert("data".into(), PortValue::Bytes(Arc::from(e.into_boxed_slice())));
+        i.insert(
+            "data".into(),
+            PortValue::Bytes(Arc::from(e.into_boxed_slice())),
+        );
         let r = GraphExecutor::run_node(
             &default_registry(),
             "section_extract",

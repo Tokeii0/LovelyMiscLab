@@ -22,7 +22,11 @@ impl Node for Enc {
         params: &serde_json::Value,
         _ctx: &mut NodeCtx,
     ) -> Result<PortMap, CoreError> {
-        Ok(out_text(radix_encode(&in_bytes(inputs, "data")?, &alpha(params)?, true)))
+        Ok(out_text(radix_encode(
+            &in_bytes(inputs, "data")?,
+            &alpha(params)?,
+            true,
+        )))
     }
 }
 
@@ -45,7 +49,14 @@ impl Node for Dec {
 }
 
 pub fn register(reg: &mut NodeRegistry) {
-    let variant = || ParamSpec::select("variant", "码表", &["Bitcoin", "Ripple", "自定义"], "Bitcoin");
+    let variant = || {
+        ParamSpec::select(
+            "variant",
+            "码表",
+            &["Bitcoin", "Ripple", "自定义"],
+            "Bitcoin",
+        )
+    };
     let custom = || ParamSpec::text("alphabet", "自定义码表(58字符)", "", false);
     reg.register(
         desc(
@@ -70,7 +81,11 @@ pub fn register(reg: &mut NodeRegistry) {
                 req("text", "文本", PortType::Text),
                 opt("bytes", "字节", PortType::Bytes),
             ],
-            vec![variant(), custom(), ParamSpec::toggle("strip", "去除非码表字符", true)],
+            vec![
+                variant(),
+                custom(),
+                ParamSpec::toggle("strip", "去除非码表字符", true),
+            ],
         ),
         Arc::new(|| Arc::new(Dec)),
     );

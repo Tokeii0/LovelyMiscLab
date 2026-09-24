@@ -3,7 +3,12 @@ use super::prelude::*;
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, _p: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        _p: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let data = in_bytes(inputs, "data")?;
         let mut freq = [0usize; 256];
         for &b in &data {
@@ -23,8 +28,14 @@ impl Node for N {
                 .sum::<f64>()
         };
         let mut m = PortMap::new();
-        m.insert("entropy".to_string(), PortValue::Number((e * 10000.0).round() / 10000.0));
-        m.insert("text".to_string(), PortValue::Text(format!("{e:.4} bits/byte")));
+        m.insert(
+            "entropy".to_string(),
+            PortValue::Number((e * 10000.0).round() / 10000.0),
+        );
+        m.insert(
+            "text".to_string(),
+            PortValue::Text(format!("{e:.4} bits/byte")),
+        );
         Ok(m)
     }
 }

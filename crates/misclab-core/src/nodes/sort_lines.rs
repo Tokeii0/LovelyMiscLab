@@ -15,7 +15,11 @@ impl Node for N {
                 lines.sort();
                 lines.reverse();
             }
-            "数字升序" => lines.sort_by(|a, b| num(a).partial_cmp(&num(b)).unwrap_or(std::cmp::Ordering::Equal)),
+            "数字升序" => lines.sort_by(|a, b| {
+                num(a)
+                    .partial_cmp(&num(b))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            }),
             "长度升序" => lines.sort_by_key(|l| l.chars().count()),
             "反转" => lines.reverse(),
             _ => lines.sort(),

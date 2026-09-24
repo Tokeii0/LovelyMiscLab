@@ -3,7 +3,12 @@ use super::prelude::*;
 
 struct N;
 impl Node for N {
-    fn run(&self, inputs: &PortMap, params: &serde_json::Value, _c: &mut NodeCtx) -> Result<PortMap, CoreError> {
+    fn run(
+        &self,
+        inputs: &PortMap,
+        params: &serde_json::Value,
+        _c: &mut NodeCtx,
+    ) -> Result<PortMap, CoreError> {
         let width = pnum(params, "width", 8.0).max(0.0) as usize;
         let pad = pstr(params, "char", " ").chars().next().unwrap_or(' ');
         let left = pstr(params, "side", "右侧") == "左侧";
