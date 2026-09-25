@@ -14,9 +14,9 @@ const pkg = JSON.parse(
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  // viteSingleFile inlines JS + CSS + assets into one self-contained index.html
-  // (galgame art is already WebP to keep that single file small). Tauri CSP is
-  // null, so inline scripts are allowed.
+  // viteSingleFile inlines JS + CSS into one self-contained index.html. Large art
+  // (故事模式 sprites) lives in `public/` and ships as separate files instead, so
+  // it isn't parsed on every launch.
   plugins: [react(), tailwindcss(), viteSingleFile()],
 
   // Expose the package version to the app (shown in the status bar).

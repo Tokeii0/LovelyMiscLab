@@ -3686,6 +3686,7 @@ dependencies = [
  "tower",
  "ureq",
  "uuid",
+ "zip",
 ]
 
 [[package]]

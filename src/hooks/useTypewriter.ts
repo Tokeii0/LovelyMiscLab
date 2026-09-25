@@ -1,27 +1,34 @@
 import { useEffect, useRef, useState } from "react";
 
-/** Reveal `text` one character at a time. Returns the revealed slice, whether it
- * finished, and a `skip()` to jump to the end (e.g. on click). Resets whenever
- * `text` changes. */
+/** The last line that finished typing: coming back to the view shows it whole
+ * instead of typing it out again. */
+let lastFinished = "";
+
+/** Reveal `text` one character (code point — emoji stay intact) at a time.
+ * Returns the revealed slice, whether it finished, and a `skip()` to jump to the
+ * end (e.g. on click). Resets whenever `text` changes. */
 export function useTypewriter(text: string, speed = 22) {
-  const [shown, setShown] = useState("");
-  const [done, setDone] = useState(false);
+  const [shown, setShown] = useState(() => (text === lastFinished ? text : ""));
+  const [done, setDone] = useState(() => !text || text === lastFinished);
   const timer = useRef<number | null>(null);
 
   useEffect(() => {
     if (timer.current) window.clearInterval(timer.current);
-    setShown("");
-    setDone(false);
-    if (!text) {
+    if (!text || text === lastFinished) {
+      setShown(text);
       setDone(true);
       return;
     }
+    setShown("");
+    setDone(false);
+    const chars = Array.from(text);
     let i = 0;
     timer.current = window.setInterval(() => {
       i += 1;
-      setShown(text.slice(0, i));
-      if (i >= text.length) {
+      setShown(chars.slice(0, i).join(""));
+      if (i >= chars.length) {
         if (timer.current) window.clearInterval(timer.current);
+        lastFinished = text;
         setDone(true);
       }
     }, speed);
@@ -32,6 +39,7 @@ export function useTypewriter(text: string, speed = 22) {
 
   const skip = () => {
     if (timer.current) window.clearInterval(timer.current);
+    lastFinished = text;
     setShown(text);
     setDone(true);
   };

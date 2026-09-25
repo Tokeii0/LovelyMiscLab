@@ -57,6 +57,10 @@ schemars = { version = "1", optional = true }
 base64 = "0.22"
 uuid = { version = "1", optional = true, features = ["v4"] }
 
+[dev-dependencies]
+# Builds encrypted archives for the 故事模式 password-flow tests.
+zip = { version = "2", default-features = false, features = ["deflate", "aes-crypto"] }
+
 [features]
 # MCP is on by default so the Settings panel is always present; the *server*
 # itself stays off until the user enables it. Build with `--no-default-features`

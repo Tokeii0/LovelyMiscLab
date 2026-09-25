@@ -8,7 +8,7 @@ import {
   type GalgameTurn,
 } from "@/lib/bindings";
 import { inTauri } from "@/lib/devMocks";
-import { errorMessage } from "@/lib/errors";
+import { errorCode, errorMessage, isCancelled } from "@/lib/errors";
 
 /** Sprite/background moods the narrator LLM may return. */
 export type Mood = "neutral" | "happy" | "thinking" | "worried" | "excited";
@@ -19,6 +19,8 @@ interface GalgameState {
   /** A step (narration / engine action) is in flight. */
   busy: boolean;
   error: string;
+  /** Backend error code of `error` (e.g. "ai_config" → offer a Settings link). */
+  errorCode: string | null;
 
   challenge: string;
   challengeKind: string;
@@ -40,10 +42,16 @@ interface GalgameState {
   ending: string | null;
   /** Increments each turn; seeds the random sprite-variant pick. */
   sceneSeed: number;
+  /** The working data is an encrypted archive; free text is tried as its password. */
+  awaitingPassword: boolean;
 
   /** `kind`: "text" | "image" | "file". `brief`: optional 题干 for a file/image. */
   start: (challenge: string, kind?: string, brief?: string) => void;
   pick: (choice: GalgameChoice) => void;
+  /** Re-send the step that just failed. */
+  retry: () => void;
+  /** Stop the step in flight (cancels a running tool); the scene stays as it was. */
+  cancel: () => void;
   /** Back to the intro screen (keeps nothing). */
   reset: () => void;
 }
@@ -52,6 +60,7 @@ const base = {
   started: false,
   busy: false,
   error: "",
+  errorCode: null as string | null,
   challenge: "",
   challengeKind: "text",
   brief: "",
@@ -64,7 +73,16 @@ const base = {
   lastOutputs: null as string | null,
   ending: null as string | null,
   sceneSeed: 0,
+  awaitingPassword: false,
 };
+
+// Each request gets an id; a reply for anything but the latest is dropped, so a
+// slow answer can't land in a restarted story or after 停止.
+let reqSeq = 0;
+let currentJob: string | null = null;
+let lastRequest: { req: GalgameStepRequest; history: GalgameHistoryItem[] } | null = null;
+/** How the scene looked before the step in flight (restored on error / 停止). */
+let beforeStep: Pick<GalgameState, "lastOutputs" | "history"> | null = null;
 
 /** Canned scene for the browser dev preview (no Tauri IPC / real engine). */
 function mockTurn(req: GalgameStepRequest): GalgameTurn {
@@ -94,23 +112,40 @@ function mockTurn(req: GalgameStepRequest): GalgameTurn {
  * LLM narrates the next scene and offers choices. */
 export const useGalgameStore = create<GalgameState>((set, get) => {
   const run = async (req: GalgameStepRequest, history: GalgameHistoryItem[]) => {
-    set({ busy: true, error: "", history });
+    const id = ++reqSeq;
+    lastRequest = { req, history };
+    // Show "running" on the result panel, but keep what to restore if it fails.
+    const before = { lastOutputs: get().lastOutputs, history: get().history };
+    beforeStep = before;
+    set({
+      busy: true,
+      error: "",
+      errorCode: null,
+      ...(req.picked?.node
+        ? { lastOutputs: `正在执行：${req.picked.text}\n\n工具：${req.picked.node}\n等待节点结果与 Misca 解读…` }
+        : {}),
+    });
     try {
       let turn: GalgameTurn;
       if (inTauri) {
-        turn = await api.galgameStep(req);
+        turn = await api.galgameStep(req, (job) => {
+          if (id === reqSeq) currentJob = job;
+        });
       } else {
         await new Promise((r) => setTimeout(r, 400));
         turn = mockTurn(req);
       }
+      if (id !== reqSeq) return;
       set((s) => ({
         busy: false,
+        history,
         speaker: turn.speaker || "Misca",
         mood: turn.mood || "neutral",
         narration: turn.narration || "",
         choices: turn.choices ?? [],
         lastOutputs: turn.outputs ?? null,
         ending: turn.ending ?? null,
+        awaitingPassword: !!turn.awaitingPassword,
         sceneSeed: s.sceneSeed + 1,
         workData: turn.resultData ?? s.workData,
         // Once a round yields text, the chain is text from here on; a data-URL
@@ -123,7 +158,16 @@ export const useGalgameStore = create<GalgameState>((set, get) => {
             : s.challengeKind,
       }));
     } catch (e) {
-      set({ busy: false, error: errorMessage(e) });
+      if (id !== reqSeq) return;
+      // Nothing happened: undo the placeholder and keep the scene as it was.
+      set({
+        busy: false,
+        error: isCancelled(e) ? "" : errorMessage(e),
+        errorCode: errorCode(e),
+        ...before,
+      });
+    } finally {
+      if (id === reqSeq) currentJob = null;
     }
   };
 
@@ -140,15 +184,11 @@ export const useGalgameStore = create<GalgameState>((set, get) => {
     pick: (choice) => {
       const st = get();
       if (st.busy) return;
-      const item: GalgameHistoryItem = {
-        narration: st.narration,
-        picked: choice.text,
-        outputs: st.lastOutputs ?? null,
-      };
-      const history = [...st.history, item];
-      if (choice.node) {
-        set({ lastOutputs: `正在执行：${choice.text}\n\n工具：${choice.node}\n等待节点结果与 Misca 解读…` });
-      }
+      // The history entry only becomes real once the step succeeds (see run).
+      const history = [
+        ...st.history,
+        { narration: st.narration, picked: choice.text, outputs: st.lastOutputs ?? null },
+      ];
       void run(
         {
           challenge: st.workData,
@@ -156,11 +196,29 @@ export const useGalgameStore = create<GalgameState>((set, get) => {
           brief: st.brief,
           history,
           picked: { text: choice.text, node: choice.node ?? null, params: choice.params ?? null },
+          awaitingPassword: st.awaitingPassword,
         },
         history
       );
     },
 
-    reset: () => set({ ...base }),
+    retry: () => {
+      if (get().busy || !lastRequest) return;
+      void run(lastRequest.req, lastRequest.history);
+    },
+
+    cancel: () => {
+      if (!get().busy) return;
+      reqSeq++; // drop whatever comes back
+      if (currentJob && inTauri) void api.cancelJob(currentJob).catch(() => {});
+      currentJob = null;
+      set({ busy: false, error: "", ...(beforeStep ?? {}) });
+    },
+
+    reset: () => {
+      get().cancel();
+      lastRequest = null;
+      set({ ...base });
+    },
   };
 });

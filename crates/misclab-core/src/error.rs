@@ -37,6 +37,10 @@ pub enum CoreError {
     #[error("{0}")]
     AiNotConfigured(String),
 
+    /// Encrypted data needs a (correct) password to go further.
+    #[error("{0}")]
+    PasswordRequired(String),
+
     #[error("{0}")]
     Other(String),
 }

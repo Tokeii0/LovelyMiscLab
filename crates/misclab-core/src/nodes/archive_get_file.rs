@@ -99,7 +99,14 @@ impl Node for N {
         let encoded = entry
             .get("dataBase64")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CoreError::Parse(format!("文件 {} 没有已解包数据", name(entry))))?;
+            .ok_or_else(|| {
+                let why = if entry.get("dataOmitted").and_then(|v| v.as_bool()) == Some(true) {
+                    "解压结果过大未内嵌数据，请在「解压」节点的「指定条目」里直接选择它"
+                } else {
+                    "没有已解包数据"
+                };
+                CoreError::Parse(format!("文件 {}：{why}", name(entry)))
+            })?;
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(encoded)
             .map_err(|e| CoreError::Parse(format!("解压文件 base64 损坏: {e}")))?;

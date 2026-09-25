@@ -23,9 +23,12 @@ import { useTypewriter } from "@/hooks/useTypewriter";
 import { inTauri } from "@/lib/devMocks";
 import { cn } from "@/lib/utils";
 import { type Mood, useGalgameStore } from "@/store/galgame";
+import { toast } from "@/store/toast";
 import { useViewStore } from "@/store/view";
 
 const MOODS: Mood[] = ["neutral", "happy", "thinking", "worried", "excited"];
+/** Largest file the intro accepts (it travels as a data URL every round). */
+const MAX_FILE = 20 * 1024 * 1024;
 const asMood = (m: string): Mood => (MOODS.includes(m as Mood) ? (m as Mood) : "neutral");
 
 /** Keyframes for the sprite float, blink, and the select particle burst. */
@@ -134,22 +137,28 @@ type IntroMode = "text" | "image" | "file";
 function Intro() {
   const [mode, setMode] = useState<IntroMode>("text");
   const [text, setText] = useState("");
-  const [dataUrl, setDataUrl] = useState("");
-  const [fileName, setFileName] = useState("");
+  // The image and file tabs each keep their own pick (a zip must never show up
+  // as a "broken image" after switching tabs).
+  const [picked, setPicked] = useState<Partial<Record<"image" | "file", { url: string; label: string }>>>({});
   const [brief, setBrief] = useState("");
   const start = useGalgameStore((s) => s.start);
-  const error = useGalgameStore((s) => s.error);
 
-  const readFile = (f: File | undefined) => {
+  const readFile = (slot: "image" | "file", f: File | undefined) => {
     if (!f) return;
-    setFileName(`${f.name} · ${(f.size / 1024).toFixed(1)} KB`);
+    if (f.size > MAX_FILE) {
+      toast.error("文件太大", { detail: `故事模式最多处理 ${MAX_FILE / 1024 / 1024} MB 的文件` });
+      return;
+    }
+    const label = `${f.name} · ${(f.size / 1024).toFixed(1)} KB`;
     const r = new FileReader();
-    r.onload = () => setDataUrl(r.result as string);
+    r.onload = () => setPicked((p) => ({ ...p, [slot]: { url: r.result as string, label } }));
+    r.onerror = () => toast.error("读取文件失败", { error: r.error });
     r.readAsDataURL(f);
   };
 
-  const payload = mode === "text" ? text : dataUrl;
-  const canStart = mode === "text" ? !!text.trim() : !!dataUrl;
+  const current = mode === "text" ? undefined : picked[mode];
+  const payload = mode === "text" ? text : (current?.url ?? "");
+  const canStart = mode === "text" ? !!text.trim() : !!current;
   const tabs: { id: IntroMode; label: string; icon: LucideIcon }[] = [
     { id: "text", label: "文本 / 密文", icon: Type },
     { id: "image", label: "图片", icon: ImageIcon },
@@ -200,9 +209,9 @@ function Intro() {
 
         {mode === "image" && (
           <div className="flex h-40 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-white/15 bg-slate-950/60 p-3">
-            {dataUrl ? (
+            {picked.image ? (
               <img
-                src={dataUrl}
+                src={picked.image.url}
                 alt=""
                 className="max-h-24 rounded border border-white/10 bg-white object-contain"
               />
@@ -215,10 +224,12 @@ function Intro() {
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => readFile(e.target.files?.[0])}
+                onChange={(e) => readFile("image", e.target.files?.[0])}
               />
             </label>
-            {fileName && <span className="max-w-full truncate text-[11px] text-slate-400">{fileName}</span>}
+            {picked.image && (
+              <span className="max-w-full truncate text-[11px] text-slate-400">{picked.image.label}</span>
+            )}
           </div>
         )}
 
@@ -227,10 +238,14 @@ function Intro() {
             <FileUp className="h-8 w-8 text-slate-500" />
             <label className="cursor-pointer rounded-lg border border-white/10 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-200 transition-colors hover:border-primary/60">
               选择文件
-              <input type="file" className="hidden" onChange={(e) => readFile(e.target.files?.[0])} />
+              <input
+                type="file"
+                className="hidden"
+                onChange={(e) => readFile("file", e.target.files?.[0])}
+              />
             </label>
-            {fileName ? (
-              <span className="max-w-full truncate text-[11px] text-slate-300">{fileName}</span>
+            {picked.file ? (
+              <span className="max-w-full truncate text-[11px] text-slate-300">{picked.file.label}</span>
             ) : (
               <span className="px-4 text-center text-[11px] text-slate-500">
                 图片 / 压缩包 / 任意文件都行——Misca 会先识别类型、抽字符串、查隐写，再进入解码。
@@ -239,16 +254,12 @@ function Intro() {
           </div>
         )}
 
-        {mode !== "text" && (
-          <textarea
-            value={brief}
-            onChange={(e) => setBrief(e.target.value)}
-            placeholder="可选 · 题干/提示：把题目描述也写上，Misca 会照着解（例：附件是张 PNG，flag 藏在 LSB；压缩包密码是出题人生日）"
-            className="mt-3 h-20 w-full resize-none rounded-lg border border-white/10 bg-slate-950/60 p-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-primary focus:ring-2 focus:ring-primary/30"
-          />
-        )}
-
-        {error && <p className="mt-2 text-xs text-rose-300">{error}</p>}
+        <textarea
+          value={brief}
+          onChange={(e) => setBrief(e.target.value)}
+          placeholder="可选 · 题干/提示：把题目描述也写上，Misca 会参考它（例：附件是张 PNG，flag 藏在 LSB；压缩包密码是出题人生日）"
+          className="mt-3 h-16 w-full resize-none rounded-lg border border-white/10 bg-slate-950/60 p-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-primary focus:ring-2 focus:ring-primary/30"
+        />
 
         <div className="mt-4 flex items-center justify-between gap-3">
           <p className="text-[11px] leading-tight text-slate-400">
@@ -275,12 +286,19 @@ function Story() {
   const busy = useGalgameStore((s) => s.busy);
   const ending = useGalgameStore((s) => s.ending);
   const error = useGalgameStore((s) => s.error);
+  const errorCode = useGalgameStore((s) => s.errorCode);
   const lastOutputs = useGalgameStore((s) => s.lastOutputs);
   const challenge = useGalgameStore((s) => s.challenge);
+  const workData = useGalgameStore((s) => s.workData);
   const sceneSeed = useGalgameStore((s) => s.sceneSeed);
+  const awaitingPassword = useGalgameStore((s) => s.awaitingPassword);
   const pick = useGalgameStore((s) => s.pick);
+  const retry = useGalgameStore((s) => s.retry);
+  const cancel = useGalgameStore((s) => s.cancel);
   const reset = useGalgameStore((s) => s.reset);
   const setView = useViewStore((s) => s.setView);
+  // An image the last tool produced (it became the working data).
+  const resultImage = workData !== challenge && workData.startsWith("data:image") ? workData : null;
 
   const { shown, done, skip } = useTypewriter(narration);
   const m = asMood(mood);
@@ -326,24 +344,46 @@ function Story() {
 
         {/* right column */}
         <div className="relative flex min-w-0 flex-1 flex-col gap-3">
-          <ContentPanel outputs={lastOutputs} challenge={challenge} />
+          <ContentPanel outputs={lastOutputs} challenge={challenge} image={resultImage} />
 
           <div className="space-y-3">
             {error && (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                {error}
+              <div className="flex items-start gap-2 rounded-lg border border-rose-500/50 bg-rose-500/15 px-3 py-2 text-xs text-rose-200">
+                <span className="min-w-0 flex-1 break-words">{error}</span>
+                {errorCode === "ai_config" ? (
+                  <button
+                    onClick={() => setView("settings")}
+                    className="shrink-0 rounded border border-rose-300/40 px-2 py-0.5 hover:bg-rose-500/20"
+                  >
+                    去设置
+                  </button>
+                ) : (
+                  <button
+                    onClick={retry}
+                    className="shrink-0 rounded border border-rose-300/40 px-2 py-0.5 hover:bg-rose-500/20"
+                  >
+                    重试
+                  </button>
+                )}
               </div>
             )}
             {ending && <EndingBanner ending={ending} />}
             <DialogueBox speaker={speaker} text={shown} done={done} thinking={busy} onSkip={skip} />
 
             {busy ? (
-              <div className="flex items-center justify-center gap-2 py-1 text-sm text-slate-300">
+              <div className="flex items-center justify-center gap-3 py-1 text-sm text-slate-300">
                 <Loader2 className="h-4 w-4 animate-spin" /> 生成中…
+                <button
+                  onClick={cancel}
+                  className="rounded border border-white/15 px-2 py-0.5 text-xs text-slate-300 hover:border-rose-400/60 hover:text-rose-200"
+                >
+                  停止
+                </button>
               </div>
             ) : (
               <>
-                {choices.length > 0 && (
+                {/* Choices appear once the line has finished typing (click the box to skip). */}
+                {choices.length > 0 && done && (
                   <ChoiceList choices={choices} disabled={busy} onPick={handlePick} />
                 )}
                 {ending && choices.length === 0 && (
@@ -356,6 +396,7 @@ function Story() {
 
             <ManualInput
               disabled={busy}
+              awaitingPassword={awaitingPassword}
               onSubmit={(t, at) => {
                 if (at) fire(at.x, at.y);
                 pick({ text: t });

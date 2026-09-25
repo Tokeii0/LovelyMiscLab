@@ -38,6 +38,7 @@ impl From<misclab_core::CoreError> for AppError {
         let code = match &e {
             CoreError::Cancelled => "cancelled",
             CoreError::AiNotConfigured(_) => "ai_config",
+            CoreError::PasswordRequired(_) => "password_required",
             _ => "core",
         };
         AppError::new(code, e.to_string())

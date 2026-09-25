@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 
 import { api } from "@/lib/bindings";
@@ -28,12 +28,14 @@ import { WindowResizeHandles } from "@/app/WindowResizeHandles";
 import { ConfirmHost } from "@/components/ui/ConfirmHost";
 import { Toaster } from "@/components/ui/toaster";
 import { CanvasView } from "@/views/CanvasView";
-import { GalgameView } from "@/views/GalgameView";
 import { ResourcesView } from "@/views/ResourcesView";
 import { RunsView } from "@/views/RunsView";
 import { ModulesView } from "@/views/ModulesView";
 import { SettingsView } from "@/views/SettingsView";
 import { TemplatesView } from "@/views/TemplatesView";
+
+// Experimental and rarely opened: load its code only when it's actually shown.
+const GalgameView = lazy(() => import("@/views/GalgameView").then((m) => ({ default: m.GalgameView })));
 
 function DragGhost() {
   const descriptor = usePaletteDrag((s) => s.descriptor);
@@ -133,7 +135,11 @@ function App() {
             </div>
             {view !== "canvas" && (
               <div className="absolute inset-0 bg-background">
-                {view === "galgame" && <GalgameView />}
+                {view === "galgame" && (
+                  <Suspense fallback={null}>
+                    <GalgameView />
+                  </Suspense>
+                )}
                 {view === "modules" && <ModulesView />}
                 {view === "templates" && <TemplatesView />}
                 {view === "runs" && <RunsView />}

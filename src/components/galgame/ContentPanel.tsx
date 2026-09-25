@@ -1,17 +1,20 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Terminal } from "lucide-react";
 
+import { useImageViewer } from "@/store/imageViewer";
+
 /** The "screen" above the dialogue: the current engine run-result (what Misca is
  * reacting to), the pipeline note, and a collapsible raw-challenge view. Styled
  * as a solid dark monitor so mono text stays readable over the mood gradient. */
 export function ContentPanel({
   outputs,
   challenge,
-  notes,
+  image,
 }: {
   outputs: string | null;
   challenge: string;
-  notes?: string | null;
+  /** An image the last tool produced (e.g. LSB extraction) — shown, not "<图片>". */
+  image?: string | null;
 }) {
   const [showChallenge, setShowChallenge] = useState(false);
   return (
@@ -19,16 +22,24 @@ export function ContentPanel({
       <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-xs font-semibold text-slate-100">
         <Terminal className="h-3.5 w-3.5 shrink-0 text-primary" />
         运行结果
-        {notes && (
-          <span className="truncate text-[11px] font-normal text-slate-400">· {notes}</span>
-        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto p-3">
         {outputs ? (
-          <pre className="whitespace-pre-wrap break-words font-mono text-[13px] leading-relaxed text-emerald-300">
-            {outputs}
-          </pre>
+          <>
+            {image && (
+              <img
+                src={image}
+                alt="工具产出的图片"
+                title="点击查看大图"
+                onClick={() => useImageViewer.getState().show(image, "故事模式 · 产出图片")}
+                className="mb-2 max-h-48 cursor-zoom-in rounded border border-white/10 bg-white object-contain"
+              />
+            )}
+            <pre className="whitespace-pre-wrap break-words font-mono text-[13px] leading-relaxed text-emerald-300">
+              {outputs}
+            </pre>
+          </>
         ) : (
           <div className="flex h-full items-center justify-center px-6 text-center text-xs text-slate-400">
             还没有运行结果。选一个带 ⚙ 的选项后，Misca 会把当前数据交给对应节点执行。

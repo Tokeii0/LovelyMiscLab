@@ -93,6 +93,49 @@ fn archive_input_bytes(inputs: &PortMap, name: &str) -> Result<Vec<u8>, CoreErro
     }
 }
 
+/// Largest single entry we decompress (zip-bomb guard).
+const MAX_ENTRY: u64 = 64 * 1024 * 1024;
+/// Total decompressed bytes per archive.
+const MAX_TOTAL: u64 = 256 * 1024 * 1024;
+/// How much entry data is embedded (as base64) in the `entries` JSON output.
+const MAX_EMBED: usize = 32 * 1024 * 1024;
+/// `EntryData::error` for an encrypted entry read without a password.
+const NEED_PASSWORD: &str = "需要密码";
+
+/// Read at most `min(MAX_ENTRY, budget)` bytes; more than that is an error
+/// (reported on the entry) instead of an unbounded allocation.
+fn read_capped(r: &mut dyn Read, budget: &mut u64) -> Result<Vec<u8>, String> {
+    let limit = MAX_ENTRY.min(*budget);
+    let mut buf = Vec::new();
+    r.take(limit + 1)
+        .read_to_end(&mut buf)
+        .map_err(|e| e.to_string())?;
+    if buf.len() as u64 > limit {
+        return Err(if limit < MAX_ENTRY {
+            "解压总量超过 256MB 上限，未读取".into()
+        } else {
+            "条目超过 64MB 上限，未读取".into()
+        });
+    }
+    *budget -= buf.len() as u64;
+    Ok(buf)
+}
+
+fn too_big(size: u64) -> Option<String> {
+    (size > MAX_ENTRY).then(|| format!("条目过大（{size} 字节，上限 64MB），未读取"))
+}
+
+/// Map a library error that is really "wrong / missing password".
+fn password_error(msg: &str, password: &str) -> Option<CoreError> {
+    msg.to_ascii_lowercase().contains("password").then(|| {
+        CoreError::PasswordRequired(if password.is_empty() {
+            "压缩包已加密，需要密码".into()
+        } else {
+            "密码错误，无法解密".into()
+        })
+    })
+}
+
 #[derive(Debug, Clone)]
 struct EntryData {
     name: String,
@@ -176,6 +219,7 @@ fn extract_zip(data: &[u8], password: &str) -> Result<ArchiveData, CoreError> {
     let mut zip = zip::ZipArchive::new(Cursor::new(data))
         .map_err(|e| CoreError::Parse(format!("zip: {e}")))?;
     let mut entries = Vec::with_capacity(zip.len());
+    let mut budget = MAX_TOTAL;
 
     for i in 0..zip.len() {
         let mut entry = {
@@ -196,22 +240,29 @@ fn extract_zip(data: &[u8], password: &str) -> Result<ArchiveData, CoreError> {
 
         if !entry.is_dir {
             if entry.encrypted && password.is_empty() {
-                entry.error = Some("需要密码".into());
+                entry.error = Some(NEED_PASSWORD.into());
+            } else if let Some(msg) = too_big(entry.size) {
+                entry.error = Some(msg);
             } else {
-                let mut buf = Vec::new();
                 let read_result = if entry.encrypted {
-                    zip.by_index_decrypt(i, password.as_bytes())
-                        .map_err(|e| CoreError::Parse(format!("ZIP 解密失败: {e}")))?
-                        .read_to_end(&mut buf)
+                    let mut f =
+                        zip.by_index_decrypt(i, password.as_bytes())
+                            .map_err(|e| match e {
+                                zip::result::ZipError::InvalidPassword => {
+                                    CoreError::PasswordRequired("密码错误，无法解密".into())
+                                }
+                                other => CoreError::Parse(format!("ZIP 解密失败: {other}")),
+                            })?;
+                    read_capped(&mut f, &mut budget)
                 } else {
-                    zip.by_index(i)
-                        .map_err(|e| CoreError::Parse(format!("读取 ZIP 条目 {i} 失败: {e}")))?
-                        .read_to_end(&mut buf)
+                    let mut f = zip
+                        .by_index(i)
+                        .map_err(|e| CoreError::Parse(format!("读取 ZIP 条目 {i} 失败: {e}")))?;
+                    read_capped(&mut f, &mut budget)
                 };
                 match read_result {
-                    Ok(_) => entry.bytes = Some(buf),
-                    Err(e) if password.is_empty() => entry.error = Some(e.to_string()),
-                    Err(e) => return Err(CoreError::Parse(format!("读取 ZIP 条目失败: {e}"))),
+                    Ok(buf) => entry.bytes = Some(buf),
+                    Err(e) => entry.error = Some(e),
                 }
             }
         }
@@ -235,11 +286,8 @@ fn gz_filename(data: &[u8]) -> String {
 }
 
 fn decode_gz(data: &[u8]) -> Result<Vec<u8>, CoreError> {
-    let mut buf = Vec::new();
-    GzDecoder::new(Cursor::new(data))
-        .read_to_end(&mut buf)
-        .map_err(|e| CoreError::Parse(format!("gzip: {e}")))?;
-    Ok(buf)
+    read_capped(&mut GzDecoder::new(Cursor::new(data)), &mut { MAX_TOTAL })
+        .map_err(|e| CoreError::Parse(format!("gzip: {e}")))
 }
 
 fn extract_gz(data: &[u8], auto_nested_tar: bool) -> Result<ArchiveData, CoreError> {
@@ -254,24 +302,23 @@ fn extract_gz(data: &[u8], auto_nested_tar: bool) -> Result<ArchiveData, CoreErr
 }
 
 fn extract_zlib(data: &[u8]) -> Result<ArchiveData, CoreError> {
-    let mut buf = Vec::new();
-    ZlibDecoder::new(Cursor::new(data))
-        .read_to_end(&mut buf)
+    let buf = read_capped(&mut ZlibDecoder::new(Cursor::new(data)), &mut { MAX_TOTAL })
         .map_err(|e| CoreError::Parse(format!("zlib: {e}")))?;
     Ok(single_file("zlib", "(zlib 解压内容)", buf))
 }
 
 fn extract_deflate(data: &[u8]) -> Result<ArchiveData, CoreError> {
-    let mut buf = Vec::new();
-    DeflateDecoder::new(Cursor::new(data))
-        .read_to_end(&mut buf)
-        .map_err(|e| CoreError::Parse(format!("raw deflate: {e}")))?;
+    let buf = read_capped(&mut DeflateDecoder::new(Cursor::new(data)), &mut {
+        MAX_TOTAL
+    })
+    .map_err(|e| CoreError::Parse(format!("raw deflate: {e}")))?;
     Ok(single_file("deflate", "(raw deflate 解压内容)", buf))
 }
 
 fn extract_tar(data: &[u8]) -> Result<ArchiveData, CoreError> {
     let mut archive = tar::Archive::new(Cursor::new(data));
     let mut entries = Vec::new();
+    let mut budget = MAX_TOTAL;
 
     for entry in archive
         .entries()
@@ -296,11 +343,17 @@ fn extract_tar(data: &[u8]) -> Result<ArchiveData, CoreError> {
             error: None,
         };
         if is_file {
-            let mut buf = Vec::new();
-            e.read_to_end(&mut buf)
-                .map_err(|e| CoreError::Parse(format!("读取 tar 条目失败: {e}")))?;
-            item.size = buf.len() as u64;
-            item.bytes = Some(buf);
+            if let Some(msg) = too_big(size) {
+                item.error = Some(msg);
+            } else {
+                match read_capped(&mut e, &mut budget) {
+                    Ok(buf) => {
+                        item.size = buf.len() as u64;
+                        item.bytes = Some(buf);
+                    }
+                    Err(msg) => item.error = Some(msg),
+                }
+            }
         }
         entries.push(item);
     }
@@ -312,14 +365,19 @@ fn extract_tar(data: &[u8]) -> Result<ArchiveData, CoreError> {
 }
 
 fn extract_7z(data: &[u8], password: &str) -> Result<ArchiveData, CoreError> {
+    let map_err = |e: sevenz_rust::Error| {
+        let msg = e.to_string();
+        password_error(&msg, password).unwrap_or_else(|| CoreError::Parse(format!("7z: {msg}")))
+    };
     let mut reader = sevenz_rust::SevenZReader::new(
         Cursor::new(data),
         data.len() as u64,
         sevenz_rust::Password::from(password),
     )
-    .map_err(|e| CoreError::Parse(format!("7z: {e}")))?;
+    .map_err(map_err)?;
 
     let mut entries = Vec::new();
+    let mut budget = MAX_TOTAL;
     reader
         .for_each_entries(|entry, rd| {
             let mut item = EntryData {
@@ -333,15 +391,22 @@ fn extract_7z(data: &[u8], password: &str) -> Result<ArchiveData, CoreError> {
                 error: None,
             };
             if !entry.is_directory() {
-                let mut buf = Vec::new();
-                rd.read_to_end(&mut buf)?;
-                item.size = buf.len() as u64;
-                item.bytes = Some(buf);
+                match read_capped(rd, &mut budget) {
+                    Ok(buf) => {
+                        item.size = buf.len() as u64;
+                        item.bytes = Some(buf);
+                    }
+                    Err(msg) => {
+                        // Drain the rest so the next entry of a solid archive decodes.
+                        std::io::copy(rd, &mut std::io::sink())?;
+                        item.error = Some(msg);
+                    }
+                }
             }
             entries.push(item);
             Ok(true)
         })
-        .map_err(|e| CoreError::Parse(format!("7z: {e}")))?;
+        .map_err(map_err)?;
 
     Ok(ArchiveData {
         format: "7z".into(),
@@ -363,13 +428,17 @@ fn rar_inner(path: &Path, password: &str) -> Result<ArchiveData, CoreError> {
     } else {
         unrar::Archive::with_password(path, password).open_for_processing()
     }
-    .map_err(|e| CoreError::Parse(format!("rar: {e}")))?;
+    .map_err(|e| {
+        password_error(&e.to_string(), password)
+            .unwrap_or_else(|| CoreError::Parse(format!("rar: {e}")))
+    })?;
 
     let mut entries = Vec::new();
-    while let Some(header) = archive
-        .read_header()
-        .map_err(|e| CoreError::Parse(format!("rar: {e}")))?
-    {
+    let mut total = 0u64;
+    while let Some(header) = archive.read_header().map_err(|e| {
+        password_error(&e.to_string(), password)
+            .unwrap_or_else(|| CoreError::Parse(format!("rar: {e}")))
+    })? {
         let meta = header.entry();
         let name = meta.filename.to_string_lossy().replace('\\', "/");
         let is_dir = meta.is_directory();
@@ -388,14 +457,20 @@ fn rar_inner(path: &Path, password: &str) -> Result<ArchiveData, CoreError> {
             error: None,
         };
 
-        if meta.is_file() {
-            let (bytes, rest) = header
-                .read()
-                .map_err(|e| CoreError::Parse(format!("rar 读取失败: {e}")))?;
+        let over = too_big(size).or_else(|| {
+            (total + size > MAX_TOTAL).then(|| "解压总量超过 256MB 上限，未读取".to_string())
+        });
+        if meta.is_file() && over.is_none() {
+            let (bytes, rest) = header.read().map_err(|e| {
+                password_error(&e.to_string(), password)
+                    .unwrap_or_else(|| CoreError::Parse(format!("rar 读取失败: {e}")))
+            })?;
+            total += bytes.len() as u64;
             item.size = bytes.len() as u64;
             item.bytes = Some(bytes);
             archive = rest;
         } else {
+            item.error = over;
             archive = header
                 .skip()
                 .map_err(|e| CoreError::Parse(format!("rar 跳过目录失败: {e}")))?;
@@ -486,6 +561,7 @@ fn find_selected<'a>(
 
 fn entries_json(data: &ArchiveData) -> serde_json::Value {
     let mut file_index = 0usize;
+    let mut embedded = 0usize;
     let entries = data
         .entries
         .iter()
@@ -508,9 +584,12 @@ fn entries_json(data: &ArchiveData) -> serde_json::Value {
                 "encrypted": entry.encrypted,
                 "crc32": entry.crc32.map(|crc| format!("{crc:08x}")),
                 "error": entry.error,
-                "dataBase64": entry.bytes.as_ref().map(|bytes| {
-                    base64::engine::general_purpose::STANDARD.encode(bytes)
+                "dataBase64": entry.bytes.as_ref().and_then(|bytes| {
+                    embedded += bytes.len();
+                    (embedded <= MAX_EMBED)
+                        .then(|| base64::engine::general_purpose::STANDARD.encode(bytes))
                 }),
+                "dataOmitted": entry.bytes.is_some() && embedded > MAX_EMBED,
             })
         })
         .collect::<Vec<_>>();
@@ -524,7 +603,27 @@ fn entries_json(data: &ArchiveData) -> serde_json::Value {
 }
 
 fn finish(data: ArchiveData, target: &str) -> Result<PortMap, CoreError> {
+    // Nothing readable without a password (or the requested entry needs one): an
+    // error, not an empty "success" that silently feeds nothing downstream.
+    let locked = data
+        .entries
+        .iter()
+        .filter(|e| e.error.as_deref() == Some(NEED_PASSWORD))
+        .count();
+    if locked > 0 && readable_files(&data.entries).is_empty() {
+        return Err(CoreError::PasswordRequired(format!(
+            "压缩包已加密，需要密码（{locked} 个加密条目）"
+        )));
+    }
     let selected = find_selected(&data.entries, target)?;
+    if let Some(entry) = selected {
+        if entry.error.as_deref() == Some(NEED_PASSWORD) {
+            return Err(CoreError::PasswordRequired(format!(
+                "条目 {} 已加密，需要密码",
+                entry.name
+            )));
+        }
+    }
     if !target.trim().is_empty() {
         if let Some(entry) = selected {
             if let Some(error) = &entry.error {
@@ -747,6 +846,57 @@ mod tests {
         let from_base64 = run_extract_value(PortValue::Text(encoded), json!({ "format": "自动" }));
         assert_eq!(text(&from_base64, "format"), "zip");
         assert_eq!(text(&from_base64, "entry"), "a.txt");
+    }
+
+    fn make_encrypted_zip() -> Vec<u8> {
+        let mut buf = Vec::new();
+        {
+            let mut w = zip::ZipWriter::new(Cursor::new(&mut buf));
+            let opts = SimpleFileOptions::default().with_aes_encryption(zip::AesMode::Aes256, "pw");
+            w.start_file("flag.txt", opts).unwrap();
+            w.write_all(b"flag{zip}").unwrap();
+            w.finish().unwrap();
+        }
+        buf
+    }
+
+    fn run_err(bytes: Vec<u8>, params: serde_json::Value) -> CoreError {
+        let mut inputs = PortMap::new();
+        inputs.insert(
+            "archive".into(),
+            PortValue::Bytes(Arc::from(bytes.into_boxed_slice())),
+        );
+        GraphExecutor::run_node(
+            &default_registry(),
+            "archive_extract",
+            &inputs,
+            &params,
+            &NullSink,
+            &CancellationToken::new(),
+        )
+        .unwrap_err()
+    }
+
+    #[test]
+    fn encrypted_zip_without_password_is_an_error_not_empty_output() {
+        let err = run_err(make_encrypted_zip(), json!({}));
+        assert!(matches!(err, CoreError::PasswordRequired(_)), "{err:?}");
+        let wrong = run_err(make_encrypted_zip(), json!({ "password": "nope" }));
+        assert!(matches!(wrong, CoreError::PasswordRequired(ref m) if m.contains("密码错误")));
+        let ok = run_extract(make_encrypted_zip(), json!({ "password": "pw" }));
+        assert_eq!(text(&ok, "text"), "flag{zip}");
+    }
+
+    #[test]
+    fn oversized_entries_are_reported_not_decompressed() {
+        let mut budget = 16u64;
+        let mut small = Cursor::new(vec![7u8; 10]);
+        assert_eq!(read_capped(&mut small, &mut budget).unwrap().len(), 10);
+        assert_eq!(budget, 6);
+        let mut big = Cursor::new(vec![7u8; 10]);
+        assert!(read_capped(&mut big, &mut budget).is_err());
+        assert!(too_big(MAX_ENTRY + 1).is_some());
+        assert!(too_big(MAX_ENTRY).is_none());
     }
 
     #[test]

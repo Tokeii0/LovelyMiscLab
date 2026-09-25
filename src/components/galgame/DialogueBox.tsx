@@ -17,6 +17,15 @@ export function DialogueBox({
   return (
     <div
       onClick={onSkip}
+      role="button"
+      tabIndex={0}
+      aria-label="跳过打字效果"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSkip();
+        }
+      }}
       className="pointer-events-auto relative cursor-pointer select-none rounded-2xl border border-white/10 bg-slate-900/75 p-5 pt-6 shadow-2xl backdrop-blur-md"
     >
       {/* name plate */}

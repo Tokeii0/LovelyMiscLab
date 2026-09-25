@@ -9,16 +9,18 @@ use std::collections::{BTreeMap, HashSet};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tauri::ipc::Channel;
 use tauri::State;
 
 use misclab_core::ai::{self, ModelConfig};
 use misclab_core::cancel::CancellationToken;
 use misclab_core::graph::executor::GraphExecutor;
 use misclab_core::graph::port::{PortType, PortValue};
-use misclab_core::node::descriptor::NodeDescriptor;
+use misclab_core::node::descriptor::{NodeDescriptor, ParamWidget};
 use misclab_core::node::registry::NodeRegistry;
 use misclab_core::node::{NodeEnv, PortMap};
 use misclab_core::progress::NullSink;
+use misclab_core::CoreError;
 
 use crate::commands::ai_workflow::truncate;
 use crate::error::AppError;
@@ -69,6 +71,10 @@ pub struct GalgameStepRequest {
     pub history: Vec<HistoryItem>,
     #[serde(default)]
     pub picked: Option<PickedChoice>,
+    /// Echo of the previous turn's `awaiting_password`: the working data is an
+    /// encrypted archive and free text typed now is a password to try.
+    #[serde(default)]
+    pub awaiting_password: bool,
 }
 
 /// A choice offered to the player. `node` ⇒ picking runs that one tool.
@@ -101,6 +107,10 @@ pub struct GalgameTurn {
     /// next round's input so 套娃 decodes continue where they left off.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub result_data: Option<String>,
+    /// The tool hit an encrypted archive: the working data is unchanged and the
+    /// next free-text input is tried as its password.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub awaiting_password: bool,
 }
 
 // ---- what we parse back from the narrator LLM ------------------------------
@@ -341,66 +351,24 @@ fn password_from_text(text: &str) -> Option<String> {
     None
 }
 
-fn archive_output_needs_password(outputs: &str) -> bool {
-    outputs.contains("[解压]")
-        && (outputs.contains("需要密码")
-            || outputs.contains("条目未读取")
-            || outputs.contains("未找到可直接输出的文件"))
-}
-
-fn previous_archive_needs_password(req: &GalgameStepRequest) -> bool {
-    req.history
-        .iter()
-        .rev()
-        .filter_map(|h| h.outputs.as_deref())
-        .any(archive_output_needs_password)
-}
-
-fn manual_archive_password_retry(req: &GalgameStepRequest) -> Option<String> {
-    let picked = req.picked.as_ref()?;
-    if picked
-        .node
-        .as_deref()
-        .is_some_and(|node| !node.trim().is_empty())
-    {
-        return None;
-    }
-    previous_archive_needs_password(req).then_some(())?;
-    password_from_text(&picked.text)
-}
-
-fn password_from_recent_story(req: &GalgameStepRequest) -> Option<String> {
-    req.picked
-        .as_ref()
-        .and_then(|p| password_from_text(&p.text))
-        .or_else(|| {
-            req.history
-                .iter()
-                .rev()
-                .filter_map(|h| h.picked.as_deref())
-                .find_map(password_from_text)
-        })
-        .or_else(|| {
-            req.history
-                .iter()
-                .rev()
-                .filter_map(|h| h.outputs.as_deref())
-                .find_map(password_from_text)
-        })
-}
-
+/// Params for an archive_extract the narrator picked: default the format and, if
+/// we're waiting on a password, use one the player typed recently.
 fn normalize_archive_extract_params(
     params: serde_json::Value,
     req: &GalgameStepRequest,
 ) -> serde_json::Value {
     let mut obj = params.as_object().cloned().unwrap_or_default();
-    if let Some(existing) = obj.get("password").and_then(|v| v.as_str()) {
-        if let Some(cleaned) = password_from_text(existing) {
-            obj.insert("password".into(), json!(cleaned));
-        }
-    } else if previous_archive_needs_password(req) {
-        if let Some(password) = password_from_recent_story(req) {
-            obj.insert("password".into(), json!(password));
+    let has_password = obj
+        .get("password")
+        .and_then(|v| v.as_str())
+        .is_some_and(|p| !p.trim().is_empty());
+    if !has_password && req.awaiting_password {
+        if let Some(pw) = req
+            .picked
+            .as_ref()
+            .and_then(|p| password_from_text(&p.text))
+        {
+            obj.insert("password".into(), json!(pw));
         }
     }
     obj.entry("format").or_insert_with(|| json!("自动"));
@@ -442,7 +410,28 @@ fn build_story_catalog(descriptors: &[NodeDescriptor], kind: DataKind) -> String
     for (cat, ds) in &by_cat {
         out.push_str(&format!("# {cat}\n"));
         for d in ds {
-            out.push_str(&format!("{} | {}\n", d.id, d.display_name));
+            // Param names (and select options) so `params` in a choice uses real keys.
+            let params = d
+                .params
+                .iter()
+                .take(4)
+                .map(|p| match &p.widget {
+                    ParamWidget::Select { options } if options.len() <= 6 => {
+                        format!("{}[{}]", p.name, options.join("/"))
+                    }
+                    _ => p.name.clone(),
+                })
+                .collect::<Vec<_>>();
+            if params.is_empty() {
+                out.push_str(&format!("{} | {}\n", d.id, d.display_name));
+            } else {
+                out.push_str(&format!(
+                    "{} | {} | 参数: {}\n",
+                    d.id,
+                    d.display_name,
+                    params.join(", ")
+                ));
+            }
         }
     }
     out
@@ -748,6 +737,7 @@ fn to_turn(llm: LlmTurn, descriptors: &[NodeDescriptor], hints: &[Hint]) -> Galg
         outputs: None,
         ending,
         result_data: None,
+        awaiting_password: false,
     }
 }
 
@@ -1071,11 +1061,12 @@ fn fallback_turn(registry: &NodeRegistry, hints: &[Hint]) -> GalgameTurn {
     GalgameTurn {
         speaker: "Misca".into(),
         mood: "thinking".into(),
-        narration: "我这边没拿到稳定的叙事 JSON，但后端已经按当前数据做了本地判断。先从这些具体工具里挑一个继续，不走 MCP。".into(),
+        narration: "我这边没拿到稳定的叙事 JSON，但后端已经按当前数据做了本地判断。先从这些具体工具里挑一个继续。".into(),
         choices,
         outputs: None,
         ending: None,
         result_data: None,
+        awaiting_password: false,
     }
 }
 
@@ -1175,26 +1166,47 @@ fn story_input_value(port_type: PortType, data: &str) -> PortValue {
     }
 }
 
-/// Run one tool node on `work_data` and return (display summary, chained text).
+/// What running one tool produced this round.
+struct NodeRun {
+    /// Readable result for the player and the narrator.
+    summary: String,
+    /// The value the next round continues from (None = keep the current data).
+    chain: Option<String>,
+    /// Stopped at an encrypted archive: keep the data, ask for a password.
+    needs_password: bool,
+}
+
+/// Output ports not worth showing: the archive bundle is base64 of every file.
+fn hide_from_summary(descriptor_id: &str, port: &str) -> bool {
+    port == "entries" && descriptor_id == "archive_extract"
+}
+
+/// Run one tool node on `work_data`.
 fn run_single_node(
     registry: &NodeRegistry,
     env: &NodeEnv,
     descriptor_id: &str,
     params: &serde_json::Value,
     work_data: &str,
-) -> (String, Option<String>) {
+    cancel: &CancellationToken,
+) -> Result<NodeRun, CoreError> {
     let descriptors = registry.descriptors();
     let Some(desc) = descriptors.iter().find(|d| d.id == descriptor_id) else {
-        return (format!("（找不到工具节点：{descriptor_id}）"), None);
+        return Ok(NodeRun {
+            summary: format!("（找不到工具节点：{descriptor_id}）"),
+            chain: None,
+            needs_password: false,
+        });
     };
     if !is_story_tool_allowed(desc) {
-        return (
-            format!(
+        return Ok(NodeRun {
+            summary: format!(
                 "（{} 是 AI/元工具，故事模式不会嵌套调用；请改选一个具体解码/分析工具。）",
                 desc.display_name
             ),
-            None,
-        );
+            chain: None,
+            needs_password: false,
+        });
     }
 
     // Feed the current data into the tool's first input port, typed to match.
@@ -1206,7 +1218,6 @@ fn run_single_node(
         );
     }
 
-    let cancel = CancellationToken::new();
     match GraphExecutor::run_node_with_env(
         registry,
         descriptor_id,
@@ -1214,15 +1225,23 @@ fn run_single_node(
         params,
         env,
         &NullSink,
-        &cancel,
+        cancel,
     ) {
         Ok(pm) => {
+            // The node's own summary line (if it has one) leads; noise ports are dropped.
+            let mut ports: Vec<&str> = desc
+                .outputs
+                .iter()
+                .map(|o| o.name.as_str())
+                .filter(|p| !hide_from_summary(descriptor_id, p))
+                .collect();
+            ports.sort_by_key(|p| *p != "summary");
             let mut parts = Vec::new();
-            for o in &desc.outputs {
-                if let Some(v) = pm.get(&o.name) {
+            for port in ports {
+                if let Some(v) = pm.get(port) {
                     let s = summarize_value(v);
                     if !s.trim().is_empty() {
-                        parts.push(format!("[{}] {} → {}", desc.display_name, o.name, s));
+                        parts.push(format!("[{}] {} → {}", desc.display_name, port, s));
                     }
                 }
             }
@@ -1233,7 +1252,7 @@ fn run_single_node(
             };
             // Chain the primary (first) output into the next round — unless this
             // is a describe-only tool, which leaves the working data untouched.
-            let raw = if INSPECT_ONLY.contains(&descriptor_id) {
+            let chain = if INSPECT_ONLY.contains(&descriptor_id) {
                 None
             } else {
                 match preferred_chain_value(descriptor_id, desc, &pm) {
@@ -1243,10 +1262,65 @@ fn run_single_node(
                     None => None,
                 }
             };
-            (summary, raw)
+            Ok(NodeRun {
+                summary,
+                chain,
+                needs_password: false,
+            })
         }
-        Err(e) => (format!("（{} 执行出错：{e}）", desc.display_name), None),
+        Err(CoreError::Cancelled) => Err(CoreError::Cancelled),
+        Err(CoreError::PasswordRequired(msg)) => Ok(NodeRun {
+            summary: format!("[{}] {msg}", desc.display_name),
+            chain: None,
+            needs_password: true,
+        }),
+        Err(e) => Ok(NodeRun {
+            summary: format!("（{} 执行出错：{e}）", desc.display_name),
+            chain: None,
+            needs_password: false,
+        }),
     }
+}
+
+/// Run archive_extract, trying the password as typed first and a cleaned-up
+/// token ("密码是 abc。" → "abc") only if that fails.
+fn run_archive_with_password(
+    registry: &NodeRegistry,
+    env: &NodeEnv,
+    params: serde_json::Value,
+    typed: &str,
+    work_data: &str,
+    cancel: &CancellationToken,
+) -> Result<NodeRun, CoreError> {
+    let mut candidates = vec![typed.trim().to_string()];
+    if let Some(clean) = password_from_text(typed) {
+        if !candidates.contains(&clean) {
+            candidates.push(clean);
+        }
+    }
+    let mut last = None;
+    for pw in candidates.into_iter().filter(|p| !p.is_empty()) {
+        let mut p = params.as_object().cloned().unwrap_or_default();
+        p.insert("password".into(), json!(pw));
+        p.entry("format").or_insert_with(|| json!("自动"));
+        let run = run_single_node(
+            registry,
+            env,
+            "archive_extract",
+            &serde_json::Value::Object(p),
+            work_data,
+            cancel,
+        )?;
+        if !run.needs_password {
+            return Ok(run);
+        }
+        last = Some(run);
+    }
+    Ok(last.unwrap_or(NodeRun {
+        summary: "（没有识别到密码，请直接输入密码）".into(),
+        chain: None,
+        needs_password: true,
+    }))
 }
 
 // ---- prompt assembly -------------------------------------------------------
@@ -1405,6 +1479,7 @@ fn step(
     registry: &NodeRegistry,
     env: &NodeEnv,
     req: &GalgameStepRequest,
+    cancel: &CancellationToken,
 ) -> Result<GalgameTurn, AppError> {
     let cfg = &env.ai.llm;
     if !cfg.is_configured() {
@@ -1414,62 +1489,96 @@ fn step(
         ));
     }
 
-    // 1. If the picked choice names a tool, run that single node on the current data.
-    let mut outputs_summary: Option<String> = None;
-    let mut result_data: Option<String> = None;
+    // 1. Run a tool on the current data: the one the picked choice names, or —
+    // while an encrypted archive waits for its password — archive_extract with
+    // what the player just typed.
     let picked_node = req
         .picked
         .as_ref()
         .and_then(|p| p.node.as_deref())
         .map(str::trim)
         .filter(|n| !n.is_empty());
-    let manual_retry = manual_archive_password_retry(req);
-    if let Some((node_id, params)) = picked_node
-        .map(|node_id| {
-            let params = req
-                .picked
-                .as_ref()
-                .and_then(|p| p.params.clone())
-                .unwrap_or_else(|| json!({}));
-            let params = if node_id == "archive_extract" {
-                normalize_archive_extract_params(params, req)
-            } else {
-                params
-            };
-            (node_id, params)
-        })
-        .or_else(|| {
-            manual_retry.map(|password| {
-                (
-                    "archive_extract",
-                    json!({
-                        "format": "自动",
-                        "password": password,
-                    }),
-                )
-            })
-        })
-    {
-        let (summary, raw) = run_single_node(registry, env, node_id, &params, &req.challenge);
-        outputs_summary = Some(summary);
-        result_data = raw;
-    }
+    let picked_params = req
+        .picked
+        .as_ref()
+        .and_then(|p| p.params.clone())
+        .unwrap_or_else(|| json!({}));
+    let run = match (picked_node, req.picked.as_ref()) {
+        (Some("archive_extract"), _) => {
+            let params = normalize_archive_extract_params(picked_params, req);
+            Some(run_single_node(
+                registry,
+                env,
+                "archive_extract",
+                &params,
+                &req.challenge,
+                cancel,
+            )?)
+        }
+        (Some(node_id), _) => Some(run_single_node(
+            registry,
+            env,
+            node_id,
+            &picked_params,
+            &req.challenge,
+            cancel,
+        )?),
+        (None, Some(picked)) if req.awaiting_password => Some(run_archive_with_password(
+            registry,
+            env,
+            json!({}),
+            &picked.text,
+            &req.challenge,
+            cancel,
+        )?),
+        _ => None,
+    };
+    cancel.check()?;
 
     // 2. Narrate the next turn, reacting to the fresh result. Detect on the *new*
     // data (this round's output) so the hints point at the next decode, not the
     // one we just did.
+    let summary = run.as_ref().map(|r| r.summary.clone());
+    let result_data = run.as_ref().and_then(|r| r.chain.clone());
+    let awaiting_password = run.as_ref().is_some_and(|r| r.needs_password);
     let hint_data = result_data.clone().unwrap_or_else(|| req.challenge.clone());
-    let mut turn = narrate(cfg, registry, req, outputs_summary.as_deref(), &hint_data)?;
-    turn.outputs = outputs_summary;
+    let mut turn = match narrate(cfg, registry, req, summary.as_deref(), &hint_data) {
+        Ok(t) => t,
+        // The tool already ran: keep its result and offer the offline choices
+        // rather than throwing the work away because the narrator failed.
+        Err(e) if run.is_some() => {
+            let kind = data_kind(&hint_data);
+            let hints = detect_hints(&registry.descriptors(), kind, &hint_data);
+            let mut t = fallback_turn(registry, &hints);
+            t.narration = format!(
+                "工具已经跑完了，结果在右边。不过我这边的 AI 旁白出错了（{}），先按下面的建议继续吧。",
+                e.message
+            );
+            t
+        }
+        Err(e) => return Err(e),
+    };
+    cancel.check()?;
+    if awaiting_password {
+        turn.narration = format!(
+            "{}\n\n（这个压缩包加了密码——直接在下方输入框里写密码，我来试。）",
+            turn.narration.trim_end()
+        );
+    }
+    turn.outputs = summary;
     turn.result_data = result_data;
+    turn.awaiting_password = awaiting_password;
     Ok(turn)
 }
 
 /// One story step: optionally run one tool on the current data, then narrate.
+/// The step registers a job and sends its id over `on_job`, so 停止 can cancel a
+/// slow tool (e.g. a crack) instead of waiting it out.
 #[tauri::command]
 pub async fn galgame_step(
     state: State<'_, AppState>,
     req: GalgameStepRequest,
+    on_job: Channel<String>,
 ) -> Result<GalgameTurn, AppError> {
     let registry = {
         let comps = state.composites.lock().expect("composites mutex poisoned");
@@ -1481,9 +1590,13 @@ pub async fn galgame_step(
         .lock()
         .expect("settings mutex poisoned")
         .clone();
-    tauri::async_runtime::spawn_blocking(move || step(&registry, &env, &req))
-        .await
-        .map_err(|e| AppError::new("join", e.to_string()))?
+    let cancel = CancellationToken::new();
+    let job = state.jobs.start(cancel.clone());
+    let _ = on_job.send(job.clone());
+    let result =
+        tauri::async_runtime::spawn_blocking(move || step(&registry, &env, &req, &cancel)).await;
+    state.jobs.finish(&job);
+    result.map_err(|e| AppError::new("join", e.to_string()))?
 }
 
 #[cfg(test)]
@@ -1595,21 +1708,29 @@ mod tests {
         assert_eq!(chained, "flag{story_zip}");
     }
 
-    fn password_needed_req(picked: PickedChoice) -> GalgameStepRequest {
+    fn req_with(picked: PickedChoice, awaiting_password: bool) -> GalgameStepRequest {
         GalgameStepRequest {
             challenge: "data:application/zip;base64,UEsDBAo=".into(),
             challenge_kind: "file".into(),
             brief: String::new(),
-            history: vec![HistoryItem {
-                narration: "先解压看看。".into(),
-                picked: Some("解压看看里面是什么".into()),
-                outputs: Some(
-                    "[解压] entries → {\"error\":\"需要密码\",\"name\":\"password=123456.png\"}\n[解压] summary → zip: 1 个文件；未找到可直接输出的文件；1 个条目未读取。"
-                        .into(),
-                ),
-            }],
+            history: vec![],
             picked: Some(picked),
+            awaiting_password,
         }
+    }
+
+    fn encrypted_zip_data_url(password: &str) -> String {
+        use std::io::Write;
+        let mut buf = Vec::new();
+        {
+            let mut w = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
+            let opts = zip::write::SimpleFileOptions::default()
+                .with_aes_encryption(zip::AesMode::Aes256, password);
+            w.start_file("flag.txt", opts).unwrap();
+            w.write_all(b"flag{story_zip}").unwrap();
+            w.finish().unwrap();
+        }
+        bytes_to_data_url(&buf)
     }
 
     #[test]
@@ -1625,33 +1746,48 @@ mod tests {
         );
     }
 
+    /// The reported bug: extracting an encrypted archive without a password lost
+    /// the archive (the file-name list became the working data). Now the run
+    /// stops, keeps the data, and the typed password — raw first — unlocks it.
     #[test]
-    fn manual_password_after_archive_error_retries_extract() {
-        let req = password_needed_req(PickedChoice {
-            text: "123456".into(),
-            node: None,
-            params: None,
-        });
-        assert_eq!(
-            manual_archive_password_retry(&req).as_deref(),
-            Some("123456")
-        );
+    fn encrypted_archive_keeps_data_and_accepts_a_typed_password() {
+        let reg = default_registry();
+        let env = NodeEnv::default();
+        let cancel = CancellationToken::new();
+        let data = encrypted_zip_data_url("p@ss word");
+
+        let locked =
+            run_single_node(&reg, &env, "archive_extract", &json!({}), &data, &cancel).unwrap();
+        assert!(locked.needs_password);
+        assert!(locked.chain.is_none(), "working data must stay the archive");
+
+        // A password with a space only works if tried verbatim before cleanup.
+        let opened =
+            run_archive_with_password(&reg, &env, json!({}), "p@ss word", &data, &cancel).unwrap();
+        assert!(!opened.needs_password);
+        assert_eq!(opened.chain.as_deref(), Some("flag{story_zip}"));
+
+        // A sentence around the password falls back to the cleaned token.
+        let data = encrypted_zip_data_url("123456");
+        let opened =
+            run_archive_with_password(&reg, &env, json!({}), "密码是123456。", &data, &cancel)
+                .unwrap();
+        assert_eq!(opened.chain.as_deref(), Some("flag{story_zip}"));
+        assert!(!opened.summary.contains("dataBase64"), "no base64 noise");
     }
 
     #[test]
-    fn archive_extract_params_reuse_recent_manual_password() {
-        let req = password_needed_req(PickedChoice {
-            text: "用这个密码再解压".into(),
+    fn archive_params_use_typed_password_only_while_waiting_for_one() {
+        let picked = || PickedChoice {
+            text: "password=123456.zip".into(),
             node: Some("archive_extract".into()),
             params: Some(json!({})),
-        });
-        let params = normalize_archive_extract_params(json!({}), &req);
-        assert_eq!(params["password"], "123456");
-        assert_eq!(params["format"], "自动");
-
-        let cleaned =
-            normalize_archive_extract_params(json!({"password": "password=123456.zip"}), &req);
-        assert_eq!(cleaned["password"], "123456");
+        };
+        let waiting = normalize_archive_extract_params(json!({}), &req_with(picked(), true));
+        assert_eq!(waiting["password"], "123456");
+        assert_eq!(waiting["format"], "自动");
+        let not_waiting = normalize_archive_extract_params(json!({}), &req_with(picked(), false));
+        assert!(not_waiting.get("password").is_none());
     }
 
     /// A PNG data URL is recognised as binary and offered extract/identify tools.
@@ -1686,6 +1822,7 @@ mod tests {
             brief: "附件是张 PNG，flag 藏在 LSB 里".into(),
             history: vec![],
             picked: None,
+            awaiting_password: false,
         };
         let ctx = build_context(&req, &req.challenge, None, &[]);
         assert!(ctx.contains("题干"), "context should label the brief");

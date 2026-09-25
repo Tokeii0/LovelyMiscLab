@@ -109,6 +109,8 @@ export interface GalgameStepRequest {
   brief: string;
   history: GalgameHistoryItem[];
   picked?: GalgamePicked | null;
+  /** Echo of the last turn's `awaitingPassword`: free text now is a password. */
+  awaitingPassword?: boolean;
 }
 export interface GalgameTurn {
   speaker: string;
@@ -122,6 +124,8 @@ export interface GalgameTurn {
   ending?: string | null;
   /** Raw pipeline output this round — chained into the next round's input. */
   resultData?: string | null;
+  /** Hit an encrypted archive: data unchanged, next free text is its password. */
+  awaitingPassword?: boolean;
 }
 
 export interface SuggestCtx {
@@ -234,8 +238,12 @@ export const api = {
   },
 
   /** 故事模式：跑一"幕"——可选执行一次解题动作，然后由 LLM 叙述下一幕。 */
-  galgameStep: (req: GalgameStepRequest) =>
-    invoke<GalgameTurn>("galgame_step", { req }),
+  galgameStep: (req: GalgameStepRequest, onJob: (job: string) => void) => {
+    // The step reports its job id first, so 停止 can cancel a slow tool.
+    const channel = new Channel<string>();
+    channel.onmessage = onJob;
+    return invoke<GalgameTurn>("galgame_step", { req, onJob: channel });
+  },
 
   // User-defined composite (sub-graph) modules.
   listCompositeModules: () => invoke<CompositeModule[]>("list_composite_modules"),
