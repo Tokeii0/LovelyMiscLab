@@ -7,15 +7,22 @@ import {
   MiniMap,
   ReactFlow,
   useReactFlow,
+  type FinalConnectionState,
 } from "@xyflow/react";
 
-import type { NodeDescriptor } from "@/lib/types";
+import type { NodeDescriptor, PortType } from "@/lib/types";
 import { AgentPanel } from "@/app/AgentPanel";
 import { useAgentStore } from "@/store/agent";
 import { useGraphStore } from "@/store/graph";
 import { usePaletteDrag } from "@/store/paletteDrag";
 import { usePortSuggest } from "@/store/portSuggest";
 import { useThemeStore } from "@/store/theme";
+import { clearCanvas } from "@/flow/canvasActions";
+import { copySelection, duplicateSelection, hasClipboard, pasteClipboard } from "@/flow/clipboard";
+import { placeInView, registerFlow } from "@/flow/placement";
+import { promptDialog } from "@/store/confirm";
+import { useHelpStore } from "@/store/help";
+import { useModuleDialogStore } from "@/store/moduleDialog";
 
 import { runAgent } from "./agentRunner";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
@@ -23,12 +30,11 @@ import { viewportAspect } from "./layout";
 import { GenericNode } from "./GenericNode";
 import { LabeledEdge } from "./LabeledEdge";
 import { NodeSearchMenu } from "./NodeSearchMenu";
-import { canConnect } from "./portColors";
+import { canConnect, portTypeLabel } from "./portColors";
 import { PortSuggest } from "./PortSuggest";
-import { resolvePortType } from "./portUtils";
-import { executeGraph } from "./runner";
+import { candidateNodes, firstCompatibleInput, firstCompatibleOutput, resolvePortType } from "./portUtils";
+import { executeGraph, executeToNode, runSingleNode } from "./runner";
 import { SelectorNode } from "./SelectorNode";
-import { clearCanvas } from "@/flow/canvasActions";
 
 const nodeTypes = { generic: GenericNode, selector: SelectorNode };
 const edgeTypes = { labeled: LabeledEdge };
@@ -41,7 +47,29 @@ type Menu = {
   flow?: { x: number; y: number };
 };
 
-type Search = { x: number; y: number; flow: { x: number; y: number } };
+type Search = {
+  x: number;
+  y: number;
+  flow: { x: number; y: number };
+  /** Set when opened by dropping a wire: connect the picked node to this port. */
+  wire?: { nodeId: string; port: string; dir: "in" | "out"; type: PortType };
+};
+
+/** Would a new edge source→target close a cycle (is source reachable from target)? */
+function createsCycle(edges: { source: string; target: string }[], source: string, target: string): boolean {
+  const out = new Map<string, string[]>();
+  for (const e of edges) out.set(e.source, [...(out.get(e.source) ?? []), e.target]);
+  const stack = [target];
+  const seen = new Set<string>();
+  while (stack.length) {
+    const n = stack.pop()!;
+    if (n === source) return true;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    stack.push(...(out.get(n) ?? []));
+  }
+  return false;
+}
 
 export function Canvas() {
   const nodes = useGraphStore((s) => s.nodes);
@@ -68,8 +96,13 @@ export function Canvas() {
     void runAgent(pendingPrompt, pendingData, rf);
   }, [pendingPrompt, rf]);
 
+  useEffect(() => {
+    registerFlow(rf);
+    return () => registerFlow(null);
+  }, [rf]);
+
   // Resolve a palette drop: add at the cursor if over the canvas, else (a plain
-  // click) add near the canvas center.
+  // click) add at a free spot in the middle of the view.
   useEffect(() => {
     setDrop((d, x, y, moved) => {
       const el = document.elementFromPoint(x, y);
@@ -77,13 +110,7 @@ export function Canvas() {
       if (overCanvas) {
         addNode(d, rf.screenToFlowPosition({ x, y }));
       } else if (!moved) {
-        addNode(
-          d,
-          rf.screenToFlowPosition({
-            x: window.innerWidth / 2 - 90,
-            y: window.innerHeight / 2 - 40,
-          })
-        );
+        addNode(d, placeInView());
       }
     });
   }, [setDrop, addNode, rf]);
@@ -99,10 +126,33 @@ export function Canvas() {
       if (c.source === c.target) return false;
       const s = resolvePortType(c.source, c.sourceHandle, "out");
       const t = resolvePortType(c.target, c.targetHandle, "in");
-      if (!s || !t) return false;
-      return canConnect(s, t);
+      if (!s || !t || !canConnect(s, t)) return false;
+      // The engine runs a DAG: refuse a wire that would close a loop.
+      return !createsCycle(useGraphStore.getState().edges, c.source, c.target);
     },
     []
+  );
+
+  // A wire dropped on empty canvas opens the search, pre-filtered to nodes that
+  // can take it, and connects whatever is picked.
+  const onConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent, state: FinalConnectionState) => {
+      if (state.isValid || !state.fromNode || !state.fromHandle?.id) return;
+      const target = event.target as HTMLElement | null;
+      if (!target?.classList.contains("react-flow__pane")) return;
+      const point = "changedTouches" in event ? event.changedTouches[0] : event;
+      const dir: "in" | "out" = state.fromHandle.type === "source" ? "out" : "in";
+      const port = state.fromHandle.id;
+      const type = resolvePortType(state.fromNode.id, port, dir);
+      if (!type) return;
+      setSearch({
+        x: point.clientX,
+        y: point.clientY,
+        flow: rf.screenToFlowPosition({ x: point.clientX, y: point.clientY }),
+        wire: { nodeId: state.fromNode.id, port, dir, type },
+      });
+    },
+    [rf]
   );
 
   const closeMenu = useCallback(() => setMenu(null), []);
@@ -119,7 +169,29 @@ export function Canvas() {
   };
 
   const onPick = (d: NodeDescriptor) => {
-    if (search) addNode(d, search.flow);
+    if (search) {
+      const wire = search.wire;
+      if (!wire) {
+        addNode(d, search.flow);
+      } else {
+        // Add + connect as one undo step; an upstream node sits left of the drop point.
+        const g = useGraphStore.getState();
+        g.transact(() => {
+          const pos = wire.dir === "in" ? { x: search.flow.x - 220, y: search.flow.y } : search.flow;
+          const id = g.addNode(d, pos);
+          if (wire.dir === "out") {
+            const match = firstCompatibleInput(d, wire.type);
+            if (match) {
+              if (match.isParam) g.toggleParamInput(id, match.port);
+              g.onConnect({ source: wire.nodeId, sourceHandle: wire.port, target: id, targetHandle: match.port });
+            }
+          } else {
+            const out = firstCompatibleOutput(d, wire.type);
+            if (out) g.onConnect({ source: id, sourceHandle: out, target: wire.nodeId, targetHandle: wire.port });
+          }
+        });
+      }
+    }
     setSearch(null);
   };
 
@@ -128,9 +200,45 @@ export function Canvas() {
     const g = useGraphStore.getState();
     if (menu.kind === "node") {
       const id = menu.id!;
+      const node = g.nodes.find((n) => n.id === id);
+      const selected = g.nodes.filter((n) => n.selected);
+      // Right-clicking inside a multi-selection acts on the whole selection.
+      if (node?.selected && selected.length > 1) {
+        return [
+          { label: `复制 ${selected.length} 个节点`, hint: "Ctrl+C", onClick: () => void copySelection() },
+          { label: "创建副本", hint: "Ctrl+D", onClick: () => void duplicateSelection() },
+          {
+            label: "封装为模块…",
+            onClick: () => useModuleDialogStore.getState().setOpen(true),
+          },
+          {
+            label: `删除 ${selected.length} 个节点`,
+            hint: "Delete",
+            danger: true,
+            separator: true,
+            onClick: () => void g.deleteSelection(),
+          },
+        ];
+      }
+      const disabled = node?.data.disabled ?? false;
       return [
-        { label: "复制节点", onClick: () => g.duplicateNode(id) },
-        { label: "删除节点", danger: true, onClick: () => g.deleteNode(id) },
+        { label: "运行到此节点", onClick: () => void executeToNode(id) },
+        { label: "仅运行此节点", onClick: () => void runSingleNode(id) },
+        {
+          label: "重命名…",
+          separator: true,
+          onClick: async () => {
+            const next = await promptDialog({ title: "重命名节点", initial: node?.data.label ?? "" });
+            if (next != null) g.renameNode(id, next.trim() || (node?.data.label ?? ""));
+          },
+        },
+        { label: disabled ? "启用节点" : "禁用节点", onClick: () => g.setDisabled(id, !disabled) },
+        { label: "创建副本", hint: "Ctrl+D", onClick: () => g.duplicateNode(id) },
+        {
+          label: "节点帮助",
+          onClick: () => useHelpStore.getState().openForNode(node?.data.descriptorId),
+        },
+        { label: "删除节点", hint: "Delete", danger: true, separator: true, onClick: () => g.deleteNode(id) },
       ];
     }
     if (menu.kind === "edge") {
@@ -139,8 +247,14 @@ export function Canvas() {
     }
     const { x, y, flow } = menu;
     return [
-      { label: "添加节点…", onClick: () => flow && setSearch({ x, y, flow }) },
-      { label: "运行整图", onClick: () => void executeGraph() },
+      { label: "添加节点…", hint: "双击", onClick: () => flow && setSearch({ x, y, flow }) },
+      {
+        label: "粘贴",
+        hint: "Ctrl+V",
+        disabled: !hasClipboard(),
+        onClick: () => void pasteClipboard(flow),
+      },
+      { label: "运行整图", hint: "Ctrl+Enter", separator: true, onClick: () => void executeGraph() },
       {
         label: "整理节点",
         onClick: () => {
@@ -150,8 +264,8 @@ export function Canvas() {
         },
       },
       { label: "适应视图", onClick: () => rf.fitView({ duration: 200 }) },
-      { label: "全选节点", onClick: () => g.selectAll() },
-      { label: "清空画布", danger: true, onClick: () => void clearCanvas() },
+      { label: "全选节点", hint: "Ctrl+A", onClick: () => g.selectAll() },
+      { label: "清空画布…", danger: true, separator: true, onClick: () => void clearCanvas() },
     ];
   };
 
@@ -169,6 +283,7 @@ export function Canvas() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onConnectEnd={onConnectEnd}
         isValidConnection={isValidConnection as never}
         onSelectionChange={({ nodes }) => setSelected(nodes[0]?.id ?? null)}
         onPaneClick={closeMenu}
@@ -222,6 +337,8 @@ export function Canvas() {
           y={search.y}
           onPick={onPick}
           onClose={() => setSearch(null)}
+          candidates={search.wire ? candidateNodes(search.wire.type, search.wire.dir) : undefined}
+          title={search.wire ? `${search.wire.dir === "out" ? "接下游" : "接上游"}：${portTypeLabel(search.wire.type)}` : undefined}
         />
       )}
       {suggestCtx && <PortSuggest />}

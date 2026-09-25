@@ -33,6 +33,8 @@ import {
   type ResourceItem,
   type ResourceKind,
 } from "@/store/workspace";
+import { placeInView } from "@/flow/placement";
+import { confirmDialog } from "@/store/confirm";
 
 function Empty({
   icon: Icon,
@@ -287,7 +289,20 @@ export function RunsView() {
           <h1 className="text-lg font-semibold">运行记录</h1>
           <p className="text-xs text-muted-foreground">回看每次执行的路径、耗时和失败点。</p>
         </div>
-        <Button variant="outline" size="sm" onClick={clearHistory}>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={history.length === 0}
+          onClick={async () => {
+            const ok = await confirmDialog({
+              title: "清空全部运行记录？",
+              message: `将删除 ${history.length} 条记录，无法恢复。`,
+              confirmText: "清空",
+              danger: true,
+            });
+            if (ok) clearHistory();
+          }}
+        >
           <Trash2 className="h-3.5 w-3.5" />
           清空记录
         </Button>
@@ -383,9 +398,11 @@ export function ResourcesView() {
 
   const addToCanvas = (resource: ResourceItem) => {
     if (!fileImport || !resource.path) return;
-    const id = addNode(fileImport, { x: 240 + Math.random() * 120, y: 160 + Math.random() * 120 });
-    setParam(id, "path", resource.path);
     setView("canvas");
+    useGraphStore.getState().transact(() => {
+      const id = addNode(fileImport, placeInView());
+      setParam(id, "path", resource.path);
+    });
   };
 
   const restoreDraft = async () => {
@@ -474,7 +491,20 @@ export function ResourcesView() {
               </p>
             </div>
             {resources.length > 0 && (
-              <Button variant="outline" size="sm" onClick={clearResources}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={resources.length === 0}
+                onClick={async () => {
+                  const ok = await confirmDialog({
+                    title: "清空资源库？",
+                    message: `将移除 ${resources.length} 条资源记录（不会删除磁盘上的文件）。`,
+                    confirmText: "清空",
+                    danger: true,
+                  });
+                  if (ok) clearResources();
+                }}
+              >
                 <Trash2 className="h-3.5 w-3.5" />
                 清空资源
               </Button>

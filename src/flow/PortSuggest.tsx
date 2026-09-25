@@ -7,10 +7,14 @@ import { inTauri } from "@/lib/devMocks";
 import type { NodeDescriptor } from "@/lib/types";
 import { useGraphStore } from "@/store/graph";
 import { usePortSuggest } from "@/store/portSuggest";
+import { errorCode, errorMessage } from "@/lib/errors";
+import { searchDescriptors } from "@/lib/nodeSearch";
+import { useEscapeToClose } from "@/store/modal";
 
 import { nodeIcon } from "./nodeIcons";
+import { freePosition } from "./placement";
+import { portTypeLabel } from "./portColors";
 import { candidateNodes, firstCompatibleInput, firstCompatibleOutput, resolvePortType } from "./portUtils";
-import { errorCode, errorMessage } from "@/lib/errors";
 
 const WIDTH = 268;
 
@@ -31,6 +35,7 @@ export function PortSuggest() {
   const [aiReasons, setAiReasons] = useState<Record<string, string>>({});
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
+  useEscapeToClose(!!ctx, close);
 
   const srcType = ctx ? resolvePortType(ctx.nodeId, ctx.port, ctx.dir) : undefined;
 
@@ -41,12 +46,7 @@ export function PortSuggest() {
 
   if (!ctx) return null;
 
-  const q = query.trim().toLowerCase();
-  const filtered = q
-    ? base.filter(
-        (d) => d.id.toLowerCase().includes(q) || d.displayName.toLowerCase().includes(q)
-      )
-    : base;
+  const filtered = searchDescriptors(base, query);
   // AI-ranked ids float to the top (in the model's order); the rest follow.
   const ordered = aiOrder
     ? [
@@ -64,14 +64,8 @@ export function PortSuggest() {
       return;
     }
     const dx = ctx.dir === "out" ? 260 : -260;
-    // Place beside the source, nudging down past any node already sitting there
-    // so a suggested node never lands on top of an existing one.
-    const x = src.position.x + dx;
-    let y = src.position.y;
-    const occupied = (yy: number) =>
-      g.nodes.some((n) => Math.abs(n.position.x - x) < 60 && Math.abs(n.position.y - yy) < 60);
-    while (occupied(y)) y += 90;
-    const pos = { x, y };
+    // Beside the source, moved down past anything already sitting there.
+    const pos = freePosition({ x: src.position.x + dx, y: src.position.y });
     // Add + promote + connect is one user action → one undo step.
     g.transact(() => {
       const newId = g.addNode(d, pos);
@@ -139,7 +133,7 @@ export function PortSuggest() {
           <Sparkles className="h-3.5 w-3.5 text-primary" />
           <span className="font-medium">{title}</span>
           <span className="ml-auto rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-            {srcType ?? "?"}
+            {srcType ? portTypeLabel(srcType) : "?"}
           </span>
         </div>
 
@@ -149,8 +143,7 @@ export function PortSuggest() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && display[0]) pick(display[0]);
-              else if (e.key === "Escape") close();
+              if (e.key === "Enter" && !e.nativeEvent.isComposing && display[0]) pick(display[0]);
             }}
             placeholder="筛选 / 描述想做的事…"
             className="w-full rounded border border-input bg-background px-2 py-1 focus:outline-none focus:ring-1 focus:ring-ring"

@@ -29,6 +29,25 @@ export function portColor(t: PortType): string {
   }
 }
 
+const PORT_TYPE_LABEL: Record<PortType, string> = {
+  any: "任意",
+  text: "文本",
+  number: "数值",
+  bool: "布尔",
+  json: "JSON",
+  stringList: "文本列表",
+  candidates: "候选列表",
+  bytes: "字节",
+  artifact: "文件",
+  image: "图片",
+  fingerprint: "指纹",
+};
+
+/** Human-readable (Chinese) name of a port type for tooltips, docs and labels. */
+export function portTypeLabel(t: PortType): string {
+  return PORT_TYPE_LABEL[t] ?? t;
+}
+
 /** Mirrors `PortType::accepts` in Rust: `any` matches anything, exact matches,
  * and a `text` input accepts scalar/list sources (coerced to string at the node
  * boundary) so e.g. a width/height number can drive a text field or 文本输出. */

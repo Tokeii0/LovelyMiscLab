@@ -24,6 +24,7 @@ import { McpPanel } from "@/views/McpPanel";
 import { choose } from "@/store/confirm";
 import { toast } from "@/store/toast";
 import { useViewStore } from "@/store/view";
+import { isAnyModalOpen } from "@/store/modal";
 
 const EMPTY: AppSettings = {
   ai: {
@@ -242,6 +243,18 @@ export function SettingsView() {
   // Leaving the page with unsaved edits asks first instead of silently dropping them.
   const saveRef = useRef(save);
   saveRef.current = save;
+
+  // Ctrl+S on this page saves the settings (the global handler skips it here).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "s" && !isAnyModalOpen()) {
+        e.preventDefault();
+        void saveRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   useEffect(() => {
     const { setLeaveGuard } = useViewStore.getState();
     if (!dirty) {

@@ -1,113 +1,72 @@
 import { useEffect } from "react";
 
+import { copySelection, cutSelection, duplicateSelection, pasteClipboard } from "@/flow/clipboard";
+import { executeGraph } from "@/flow/runner";
 import { newFlow, openFlow, saveFlow, saveFlowAs } from "@/lib/project";
+import { hasTextSelection, isTextInput } from "@/lib/shortcuts";
 import { useCommandPaletteStore } from "@/store/commandPalette";
-import { useGraphStore, type Clipboard } from "@/store/graph";
+import { useGraphStore } from "@/store/graph";
+import { isAnyModalOpen } from "@/store/modal";
+import { useViewStore } from "@/store/view";
 
-// Module-level clipboard (persists across renders; not reactive).
-let clipboard: Clipboard | null = null;
-let pasteOffset = 0;
-
-/** Snapshot the currently-selected nodes + the edges wholly between them. */
-function buildClip(): Clipboard | null {
-  const g = useGraphStore.getState();
-  const sel = g.nodes.filter((n) => n.selected);
-  if (sel.length === 0) return null;
-  const ids = new Set(sel.map((n) => n.id));
-  return {
-    nodes: sel.map((n) => ({
-      oldId: n.id,
-      descriptorId: n.data.descriptorId,
-      label: n.data.label,
-      color: n.data.color,
-      params: { ...n.data.params },
-      inputParams: [...(n.data.inputParams ?? [])],
-      position: { ...n.position },
-    })),
-    edges: g.edges
-      .filter((e) => ids.has(e.source) && ids.has(e.target))
-      .map((e) => ({
-        source: e.source,
-        sourceHandle: e.sourceHandle,
-        target: e.target,
-        targetHandle: e.targetHandle,
-      })),
-  };
-}
-
-/** Global canvas keyboard shortcuts: copy/paste/cut/duplicate/select-all/delete. */
+/**
+ * App-wide keyboard shortcuts.
+ *  - Ctrl+K: command palette. Ctrl+N/O/S (+Shift+S): file actions — any view,
+ *    but never while a dialog is open (Settings handles its own Ctrl+S).
+ *  - Canvas editing keys only on the canvas view, with no dialog open and focus
+ *    outside text fields, so Delete in Settings or Ctrl+C on selected text never
+ *    touch the (hidden) graph.
+ */
 export function KeyboardShortcuts() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // File shortcuts work everywhere (even while a field is focused).
-      const fileMod = e.ctrlKey || e.metaKey;
-      const fileKey = e.key.toLowerCase();
-      if (fileMod && fileKey === "k") {
+      if (e.isComposing || e.defaultPrevented) return;
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      const modal = isAnyModalOpen();
+      const view = useViewStore.getState().view;
+
+      if (mod && key === "k") {
+        const palette = useCommandPaletteStore.getState();
+        if (modal && !palette.open) return;
         e.preventDefault();
-        useCommandPaletteStore.getState().toggle();
+        palette.toggle();
         return;
       }
-      if (fileMod && (fileKey === "s" || fileKey === "o" || fileKey === "n")) {
+      if (mod && (key === "s" || key === "o" || key === "n")) {
+        if (modal || (key === "s" && view === "settings")) return;
         e.preventDefault();
-        if (fileKey === "s") void (e.shiftKey ? saveFlowAs() : saveFlow());
-        else if (fileKey === "o") void openFlow();
+        if (key === "s") void (e.shiftKey ? saveFlowAs() : saveFlow());
+        else if (key === "o") void openFlow();
         else void newFlow();
         return;
       }
 
-      // Don't hijack typing in inputs/textareas/selects (node inline fields, inspector).
-      const t = e.target as HTMLElement | null;
-      if (
-        t &&
-        (t.tagName === "INPUT" ||
-          t.tagName === "TEXTAREA" ||
-          t.tagName === "SELECT" ||
-          t.isContentEditable)
-      ) {
-        return;
-      }
-
+      if (modal || view !== "canvas" || isTextInput(e.target)) return;
       const g = useGraphStore.getState();
-      const mod = e.ctrlKey || e.metaKey;
-      const key = e.key.toLowerCase();
 
-      if (mod && key === "c") {
-        const clip = buildClip();
-        if (clip) {
-          clipboard = clip;
-          pasteOffset = 0;
-          e.preventDefault();
-        }
+      if (mod && key === "enter") {
+        e.preventDefault();
+        void executeGraph();
+      } else if (mod && key === "c") {
+        // Selected text (an output preview, a log line…) copies as text.
+        if (!hasTextSelection() && copySelection()) e.preventDefault();
+      } else if (mod && key === "x") {
+        if (!hasTextSelection() && cutSelection()) e.preventDefault();
+      } else if (mod && key === "v") {
+        if (pasteClipboard()) e.preventDefault();
+      } else if (mod && key === "d") {
+        if (duplicateSelection()) e.preventDefault();
       } else if (mod && key === "z") {
+        e.preventDefault();
         if (e.shiftKey) g.redo();
         else g.undo();
-        e.preventDefault();
       } else if (mod && key === "y") {
+        e.preventDefault();
         g.redo();
-        e.preventDefault();
-      } else if (mod && key === "v") {
-        if (clipboard) {
-          pasteOffset += 32;
-          g.paste(clipboard, pasteOffset, pasteOffset);
-          e.preventDefault();
-        }
-      } else if (mod && key === "x") {
-        const clip = buildClip();
-        if (clip) {
-          clipboard = clip;
-          pasteOffset = 0;
-          g.deleteSelection();
-          e.preventDefault();
-        }
-      } else if (mod && key === "d") {
-        const clip = buildClip();
-        if (clip) {
-          g.paste(clip, 32, 32);
-          e.preventDefault();
-        }
       } else if (mod && key === "a") {
-        g.selectAll();
         e.preventDefault();
+        g.selectAll();
       } else if (key === "delete" || key === "backspace") {
         if (g.deleteSelection()) e.preventDefault();
       } else if (key === "escape") {

@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Check, Clock, Copy, Inbox, Play, RotateCcw, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { api } from "@/lib/bindings";
 import { inTauri } from "@/lib/devMocks";
 import type { NodeDescriptor, ParamSpec, PortValue } from "@/lib/types";
@@ -355,266 +356,261 @@ export function ModuleRunDialog({
   );
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div
-        className="flex max-h-[88vh] w-[1080px] max-w-[95vw] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* header */}
-        <div className="flex items-center gap-3 border-b border-border px-5 py-4">
-          <span
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-            style={{ background: `${descriptor.color}18`, color: descriptor.color }}
-          >
-            <Icon className="h-6 w-6" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="text-lg font-bold">{descriptor.displayName}</div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>{descriptor.category} · 单独调用</span>
-              <span
+    <Dialog open onClose={onClose} className="max-h-[88vh] w-[1080px]">
+      {/* header */}
+      <div className="flex items-center gap-3 border-b border-border px-5 py-4">
+        <span
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+          style={{ background: `${descriptor.color}18`, color: descriptor.color }}
+        >
+          <Icon className="h-6 w-6" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-lg font-bold">{descriptor.displayName}</div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>{descriptor.category} · 单独调用</span>
+            <span
+              className={cn(
+                "rounded px-1.5 py-0.5 text-[10px]",
+                inTauri ? "bg-green-500/10 text-green-600" : "bg-secondary text-muted-foreground"
+              )}
+            >
+              {inTauri ? "本地执行" : "预览"}
+            </span>
+          </div>
+        </div>
+        <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* body */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[1fr_400px]">
+        {/* left: input + params */}
+        <div className="flex min-h-0 flex-col gap-5 overflow-y-auto border-r border-border p-5">
+          {descriptor.inputs.length > 0 && (
+            <section>
+              <SectionTitle>输入</SectionTitle>
+              <div className="mt-2 space-y-3">
+                {descriptor.inputs.map((port) => {
+                  const val = inputs[port.name] ?? "";
+                  return (
+                    <div key={port.name}>
+                      {descriptor.inputs.length > 1 && (
+                        <div className="mb-1 text-[11px] text-muted-foreground">
+                          {port.label} <span className="opacity-50">({port.type})</span>
+                        </div>
+                      )}
+                      <div className="relative">
+                        <textarea
+                          rows={4}
+                          value={val}
+                          onChange={(e) => setInputs((p) => ({ ...p, [port.name]: e.target.value }))}
+                          placeholder="输入文本或粘贴 Base64 / Hex 数据…"
+                          className={cn(inputCls, "resize-y pb-6")}
+                        />
+                        <span className="pointer-events-none absolute bottom-2 right-3 text-[10px] text-muted-foreground">
+                          {byteLen(val)} 字节
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {descriptor.params.length > 0 && (
+            <section>
+              <SectionTitle>参数配置</SectionTitle>
+              <div className="mt-2 space-y-3">
+                {rows.map((row, i) =>
+                  row.kind === "single" ? (
+                    field(row.p, i)
+                  ) : (
+                    <div
+                      key={i}
+                      className={cn(
+                        "grid gap-2",
+                        row.a.widget.kind === "text" || row.a.widget.kind === "number"
+                          ? "grid-cols-[2fr_1fr]"
+                          : "grid-cols-2"
+                      )}
+                    >
+                      {field(row.a)}
+                      {field(row.b)}
+                    </div>
+                  )
+                )}
+              </div>
+            </section>
+          )}
+
+          {descriptor.inputs.length === 0 && descriptor.params.length === 0 && (
+            <div className="text-xs text-muted-foreground">该模块无需输入或参数，直接运行即可。</div>
+          )}
+        </div>
+
+        {/* right: output preview */}
+        <div className="flex min-h-0 flex-col p-5">
+          <SectionTitle>输出预览</SectionTitle>
+          <div className="mt-2 flex border-b border-border text-xs">
+            {(
+              [
+                ["result", "结果"],
+                ["logs", "日志"],
+                ["history", "历史"],
+              ] as const
+            ).map(([t, l]) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
                 className={cn(
-                  "rounded px-1.5 py-0.5 text-[10px]",
-                  inTauri ? "bg-green-500/10 text-green-600" : "bg-secondary text-muted-foreground"
+                  "px-3 py-2 transition-colors",
+                  tab === t
+                    ? "border-b-2 border-primary font-medium text-primary"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {inTauri ? "本地执行" : "预览"}
+                {l}
+              </button>
+            ))}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto py-3">
+            {tab === "result" &&
+              (error ? (
+                <div className="whitespace-pre-wrap rounded-lg bg-destructive/10 p-3 text-xs text-destructive">
+                  {error}
+                </div>
+              ) : !outputs ? (
+                <EmptyBox text="运行后在这里查看结果" />
+              ) : (
+                <div className="space-y-3">
+                  {[
+                    ...descriptor.outputs
+                      .filter((o) => outputs[o.name] !== undefined)
+                      .map((o) => [o.name, outputs[o.name]] as [string, PortValue]),
+                    ...Object.entries(outputs).filter(
+                      ([k]) => !descriptor.outputs.some((o) => o.name === k)
+                    ),
+                  ].map(([k, v]) => (
+                    <div key={k}>
+                      <div className="mb-1 flex items-center justify-between">
+                        <span className="text-[11px] font-medium text-muted-foreground">
+                          {descriptor.outputs.find((o) => o.name === k)?.label ?? k}
+                        </span>
+                        {v.type !== "image" && <CopyBtn text={outText(v)} />}
+                      </div>
+                      {v.type === "image" ? (
+                        <img src={v.value} alt="" className="max-h-56 rounded-lg border border-border bg-white" />
+                      ) : (
+                        <pre className="max-h-56 select-text overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-2.5 font-mono text-[11px]">
+                          {outText(v)}
+                        </pre>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+
+            {tab === "logs" &&
+              (logs.length === 0 ? (
+                <EmptyBox text="暂无日志" />
+              ) : (
+                <div className="space-y-1 font-mono text-[10px]">
+                  {logs.map((l, i) => (
+                    <div key={i} className="flex gap-2">
+                      <span className="text-muted-foreground">{l.time}</span>
+                      <span
+                        className={cn(
+                          l.level === "error"
+                            ? "text-destructive"
+                            : l.level === "success"
+                              ? "text-green-600"
+                              : "text-muted-foreground"
+                        )}
+                      >
+                        {l.message}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+
+            {tab === "history" &&
+              (history.length === 0 ? (
+                <EmptyBox text="暂无历史" />
+              ) : (
+                <div className="space-y-1.5">
+                  {history.map((h, i) => (
+                    <button
+                      key={i}
+                      onClick={() => restore(h)}
+                      className="flex w-full items-center gap-2 rounded-lg border border-border p-2 text-left text-[11px] transition-colors hover:border-primary hover:bg-accent"
+                      title="点击回填参数与结果"
+                    >
+                      <span className={cn("h-2 w-2 shrink-0 rounded-full", h.error ? "bg-destructive" : "bg-green-500")} />
+                      <span className="shrink-0 text-muted-foreground">{h.time}</span>
+                      <span className="flex-1 truncate font-mono">
+                        {h.error
+                          ? "失败"
+                          : h.outputs
+                            ? outText(
+                                descriptor.outputs
+                                  .map((o) => h.outputs![o.name])
+                                  .find((v) => v !== undefined) ??
+                                  Object.values(h.outputs)[0] ?? { type: "none" }
+                              ).slice(0, 40)
+                            : ""}
+                      </span>
+                      <span className="shrink-0 text-muted-foreground">{h.elapsed}ms</span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+          </div>
+
+          {/* status panel */}
+          <div className="mt-2 space-y-2 rounded-lg border border-border bg-secondary/30 p-3 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">状态</span>
+              <span className="flex items-center gap-1 font-medium" style={{ color: status.c }}>
+                <Clock className="h-3 w-3" />
+                {status.t}
               </span>
             </div>
-          </div>
-          <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* body */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[1fr_400px]">
-          {/* left: input + params */}
-          <div className="flex min-h-0 flex-col gap-5 overflow-y-auto border-r border-border p-5">
-            {descriptor.inputs.length > 0 && (
-              <section>
-                <SectionTitle>输入</SectionTitle>
-                <div className="mt-2 space-y-3">
-                  {descriptor.inputs.map((port) => {
-                    const val = inputs[port.name] ?? "";
-                    return (
-                      <div key={port.name}>
-                        {descriptor.inputs.length > 1 && (
-                          <div className="mb-1 text-[11px] text-muted-foreground">
-                            {port.label} <span className="opacity-50">({port.type})</span>
-                          </div>
-                        )}
-                        <div className="relative">
-                          <textarea
-                            rows={4}
-                            value={val}
-                            onChange={(e) => setInputs((p) => ({ ...p, [port.name]: e.target.value }))}
-                            placeholder="输入文本或粘贴 Base64 / Hex 数据…"
-                            className={cn(inputCls, "resize-y pb-6")}
-                          />
-                          <span className="pointer-events-none absolute bottom-2 right-3 text-[10px] text-muted-foreground">
-                            {byteLen(val)} 字节
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
-
-            {descriptor.params.length > 0 && (
-              <section>
-                <SectionTitle>参数配置</SectionTitle>
-                <div className="mt-2 space-y-3">
-                  {rows.map((row, i) =>
-                    row.kind === "single" ? (
-                      field(row.p, i)
-                    ) : (
-                      <div
-                        key={i}
-                        className={cn(
-                          "grid gap-2",
-                          row.a.widget.kind === "text" || row.a.widget.kind === "number"
-                            ? "grid-cols-[2fr_1fr]"
-                            : "grid-cols-2"
-                        )}
-                      >
-                        {field(row.a)}
-                        {field(row.b)}
-                      </div>
-                    )
-                  )}
-                </div>
-              </section>
-            )}
-
-            {descriptor.inputs.length === 0 && descriptor.params.length === 0 && (
-              <div className="text-xs text-muted-foreground">该模块无需输入或参数，直接运行即可。</div>
-            )}
-          </div>
-
-          {/* right: output preview */}
-          <div className="flex min-h-0 flex-col p-5">
-            <SectionTitle>输出预览</SectionTitle>
-            <div className="mt-2 flex border-b border-border text-xs">
-              {(
-                [
-                  ["result", "结果"],
-                  ["logs", "日志"],
-                  ["history", "历史"],
-                ] as const
-              ).map(([t, l]) => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  className={cn(
-                    "px-3 py-2 transition-colors",
-                    tab === t
-                      ? "border-b-2 border-primary font-medium text-primary"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {l}
-                </button>
-              ))}
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">耗时</span>
+              <span className="font-mono">{elapsed != null ? `${elapsed} ms` : "--"}</span>
             </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto py-3">
-              {tab === "result" &&
-                (error ? (
-                  <div className="whitespace-pre-wrap rounded-lg bg-destructive/10 p-3 text-xs text-destructive">
-                    {error}
-                  </div>
-                ) : !outputs ? (
-                  <EmptyBox text="运行后在这里查看结果" />
-                ) : (
-                  <div className="space-y-3">
-                    {[
-                      ...descriptor.outputs
-                        .filter((o) => outputs[o.name] !== undefined)
-                        .map((o) => [o.name, outputs[o.name]] as [string, PortValue]),
-                      ...Object.entries(outputs).filter(
-                        ([k]) => !descriptor.outputs.some((o) => o.name === k)
-                      ),
-                    ].map(([k, v]) => (
-                      <div key={k}>
-                        <div className="mb-1 flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-muted-foreground">
-                            {descriptor.outputs.find((o) => o.name === k)?.label ?? k}
-                          </span>
-                          {v.type !== "image" && <CopyBtn text={outText(v)} />}
-                        </div>
-                        {v.type === "image" ? (
-                          <img src={v.value} alt="" className="max-h-56 rounded-lg border border-border bg-white" />
-                        ) : (
-                          <pre className="max-h-56 select-text overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-2.5 font-mono text-[11px]">
-                            {outText(v)}
-                          </pre>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-
-              {tab === "logs" &&
-                (logs.length === 0 ? (
-                  <EmptyBox text="暂无日志" />
-                ) : (
-                  <div className="space-y-1 font-mono text-[10px]">
-                    {logs.map((l, i) => (
-                      <div key={i} className="flex gap-2">
-                        <span className="text-muted-foreground">{l.time}</span>
-                        <span
-                          className={cn(
-                            l.level === "error"
-                              ? "text-destructive"
-                              : l.level === "success"
-                                ? "text-green-600"
-                                : "text-muted-foreground"
-                          )}
-                        >
-                          {l.message}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-
-              {tab === "history" &&
-                (history.length === 0 ? (
-                  <EmptyBox text="暂无历史" />
-                ) : (
-                  <div className="space-y-1.5">
-                    {history.map((h, i) => (
-                      <button
-                        key={i}
-                        onClick={() => restore(h)}
-                        className="flex w-full items-center gap-2 rounded-lg border border-border p-2 text-left text-[11px] transition-colors hover:border-primary hover:bg-accent"
-                        title="点击回填参数与结果"
-                      >
-                        <span className={cn("h-2 w-2 shrink-0 rounded-full", h.error ? "bg-destructive" : "bg-green-500")} />
-                        <span className="shrink-0 text-muted-foreground">{h.time}</span>
-                        <span className="flex-1 truncate font-mono">
-                          {h.error
-                            ? "失败"
-                            : h.outputs
-                              ? outText(
-                                  descriptor.outputs
-                                    .map((o) => h.outputs![o.name])
-                                    .find((v) => v !== undefined) ??
-                                    Object.values(h.outputs)[0] ?? { type: "none" }
-                                ).slice(0, 40)
-                              : ""}
-                        </span>
-                        <span className="shrink-0 text-muted-foreground">{h.elapsed}ms</span>
-                      </button>
-                    ))}
-                  </div>
-                ))}
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">输出大小</span>
+              <span className="font-mono">{outputs ? `${outputSize(outputs)} 字节` : "--"}</span>
             </div>
-
-            {/* status panel */}
-            <div className="mt-2 space-y-2 rounded-lg border border-border bg-secondary/30 p-3 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">状态</span>
-                <span className="flex items-center gap-1 font-medium" style={{ color: status.c }}>
-                  <Clock className="h-3 w-3" />
-                  {status.t}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">耗时</span>
-                <span className="font-mono">{elapsed != null ? `${elapsed} ms` : "--"}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">输出大小</span>
-                <span className="font-mono">{outputs ? `${outputSize(outputs)} 字节` : "--"}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* footer */}
-        <div className="flex items-center justify-between border-t border-border px-5 py-3">
-          <button
-            onClick={reset}
-            className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            重置参数
-          </button>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>
-              关闭
-            </Button>
-            <Button size="sm" onClick={run} disabled={running}>
-              <Play className="mr-1 h-3.5 w-3.5" />
-              {running ? "运行中…" : "运行"}
-            </Button>
           </div>
         </div>
       </div>
-    </div>
+
+      {/* footer */}
+      <div className="flex items-center justify-between border-t border-border px-5 py-3">
+        <button
+          onClick={reset}
+          className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          重置参数
+        </button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onClose}>
+            关闭
+          </Button>
+          <Button size="sm" onClick={run} disabled={running}>
+            <Play className="mr-1 h-3.5 w-3.5" />
+            {running ? "运行中…" : "运行"}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }

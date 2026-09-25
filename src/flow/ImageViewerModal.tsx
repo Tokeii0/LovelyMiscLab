@@ -20,6 +20,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { useImageViewer } from "@/store/imageViewer";
+import { useEscapeToClose } from "@/store/modal";
 
 const MIN_SCALE = 0.05;
 const MAX_SCALE = 40;
@@ -53,6 +54,9 @@ export function ImageViewerModal() {
   const src = useImageViewer((s) => s.src);
   const title = useImageViewer((s) => s.title);
   const close = useImageViewer((s) => s.close);
+
+  // Topmost modal layer: owns Esc, and canvas shortcuts pause while it's open.
+  useEscapeToClose(open && !!src, close);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; ox: number; oy: number; moved: boolean } | null>(
@@ -112,14 +116,13 @@ export function ImageViewerModal() {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-      else if (e.key === "+" || e.key === "=") zoomBy(1.2);
+      if (e.key === "+" || e.key === "=") zoomBy(1.2);
       else if (e.key === "-" || e.key === "_") zoomBy(1 / 1.2);
       else if (e.key === "0") fitToStage();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, close, zoomBy, fitToStage]);
+  }, [open, zoomBy, fitToStage]);
 
   if (!open || !src) return null;
 

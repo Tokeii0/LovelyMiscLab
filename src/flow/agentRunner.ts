@@ -5,9 +5,9 @@ import { useAgentStore } from "@/store/agent";
 import { useDescriptorStore } from "@/store/descriptors";
 import { useGraphStore } from "@/store/graph";
 import { useProjectStore } from "@/store/project";
+import { errorMessage } from "@/lib/errors";
 
 import { viewportAspect } from "./layout";
-import { errorMessage } from "@/lib/errors";
 
 type ConnectEvent = Extract<AgentEvent, { kind: "connect" }>;
 

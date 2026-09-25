@@ -31,7 +31,7 @@ export function AgentPanel() {
   if (!running && steps.length === 0) return null;
 
   return (
-    <div className="absolute bottom-4 right-4 z-30 flex max-h-[62%] w-[340px] flex-col rounded-lg border border-border bg-card shadow-2xl">
+    <div className="absolute right-4 top-4 z-30 flex max-h-[62%] w-[340px] flex-col rounded-lg border border-border bg-card shadow-2xl">
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <span className="flex h-6 w-6 items-center justify-center rounded bg-primary/10 text-primary">
           {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}

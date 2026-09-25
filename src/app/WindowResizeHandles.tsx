@@ -1,5 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
+import { useWindowMaximized } from "@/hooks/useWindowMaximized";
 import { inTauri } from "@/lib/devMocks";
 
 // With `decorations: false` the native resize border is gone, so we provide our
@@ -26,7 +27,9 @@ const grips: { dir: Dir; className: string }[] = [
 ];
 
 export function WindowResizeHandles() {
-  if (!inTauri) return null;
+  const maximized = useWindowMaximized();
+  // A maximized window can't be resized; the grips would only steal clicks at the edges.
+  if (!inTauri || maximized) return null;
 
   const onPointerDown = (dir: Dir) => (e: React.PointerEvent) => {
     if (e.button !== 0) return;

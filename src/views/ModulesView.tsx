@@ -1,15 +1,21 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Play, Plus, Trash2 } from "lucide-react";
 
 import { api } from "@/lib/bindings";
+import { categoryRank } from "@/lib/categories";
 import { inTauri } from "@/lib/devMocks";
+import { searchDescriptors } from "@/lib/nodeSearch";
 import { cn } from "@/lib/utils";
 import type { NodeDescriptor, PortSpec } from "@/lib/types";
+import { confirmDialog } from "@/store/confirm";
 import { useDescriptorStore } from "@/store/descriptors";
 import { useGraphStore } from "@/store/graph";
+import { toast } from "@/store/toast";
 import { useViewStore } from "@/store/view";
 import { nodeIcon } from "@/flow/nodeIcons";
-import { portColor } from "@/flow/portColors";
+import { nodeSummary } from "@/flow/nodeDescriptions";
+import { placeInView } from "@/flow/placement";
+import { portColor, portTypeLabel } from "@/flow/portColors";
 
 import { ModuleRunDialog } from "./ModuleRunDialog";
 
@@ -20,7 +26,7 @@ function Ports({ ports }: { ports: PortSpec[] }) {
       {ports.map((p) => (
         <span
           key={p.name}
-          title={`${p.label}: ${p.type}`}
+          title={`${p.label}：${portTypeLabel(p.type)}`}
           className="h-1.5 w-1.5 rounded-full"
           style={{ background: portColor(p.type) }}
         />
@@ -38,34 +44,60 @@ export function ModulesView() {
   const [cat, setCat] = useState("全部");
   const [runModule, setRunModule] = useState<NodeDescriptor | null>(null);
 
+  // Which descriptors are the user's own (deletable) modules, and of which kind —
+  // asked from the backend rather than guessed from the category label.
+  const [userModules, setUserModules] = useState<Map<string, "composite" | "script">>(new Map());
+  const refreshUserModules = useCallback(async () => {
+    if (!inTauri) return;
+    const [composites, scripts] = await Promise.all([api.listCompositeModules(), api.listScriptModules()]);
+    setUserModules(
+      new Map([
+        ...composites.map((m) => [m.id, "composite"] as const),
+        ...scripts.map((m) => [m.id, "script"] as const),
+      ])
+    );
+  }, []);
+  useEffect(() => {
+    refreshUserModules().catch((e) => toast.error("读取自定义模块失败", { error: e }));
+  }, [refreshUserModules, list]);
+
   const categories = useMemo(
-    () => ["全部", ...Array.from(new Set(list.map((d) => d.category)))],
+    () => [
+      "全部",
+      ...Array.from(new Set(list.map((d) => d.category))).sort((a, b) => categoryRank(a) - categoryRank(b)),
+    ],
     [list]
   );
 
-  const filtered = useMemo(() => {
-    const needle = q.toLowerCase();
-    return list.filter(
-      (d) =>
-        (cat === "全部" || d.category === cat) &&
-        (d.displayName.toLowerCase().includes(needle) ||
-          (d.description ?? "").toLowerCase().includes(needle))
-    );
-  }, [list, q, cat]);
+  const filtered = useMemo(
+    () => searchDescriptors(list, q).filter((d) => cat === "全部" || d.category === cat),
+    [list, q, cat]
+  );
 
   const addToCanvas = (d: NodeDescriptor) => {
-    addNode(d, { x: 220 + Math.random() * 120, y: 140 + Math.random() * 120 });
+    addNode(d, placeInView());
     setView("canvas");
   };
 
   const removeModule = async (d: NodeDescriptor) => {
-    if (inTauri) {
-      // Script nodes (id `script_…`) and composite modules (`mod_…`) have separate stores.
-      if (d.id.startsWith("script_")) await api.deleteScriptModule(d.id);
-      else await api.deleteCompositeModule(d.id);
-      setDescriptors(await api.listNodeDescriptors());
-    } else {
-      setDescriptors(useDescriptorStore.getState().list.filter((x) => x.id !== d.id));
+    const ok = await confirmDialog({
+      title: `删除模块「${d.displayName}」？`,
+      message: "删除后无法恢复；画布上已使用它的节点将无法运行。",
+      confirmText: "删除",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      if (inTauri) {
+        if (userModules.get(d.id) === "script") await api.deleteScriptModule(d.id);
+        else await api.deleteCompositeModule(d.id);
+        setDescriptors(await api.listNodeDescriptors());
+      } else {
+        setDescriptors(useDescriptorStore.getState().list.filter((x) => x.id !== d.id));
+      }
+      toast.success(`已删除「${d.displayName}」`);
+    } catch (e) {
+      toast.error("删除模块失败", { error: e });
     }
   };
 
@@ -124,7 +156,7 @@ export function ModulesView() {
                   </div>
                 </div>
                 <p className="mt-2 line-clamp-2 h-8 text-xs text-muted-foreground">
-                  {d.description || "—"}
+                  {nodeSummary(d) || "—"}
                 </p>
                 <div className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
                   <Ports ports={d.inputs} />
@@ -144,7 +176,7 @@ export function ModulesView() {
                   >
                     <Play className="h-3 w-3" /> 单独调用
                   </button>
-                  {d.category === "自定义" && (
+                  {(userModules.has(d.id) || (!inTauri && d.category === "自定义")) && (
                     <button
                       onClick={() => void removeModule(d)}
                       title="删除自定义模块"

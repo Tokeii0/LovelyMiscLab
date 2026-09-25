@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Bot, Loader2, RefreshCw, Sparkles, Wand2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { api } from "@/lib/bindings";
 import { inTauri } from "@/lib/devMocks";
 import type { Template } from "@/lib/templates";
@@ -42,11 +43,13 @@ export function AiGenerateDialog() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [answer, setAnswer] = useState("");
-
-  if (!open) return null;
+  // Bumped on close: a reply that arrives for an abandoned request is ignored.
+  const reqId = useRef(0);
 
   const close = () => {
-    if (!loading) setOpen(false);
+    reqId.current++;
+    setLoading(false);
+    setOpen(false);
   };
 
   const loadGenerated = (g: Awaited<ReturnType<typeof api.generateWorkflow>>) => {
@@ -81,9 +84,12 @@ export function AiGenerateDialog() {
     setLoading(true);
     setError("");
     setAnswer("");
+    const id = ++reqId.current;
+    const stale = () => id !== reqId.current;
     try {
       if (mode === "explain") {
         const result = await api.explainWorkflow(buildGraph(), prompt.trim());
+        if (stale()) return;
         setAnswer(result.text);
         return;
       }
@@ -97,7 +103,9 @@ export function AiGenerateDialog() {
         ]
           .filter(Boolean)
           .join("\n\n");
-        loadGenerated(await api.generateWorkflow(repairPrompt));
+        const generated = await api.generateWorkflow(repairPrompt);
+        if (stale()) return;
+        loadGenerated(generated);
         return;
       }
       // generate → hand off to the live agent; the user watches it build the
@@ -113,9 +121,9 @@ export function AiGenerateDialog() {
       setView("canvas");
       useAgentStore.getState().launch(task, blob || undefined);
     } catch (e) {
-      setError(errorMessage(e));
+      if (!stale()) setError(errorMessage(e));
     } finally {
-      setLoading(false);
+      if (!stale()) setLoading(false);
     }
   };
 
@@ -123,142 +131,134 @@ export function AiGenerateDialog() {
     mode === "generate" ? "生成流程" : mode === "explain" ? "解释流程" : "修复流程";
 
   return (
-    <div
-      className="fixed inset-0 z-[75] flex items-center justify-center bg-black/50 p-4"
-      onClick={close}
-    >
-      <div
-        className="flex max-h-[88vh] w-[620px] max-w-[95vw] flex-col rounded-lg border border-border bg-card shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2 border-b border-border p-4">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Wand2 className="h-5 w-5" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="text-base font-semibold">AI 工作流助手</div>
-            <div className="text-xs text-muted-foreground">生成、解释或修复当前节点图</div>
-          </div>
-          <button onClick={close} className="text-muted-foreground hover:text-foreground">
-            <X className="h-5 w-5" />
-          </button>
+    <Dialog open={open} onClose={close} className="max-h-[88vh] w-[620px]" ariaLabel="AI 工作流助手">
+      <div className="flex items-center gap-2 border-b border-border p-4">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Wand2 className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-base font-semibold">AI 工作流助手</div>
+          <div className="text-xs text-muted-foreground">生成、解释或修复当前节点图</div>
         </div>
+        <button onClick={close} className="text-muted-foreground hover:text-foreground">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
 
-        <div className="border-b border-border p-3">
-          <div className="grid grid-cols-3 gap-2">
-            {MODES.map((m) => {
-              const Icon = m.icon;
-              return (
-                <button
-                  key={m.mode}
-                  onClick={() => {
-                    setMode(m.mode);
-                    setError("");
-                    setAnswer("");
-                  }}
-                  className={cn(
-                    "rounded-md border px-3 py-2 text-left transition-colors",
-                    mode === m.mode
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border hover:bg-accent"
-                  )}
-                >
-                  <div className="flex items-center gap-1.5 text-sm font-medium">
-                    <Icon className="h-3.5 w-3.5" />
-                    {m.label}
-                  </div>
-                  <div className="mt-0.5 text-[10px] text-muted-foreground">{m.hint}</div>
-                </button>
-              );
-            })}
-          </div>
+      <div className="border-b border-border p-3">
+        <div className="grid grid-cols-3 gap-2">
+          {MODES.map((m) => {
+            const Icon = m.icon;
+            return (
+              <button
+                key={m.mode}
+                onClick={() => {
+                  setMode(m.mode);
+                  setError("");
+                  setAnswer("");
+                }}
+                className={cn(
+                  "rounded-md border px-3 py-2 text-left transition-colors",
+                  mode === m.mode
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border hover:bg-accent"
+                )}
+              >
+                <div className="flex items-center gap-1.5 text-sm font-medium">
+                  <Icon className="h-3.5 w-3.5" />
+                  {m.label}
+                </div>
+                <div className="mt-0.5 text-[10px] text-muted-foreground">{m.hint}</div>
+              </button>
+            );
+          })}
         </div>
+      </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <textarea
+          autoFocus
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          rows={mode === "explain" ? 3 : 4}
+          placeholder={
+            mode === "generate"
+              ? "例如：把这段套娃 base64 一直解码，直到出现 flag，再提取出来"
+              : mode === "explain"
+                ? "可选：告诉 AI 你最关心哪部分，例如失败点、参数含义或后续优化"
+                : "可选：描述希望如何修复，例如保留文件导入、改成自动解码、补 text_output"
+          }
+          className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void run();
+          }}
+        />
+        {mode === "generate" && (
           <textarea
-            autoFocus
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={mode === "explain" ? 3 : 4}
-            placeholder={
-              mode === "generate"
-                ? "例如：把这段套娃 base64 一直解码，直到出现 flag，再提取出来"
-                : mode === "explain"
-                  ? "可选：告诉 AI 你最关心哪部分，例如失败点、参数含义或后续优化"
-                  : "可选：描述希望如何修复，例如保留文件导入、改成自动解码、补 text_output"
-            }
-            className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            value={data}
+            onChange={(e) => setData(e.target.value)}
+            rows={3}
+            placeholder="待处理数据（可选）—— 很长的密文/字节等粘这里；程序会直接填入源节点，AI 只看开头预览，避免抄写出错或截断"
+            className="mt-2 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
             onKeyDown={(e) => {
               if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void run();
             }}
           />
-          {mode === "generate" && (
-            <textarea
-              value={data}
-              onChange={(e) => setData(e.target.value)}
-              rows={3}
-              placeholder="待处理数据（可选）—— 很长的密文/字节等粘这里；程序会直接填入源节点，AI 只看开头预览，避免抄写出错或截断"
-              className="mt-2 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-              onKeyDown={(e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void run();
-              }}
-            />
-          )}
-          {mode === "generate" && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {EXAMPLES.map((ex) => (
-                <button
-                  key={ex}
-                  onClick={() => setPrompt(ex)}
-                  className="rounded-full bg-secondary px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  {ex}
-                </button>
-              ))}
-            </div>
-          )}
-          {mode === "repair" && lastError && (
-            <div className="mt-3 rounded-lg bg-destructive/10 p-2.5 text-xs text-destructive">
-              最近错误：{lastError}
-            </div>
-          )}
-          {error && (
-            <div className="mt-3 whitespace-pre-wrap rounded-lg bg-destructive/10 p-2.5 text-xs text-destructive">
-              {error}
-            </div>
-          )}
-          {answer && (
-            <pre className="mt-3 max-h-72 whitespace-pre-wrap rounded-lg border border-border bg-background p-3 text-xs leading-relaxed">
-              {answer}
-            </pre>
-          )}
-          {!inTauri && (
-            <div className="mt-3 text-[11px] text-muted-foreground">
-              提示：需要在桌面应用内，并在“设置 → AI 模型”配置文本模型后使用。
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between border-t border-border p-4">
-          <span className="text-[11px] text-muted-foreground">Ctrl + Enter 执行</span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={loading}>
-              取消
-            </Button>
-            <Button size="sm" onClick={run} disabled={loading || (mode === "generate" && !prompt.trim())}>
-              {loading ? (
-                <>
-                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> 处理中...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-1 h-3.5 w-3.5" /> {buttonText}
-                </>
-              )}
-            </Button>
+        )}
+        {mode === "generate" && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {EXAMPLES.map((ex) => (
+              <button
+                key={ex}
+                onClick={() => setPrompt(ex)}
+                className="rounded-full bg-secondary px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                {ex}
+              </button>
+            ))}
           </div>
+        )}
+        {mode === "repair" && lastError && (
+          <div className="mt-3 rounded-lg bg-destructive/10 p-2.5 text-xs text-destructive">
+            最近错误：{lastError}
+          </div>
+        )}
+        {error && (
+          <div className="mt-3 whitespace-pre-wrap rounded-lg bg-destructive/10 p-2.5 text-xs text-destructive">
+            {error}
+          </div>
+        )}
+        {answer && (
+          <pre className="mt-3 max-h-72 whitespace-pre-wrap rounded-lg border border-border bg-background p-3 text-xs leading-relaxed">
+            {answer}
+          </pre>
+        )}
+        {!inTauri && (
+          <div className="mt-3 text-[11px] text-muted-foreground">
+            提示：需要在桌面应用内，并在“设置 → AI 模型”配置文本模型后使用。
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between border-t border-border p-4">
+        <span className="text-[11px] text-muted-foreground">Ctrl + Enter 执行</span>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={close}>
+            {loading ? "放弃" : "取消"}
+          </Button>
+          <Button size="sm" onClick={run} disabled={loading || (mode === "generate" && !prompt.trim())}>
+            {loading ? (
+              <>
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> 处理中...
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-1 h-3.5 w-3.5" /> {buttonText}
+              </>
+            )}
+          </Button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

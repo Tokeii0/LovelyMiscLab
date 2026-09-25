@@ -1,7 +1,9 @@
+import type { NodeDescriptor } from "@/lib/types";
+
 /**
- * Short, human-readable descriptions for every built-in node, shown in the module
- * library. Keyed by descriptor id. Kept in the frontend so we don't have to touch
- * ~90 Rust files; falls back to the display name when an id is missing.
+ * Short, one-line summaries for built-in nodes (library, search, palette). The
+ * full text lives in the Rust descriptor's `description`; read both through
+ * `nodeSummary` / `nodeDetail` so every surface shows the same thing.
  */
 export const NODE_DESCRIPTIONS: Record<string, string> = {
   // 输入输出
@@ -307,3 +309,17 @@ export const NODE_DESCRIPTIONS: Record<string, string> = {
   ai_judge: "让 AI 判断/评估内容。",
   ai_vision: "让 AI 识别图片内容。",
 };
+
+/** One-line summary: the curated line, else the first sentence of the descriptor text. */
+export function nodeSummary(d: NodeDescriptor): string {
+  const curated = NODE_DESCRIPTIONS[d.id];
+  if (curated) return curated;
+  const full = (d.description ?? "").trim();
+  const m = /^[^。！？.!?\n]+[。！？.!?]?/.exec(full);
+  return m ? m[0] : full;
+}
+
+/** Longest available description (backend text preferred, summary as fallback). */
+export function nodeDetail(d: NodeDescriptor): string {
+  return (d.description ?? "").trim() || NODE_DESCRIPTIONS[d.id] || "";
+}

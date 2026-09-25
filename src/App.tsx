@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 
 import { api } from "@/lib/bindings";
+import { cn } from "@/lib/utils";
 import { inTauri, mockDescriptors, seedDemo } from "@/lib/devMocks";
 import { startCanvasSync } from "@/flow/canvasSync";
 import { useDescriptorStore } from "@/store/descriptors";
@@ -119,14 +120,26 @@ function App() {
         <TitleBar />
         <div className="flex min-h-0 flex-1">
           <LeftRail />
-          <div className="min-w-0 flex-1">
-            {view === "canvas" && <CanvasView />}
-            {view === "galgame" && <GalgameView />}
-            {view === "modules" && <ModulesView />}
-            {view === "templates" && <TemplatesView />}
-            {view === "runs" && <RunsView />}
-            {view === "resources" && <ResourcesView />}
-            {view === "settings" && <SettingsView />}
+          <div className="relative min-w-0 flex-1">
+            {/* The canvas stays mounted (hidden, not unmounted) so zoom/pan, an
+                in-progress AI build and React Flow's measurements survive view
+                switches. `inert` keeps it out of focus/tab order while hidden. */}
+            <div
+              className={cn("absolute inset-0", view !== "canvas" && "invisible")}
+              inert={view !== "canvas"}
+            >
+              <CanvasView />
+            </div>
+            {view !== "canvas" && (
+              <div className="absolute inset-0 bg-background">
+                {view === "galgame" && <GalgameView />}
+                {view === "modules" && <ModulesView />}
+                {view === "templates" && <TemplatesView />}
+                {view === "runs" && <RunsView />}
+                {view === "resources" && <ResourcesView />}
+                {view === "settings" && <SettingsView />}
+              </div>
+            )}
           </div>
         </div>
         <WindowResizeHandles />

@@ -1,43 +1,17 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, RotateCw } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
+import { categoryRank } from "@/lib/categories";
+import { searchDescriptors } from "@/lib/nodeSearch";
 import type { NodeDescriptor, PortSpec } from "@/lib/types";
 import { useDescriptorStore } from "@/store/descriptors";
 import { usePaletteDrag } from "@/store/paletteDrag";
 
-import { NODE_DESCRIPTIONS } from "./nodeDescriptions";
+import { nodeSummary } from "./nodeDescriptions";
 import { nodeIcon } from "./nodeIcons";
-import { portColor } from "./portColors";
+import { portColor, portTypeLabel } from "./portColors";
 
 const COLLAPSE_KEY = "misclab-collapsed-categories";
-
-// Logical display order for the categories (unlisted ones fall to the end).
-const CATEGORY_ORDER = [
-  "输入输出",
-  "编码/加密",
-  "进制转换",
-  "字符编码",
-  "加密解密",
-  "哈希/摘要",
-  "压缩包",
-  "隐写术",
-  "图像处理",
-  "音频处理",
-  "文本处理",
-  "控制/逻辑",
-  "工具/分析",
-  "AI",
-  "自定义",
-];
-
-function catRank(c: string) {
-  const i = CATEGORY_ORDER.indexOf(c);
-  return i < 0 ? CATEGORY_ORDER.length : i;
-}
-
-function describe(d: NodeDescriptor) {
-  return NODE_DESCRIPTIONS[d.id] || d.description || "";
-}
 
 function Dots({ ports }: { ports: PortSpec[] }) {
   if (ports.length === 0) return <span className="text-muted-foreground/40">无</span>;
@@ -46,7 +20,7 @@ function Dots({ ports }: { ports: PortSpec[] }) {
       {ports.map((p) => (
         <span
           key={p.name}
-          title={`${p.label}: ${p.type}`}
+          title={`${p.label}：${portTypeLabel(p.type)}`}
           className="h-1.5 w-1.5 rounded-full"
           style={{ background: portColor(p.type) }}
         />
@@ -79,20 +53,14 @@ export function ModuleLibrary() {
     });
 
   const grouped = useMemo(() => {
-    const needle = q.toLowerCase();
-    const filtered = list.filter(
-      (d) =>
-        d.displayName.toLowerCase().includes(needle) ||
-        d.category.toLowerCase().includes(needle) ||
-        describe(d).toLowerCase().includes(needle)
-    );
+    const filtered = searchDescriptors(list, q);
     const map = new Map<string, NodeDescriptor[]>();
     for (const d of filtered) {
       const arr = map.get(d.category) ?? [];
       arr.push(d);
       map.set(d.category, arr);
     }
-    return Array.from(map.entries()).sort((a, b) => catRank(a[0]) - catRank(b[0]));
+    return Array.from(map.entries()).sort((a, b) => categoryRank(a[0]) - categoryRank(b[0]));
   }, [list, q]);
 
   const onPointerDown = (e: React.PointerEvent, d: NodeDescriptor) => {
@@ -106,14 +74,14 @@ export function ModuleLibrary() {
   return (
     <div className="flex h-full flex-col bg-card">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <span className="text-xs font-semibold">模块库</span>
-        <RotateCw className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="text-xs font-semibold">节点</span>
+        <span className="text-[10px] text-muted-foreground">{list.length} 个 · 拖到画布</span>
       </div>
       <div className="border-b border-border p-2">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="搜索模块 / 说明…"
+          placeholder="搜索节点（名称 / id / 描述）…"
           className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
@@ -138,7 +106,7 @@ export function ModuleLibrary() {
                 <div className="space-y-1 p-1">
                   {nodes.map((d) => {
                     const Icon = nodeIcon(d.id, d.category);
-                    const desc = describe(d);
+                    const desc = nodeSummary(d);
                     return (
                       <div
                         key={d.id}

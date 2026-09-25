@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
   Bot,
@@ -30,6 +30,12 @@ import { useGraphStore } from "@/store/graph";
 import { useHelpStore } from "@/store/help";
 import { useRunStore } from "@/store/run";
 import { useViewStore, type View } from "@/store/view";
+import { useScrollActiveIntoView } from "@/hooks/useScrollActiveIntoView";
+import { useEscapeToClose } from "@/store/modal";
+import { nodeSummary } from "@/flow/nodeDescriptions";
+import { placeInView } from "@/flow/placement";
+import { searchDescriptors } from "@/lib/nodeSearch";
+import type { NodeDescriptor } from "@/lib/types";
 
 interface Command {
   id: string;
@@ -59,6 +65,7 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -158,27 +165,40 @@ export function CommandPalette() {
         action: () => setView(v.view),
       })),
     ];
-    const nodeCommands: Command[] = descriptors.map((d) => ({
+    return base;
+  }, [setRunMode, setView]);
+
+  const nodeCommand = useCallback(
+    (d: NodeDescriptor): Command => ({
       id: `node-${d.id}`,
       title: `添加节点：${d.displayName}`,
-      hint: `${d.category} · ${d.id}`,
+      hint: `${d.category} · ${nodeSummary(d) || d.id}`,
       icon: nodeIcon(d.id, d.category),
-      keywords: `${d.id} ${d.displayName} ${d.category} ${d.description ?? ""}`,
+      keywords: d.id,
       action: () => {
-        addNode(d, { x: 260 + Math.random() * 120, y: 160 + Math.random() * 120 });
         setView("canvas");
+        addNode(d, placeInView());
       },
-    }));
-    return [...base, ...nodeCommands];
-  }, [addNode, descriptors, setRunMode, setView]);
+    }),
+    [addNode, setView]
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return commands.slice(0, 24);
-    return commands
-      .filter((c) => `${c.title} ${c.hint} ${c.keywords}`.toLowerCase().includes(q))
-      .slice(0, 36);
-  }, [commands, query]);
+    const tokens = q.split(/\s+/);
+    const cmds = commands.filter((c) => {
+      const hay = `${c.title} ${c.hint} ${c.keywords}`.toLowerCase();
+      return tokens.every((t) => hay.includes(t));
+    });
+    // Nodes use the same search (and ranking) as the library and search menu.
+    const nodes = searchDescriptors(descriptors, q).slice(0, 30).map(nodeCommand);
+    return [...cmds, ...nodes].slice(0, 40);
+  }, [commands, descriptors, nodeCommand, query]);
+
+  const close = () => setOpen(false);
+  useEscapeToClose(open, close);
+  useScrollActiveIntoView(listRef, active);
 
   if (!open) return null;
 
@@ -188,7 +208,7 @@ export function CommandPalette() {
   };
 
   return (
-    <div className="fixed inset-0 z-[90] bg-black/35 p-4 pt-[12vh]" onClick={() => setOpen(false)}>
+    <div className="fixed inset-0 z-[90] bg-black/35 p-4 pt-[12vh]" onClick={close}>
       <div
         className="mx-auto flex max-h-[72vh] w-[720px] max-w-[96vw] flex-col overflow-hidden rounded-lg border border-border bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -203,6 +223,7 @@ export function CommandPalette() {
               setActive(0);
             }}
             onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
               if (e.key === "ArrowDown") {
                 setActive((i) => Math.min(i + 1, filtered.length - 1));
                 e.preventDefault();
@@ -212,8 +233,6 @@ export function CommandPalette() {
               } else if (e.key === "Enter" && filtered[active]) {
                 run(filtered[active]);
                 e.preventDefault();
-              } else if (e.key === "Escape") {
-                setOpen(false);
               }
             }}
             placeholder="输入命令、节点名或视图..."
@@ -223,7 +242,7 @@ export function CommandPalette() {
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-2">
           {filtered.length === 0 ? (
             <div className="p-4 text-center text-xs text-muted-foreground">没有匹配命令</div>
           ) : (
@@ -232,6 +251,7 @@ export function CommandPalette() {
               return (
                 <button
                   key={command.id}
+                  data-index={index}
                   onMouseEnter={() => setActive(index)}
                   onClick={() => run(command)}
                   className={cn(
