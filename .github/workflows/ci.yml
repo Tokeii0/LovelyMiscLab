@@ -46,7 +46,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.93.0
         with:
-          components: clippy
+          components: clippy, rustfmt
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
@@ -55,6 +55,13 @@ jobs:
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
+
+      # Cheap gates first (CONTRIBUTING's quality bar).
+      - name: Rust format check
+        run: cargo fmt --all -- --check
+
+      - name: UTF-8 check
+        run: pnpm check:utf8
 
       # Builds ../dist, which the Tauri app crate embeds via generate_context!.
       - name: Frontend typecheck & build

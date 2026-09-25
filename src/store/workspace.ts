@@ -123,12 +123,3 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
 export function addRecentProject(path: string, name: string) {
   useWorkspaceStore.getState().addRecentProject(path, name);
 }
-
-export function currentWorkspaceSnapshot() {
-  const { resources, recentProjects } = getWorkspaceState();
-  return { resources, recentProjects };
-}
-
-function getWorkspaceState() {
-  return useWorkspaceStore.getState();
-}

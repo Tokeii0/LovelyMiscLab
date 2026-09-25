@@ -151,7 +151,8 @@ assert_eq!(out["text"].as_text().unwrap(), "5d41402abc4b2a76b9719d911017c592");
 - `cargo fmt --all` 已格式化；`cargo clippy --all-targets -- -D warnings` 零告警。
 - `cargo test -p misclab-core` 全绿；新节点带测试（编码/解密必须有对照向量）。
 - `pnpm check:utf8` 通过（源码统一 UTF-8，无 BOM）。
-- 若动了应用层/前端：`cargo test -p misclab-app --features mcp`、`pnpm build` 也要过。
+- 若动了应用层/前端：`cargo test -p misclab-app --features mcp`、`pnpm build`、`pnpm test`（vitest）也要过。
+- 以上检查 CI 都会执行（含 `cargo fmt --all --check` 与 `pnpm check:utf8`）。
 
 ## Python → Rust 依赖对照
 
