@@ -13,6 +13,7 @@ use misclab_core::graph::port::PortType;
 use misclab_core::node::descriptor::{NodeDescriptor, ParamSpec, ParamWidget, PortSpec};
 use misclab_core::node::registry::NodeRegistry;
 
+use crate::commands::ai_common::{extract_json, extract_json_array, truncate};
 use crate::error::AppError;
 use crate::state::AppState;
 
@@ -156,20 +157,6 @@ pub(crate) fn build_catalog_filtered(ds: &[NodeDescriptor], only: &[&str]) -> St
         .filter(|d| set.contains(d.id.as_str()))
         .map(catalog_line)
         .collect()
-}
-
-fn extract_json(s: &str) -> Option<&str> {
-    let start = s.find('{')?;
-    let end = s.rfind('}')?;
-    (end > start).then(|| &s[start..=end])
-}
-
-pub(crate) fn truncate(s: &str, n: usize) -> String {
-    if s.chars().count() <= n {
-        s.to_string()
-    } else {
-        format!("{}…", s.chars().take(n).collect::<String>())
-    }
 }
 
 /// Resolve a `"key.port"` reference against known nodes; fill the default port if
@@ -393,7 +380,7 @@ pub async fn generate_workflow(
         .ai
         .llm
         .clone();
-    let registry = state.registry.clone();
+    let registry = state.user_registry();
     tauri::async_runtime::spawn_blocking(move || generate(&registry, &cfg, &prompt))
         .await
         .map_err(|e| AppError::new("join", e.to_string()))?
@@ -415,7 +402,7 @@ pub async fn explain_workflow(
         .ai
         .llm
         .clone();
-    let registry = state.registry.clone();
+    let registry = state.user_registry();
     tauri::async_runtime::spawn_blocking(move || {
         let summary = graph_summary(&registry, &graph);
         let system = "你是 LovelyMiscLab 的工作流讲解助手。请用中文解释节点图的数据流、关键参数、可能的失败点和下一步优化建议。回答要具体、简洁、可执行。";
@@ -456,12 +443,6 @@ fn port_compatible(d: &NodeDescriptor, pt: PortType, dir_out: bool) -> bool {
     } else {
         d.outputs.iter().any(|o| pt.accepts(o.port_type))
     }
-}
-
-fn extract_json_array(s: &str) -> Option<&str> {
-    let start = s.find('[')?;
-    let end = s.rfind(']')?;
-    (end > start).then(|| &s[start..=end])
 }
 
 #[derive(Deserialize)]
@@ -552,7 +533,7 @@ pub async fn suggest_next_nodes(
         .ai
         .llm
         .clone();
-    let registry = state.registry.clone();
+    let registry = state.user_registry();
     tauri::async_runtime::spawn_blocking(move || suggest(&registry, &cfg, &ctx))
         .await
         .map_err(|e| AppError::new("join", e.to_string()))?

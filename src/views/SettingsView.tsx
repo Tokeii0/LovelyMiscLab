@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { api, type AppSettings, type ModelConfig, type ToolStatus } from "@/lib/bindings";
 import { inTauri } from "@/lib/devMocks";
 import { TOOLS } from "@/lib/tools";
+import { useAiStatus } from "@/store/aiStatus";
 import { usePrefs } from "@/store/prefs";
 import { useThemeStore } from "@/store/theme";
 import { useUpdate } from "@/store/update";
@@ -70,11 +71,14 @@ function ModelCard({
   icon: Icon,
   cfg,
   onChange,
+  showContext,
 }: {
   title: string;
   icon: typeof Bot;
   cfg: ModelConfig;
   onChange: (field: keyof ModelConfig, v: string) => void;
+  /** The text model's context window bounds how big the AI agent may build. */
+  showContext?: boolean;
 }) {
   return (
     <div className="flex-1 space-y-3 rounded-xl border border-border bg-card p-4">
@@ -100,9 +104,17 @@ function ModelCard({
         label="API Key"
         value={cfg.apiKey}
         onChange={(v) => onChange("apiKey", v)}
-        placeholder="sk-…"
+        placeholder="sk-…（本地模型可留空）"
         password
       />
+      {showContext && (
+        <Field
+          label="上下文窗口（token，可选）"
+          value={cfg.contextTokens ? String(cfg.contextTokens) : ""}
+          onChange={(v) => onChange("contextTokens", v)}
+          placeholder="留空按 128000 估算；AI 搭建会在接近上限时停止"
+        />
+      )}
     </div>
   );
 }
@@ -316,7 +328,11 @@ export function SettingsView() {
   }, []);
 
   const setAi = (g: "llm" | "vision", field: keyof ModelConfig, v: string) =>
-    setS((c) => ({ ...c, ai: { ...c.ai, [g]: { ...c.ai[g], [field]: v } } }));
+    setS((c) => {
+      // contextTokens is numeric: keep digits only, empty = 0 (unset).
+      const value = field === "contextTokens" ? Number(v.replace(/\D/g, "")) || 0 : v;
+      return { ...c, ai: { ...c.ai, [g]: { ...c.ai[g], [field]: value } } };
+    });
   const setTool = (k: string, v: string) =>
     setS((c) => ({ ...c, tools: { ...c.tools, [k]: v } }));
 
@@ -332,6 +348,7 @@ export function SettingsView() {
       return false;
     }
     setStored(s);
+    useAiStatus.getState().set(s);
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
     return true;
@@ -448,6 +465,7 @@ export function SettingsView() {
                   icon={Bot}
                   cfg={s.ai.llm}
                   onChange={(f, v) => setAi("llm", f, v)}
+                  showContext
                 />
                 <ModelCard
                   title="识图模型 (Vision)"

@@ -5,6 +5,7 @@ import { Loader2, Sparkles } from "lucide-react";
 import { api } from "@/lib/bindings";
 import { inTauri } from "@/lib/devMocks";
 import type { NodeDescriptor } from "@/lib/types";
+import { useAiStatus } from "@/store/aiStatus";
 import { useGraphStore } from "@/store/graph";
 import { usePortSuggest } from "@/store/portSuggest";
 import { errorCode, errorMessage } from "@/lib/errors";
@@ -35,6 +36,7 @@ export function PortSuggest() {
   const [aiReasons, setAiReasons] = useState<Record<string, string>>({});
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
+  const llmReady = useAiStatus((s) => s.llm);
   useEscapeToClose(!!ctx, close);
 
   const srcType = ctx ? resolvePortType(ctx.nodeId, ctx.port, ctx.dir) : undefined;
@@ -182,7 +184,7 @@ export function PortSuggest() {
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-border px-2 py-1.5">
-          {inTauri && !aiKnownUnavailable ? (
+          {inTauri && !aiKnownUnavailable && llmReady !== false ? (
             <button
               onClick={runAi}
               disabled={aiLoading}

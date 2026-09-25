@@ -1,6 +1,7 @@
 //! `#[tauri::command]` surface. Grouped by concern.
 
 pub mod agent;
+pub mod ai_common;
 pub mod ai_workflow;
 pub mod galgame;
 pub mod graph;

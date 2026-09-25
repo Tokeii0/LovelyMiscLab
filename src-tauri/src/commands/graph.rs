@@ -14,16 +14,11 @@ use misclab_core::node::PortMap;
 use misclab_core::progress::{LogLevel, NullSink, ProgressEvent, ProgressSink};
 
 use crate::error::AppError;
-use crate::state::{combined_registry_from, AppState};
+use crate::state::AppState;
 
-/// The effective registry = built-ins + the user's composite modules + script
-/// nodes, merged on demand. Cheap (clones an Arc-valued map) and keeps built-ins
-/// immutable. Delegates to the shared [`combined_registry_from`] so the MCP
-/// server and these commands stay in lock-step.
+/// The effective registry (built-ins + the user's modules); see [`AppState::user_registry`].
 fn combined_registry(state: &AppState) -> NodeRegistry {
-    let comps = state.composites.lock().expect("composites mutex poisoned");
-    let scripts = state.scripts.lock().expect("scripts mutex poisoned");
-    combined_registry_from(state.registry.as_ref(), &comps, &scripts)
+    state.user_registry()
 }
 
 /// Progress messages streamed to the frontend over a Channel, keyed by node id.

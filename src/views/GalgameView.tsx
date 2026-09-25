@@ -22,6 +22,7 @@ import { SceneBackground } from "@/components/galgame/SceneBackground";
 import { useTypewriter } from "@/hooks/useTypewriter";
 import { inTauri } from "@/lib/devMocks";
 import { cn } from "@/lib/utils";
+import { useAiStatus } from "@/store/aiStatus";
 import { type Mood, useGalgameStore } from "@/store/galgame";
 import { toast } from "@/store/toast";
 import { useViewStore } from "@/store/view";
@@ -142,6 +143,8 @@ function Intro() {
   const [picked, setPicked] = useState<Partial<Record<"image" | "file", { url: string; label: string }>>>({});
   const [brief, setBrief] = useState("");
   const start = useGalgameStore((s) => s.start);
+  const llmReady = useAiStatus((s) => s.llm);
+  const setView = useViewStore((s) => s.setView);
 
   const readFile = (slot: "image" | "file", f: File | undefined) => {
     if (!f) return;
@@ -263,9 +266,18 @@ function Intro() {
 
         <div className="mt-4 flex items-center justify-between gap-3">
           <p className="text-[11px] leading-tight text-slate-400">
-            {inTauri
-              ? "需先在「设置」里配置 AI 文本模型（Base URL / 模型 / API Key）。"
-              : "浏览器预览使用模拟剧情；桌面应用内为真实解题。"}
+            {!inTauri ? (
+              "浏览器预览使用模拟剧情；桌面应用内为真实解题。"
+            ) : llmReady === false ? (
+              <>
+                需要先配置 AI 文本模型。
+                <button className="ml-1 text-sky-300 underline" onClick={() => setView("settings")}>
+                  去设置
+                </button>
+              </>
+            ) : (
+              "Misca 由你在设置中配置的 AI 文本模型驱动。"
+            )}
           </p>
           <Button disabled={!canStart} onClick={() => start(payload, mode, brief)}>
             <Play className="h-4 w-4" />

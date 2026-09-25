@@ -5,6 +5,7 @@ import { api } from "@/lib/bindings";
 import { cn } from "@/lib/utils";
 import { inTauri, mockDescriptors, seedDemo } from "@/lib/devMocks";
 import { startCanvasSync } from "@/flow/canvasSync";
+import { useAiStatus } from "@/store/aiStatus";
 import { useDescriptorStore } from "@/store/descriptors";
 import { useGraphStore } from "@/store/graph";
 import { usePaletteDrag } from "@/store/paletteDrag";
@@ -66,6 +67,7 @@ function App() {
             toast.error("节点目录加载失败", { error: e, actions: [{ label: "重试", run: load }] })
           );
       load();
+      void useAiStatus.getState().load();
       // Auto-check for a newer release shortly after launch (opens the update
       // dialog only when one is available; silent otherwise).
       const t = setTimeout(() => void useUpdate.getState().check({ silent: true }), 3000);

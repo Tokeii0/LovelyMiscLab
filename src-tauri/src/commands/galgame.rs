@@ -22,9 +22,9 @@ use misclab_core::node::{NodeEnv, PortMap};
 use misclab_core::progress::NullSink;
 use misclab_core::CoreError;
 
-use crate::commands::ai_workflow::truncate;
+use crate::commands::ai_common::{extract_json, truncate};
 use crate::error::AppError;
-use crate::state::{combined_registry_from, AppState};
+use crate::state::AppState;
 
 // ---- wire types -------------------------------------------------------------
 
@@ -148,12 +148,6 @@ struct LlmTurn {
 }
 
 // ---- helpers ---------------------------------------------------------------
-
-fn extract_json(s: &str) -> Option<&str> {
-    let start = s.find('{')?;
-    let end = s.rfind('}')?;
-    (end > start).then(|| &s[start..=end])
-}
 
 fn normalize_mood(m: &str) -> String {
     match m.trim() {
@@ -1467,7 +1461,7 @@ fn narrate(
         return Ok(t);
     }
     let system2 = format!("{system}\n\n重要：上一次回复不是合法 JSON。这次务必只输出一个 JSON 对象，narration 简短，不要任何多余文字或代码块。");
-    if let Ok(raw2) = ai::chat(cfg, &system2, &user) {
+    if let Ok(raw2) = ai::chat_with_temperature(cfg, &system2, &user, 0.4) {
         if let Some(t) = parse_turn(&raw2, &descriptors, &hints) {
             return Ok(t);
         }
@@ -1580,11 +1574,7 @@ pub async fn galgame_step(
     req: GalgameStepRequest,
     on_job: Channel<String>,
 ) -> Result<GalgameTurn, AppError> {
-    let registry = {
-        let comps = state.composites.lock().expect("composites mutex poisoned");
-        let scripts = state.scripts.lock().expect("scripts mutex poisoned");
-        combined_registry_from(state.registry.as_ref(), &comps, &scripts)
-    };
+    let registry = state.user_registry();
     let env = state
         .settings
         .lock()

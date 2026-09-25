@@ -16,7 +16,14 @@ pub struct ModelConfig {
     pub api_key: String,
     /// Base URL, e.g. `https://api.openai.com/v1`.
     pub base_url: String,
+    /// The model's context window in tokens; 0 = unknown (a conservative default
+    /// applies). Bounds how large the AI agent lets its transcript grow.
+    #[serde(default)]
+    pub context_tokens: u64,
 }
+
+/// Context window assumed when the user hasn't set one.
+pub const DEFAULT_CONTEXT_TOKENS: u64 = 128_000;
 
 /// The two configurable models (text LLM + vision).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -27,8 +34,18 @@ pub struct AiConfig {
 }
 
 impl ModelConfig {
+    /// Base URL + model are enough: local OpenAI-compatible servers (Ollama,
+    /// LM Studio…) often need no API key.
     pub fn is_configured(&self) -> bool {
         !self.base_url.trim().is_empty() && !self.model.trim().is_empty()
+    }
+
+    pub fn context_limit(&self) -> u64 {
+        if self.context_tokens > 0 {
+            self.context_tokens
+        } else {
+            DEFAULT_CONTEXT_TOKENS
+        }
     }
 
     fn endpoint(&self) -> String {
@@ -36,28 +53,97 @@ impl ModelConfig {
     }
 }
 
-fn content_of(v: &serde_json::Value) -> String {
-    v["choices"][0]["message"]["content"]
-        .as_str()
-        .unwrap_or_default()
-        .to_string()
+/// The provider's own explanation from an error body (OpenAI-style
+/// `{"error":{"message":…}}`, or the raw text), shortened.
+fn provider_message(body: &str) -> String {
+    let msg = serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| {
+            v["error"]["message"]
+                .as_str()
+                .or_else(|| v["error"].as_str())
+                .or_else(|| v["message"].as_str())
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| body.trim().to_string());
+    msg.chars().take(300).collect()
 }
 
-fn post(cfg: &ModelConfig, body: serde_json::Value) -> Result<String, CoreError> {
+/// POST a chat-completions request; HTTP errors carry the provider's message
+/// (e.g. "invalid api key", "model not found") instead of a bare status.
+fn send(cfg: &ModelConfig, body: serde_json::Value) -> Result<serde_json::Value, CoreError> {
     let resp = ureq::post(&cfg.endpoint())
         .timeout(AI_HTTP_TIMEOUT)
         .set("Authorization", &format!("Bearer {}", cfg.api_key))
         .set("Content-Type", "application/json")
-        .send_json(body)
-        .map_err(|e| CoreError::Other(format!("AI 请求失败: {e}")))?;
+        .send_json(body);
+    let resp = match resp {
+        Ok(r) => r,
+        Err(ureq::Error::Status(code, r)) => {
+            let detail = provider_message(&r.into_string().unwrap_or_default());
+            let hint = match code {
+                401 | 403 => "（请检查 API Key）",
+                404 => "（请检查 Base URL 与模型名）",
+                429 => "（请求过于频繁或额度不足）",
+                _ => "",
+            };
+            return Err(CoreError::Other(format!(
+                "AI 请求失败（HTTP {code}）{hint}：{detail}"
+            )));
+        }
+        Err(e) => return Err(CoreError::Other(format!("AI 请求失败（网络）：{e}"))),
+    };
     let json: serde_json::Value = resp
         .into_json()
         .map_err(|e| CoreError::Other(format!("AI 响应解析失败: {e}")))?;
-    Ok(content_of(&json))
+    // Some gateways answer 200 with an error object, or no choices at all.
+    if json
+        .get("choices")
+        .and_then(|c| c.as_array())
+        .is_none_or(|c| c.is_empty())
+    {
+        return Err(CoreError::Other(format!(
+            "AI 响应没有内容：{}",
+            provider_message(&json.to_string())
+        )));
+    }
+    Ok(json)
+}
+
+fn post(cfg: &ModelConfig, body: serde_json::Value) -> Result<String, CoreError> {
+    let json = send(cfg, body)?;
+    Ok(json["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string())
+}
+
+/// Whether an error from a tool-calling request means "this endpoint/model
+/// can't do tool calls" (so a one-shot fallback makes sense) rather than a
+/// network, auth or configuration problem that a fallback would only repeat.
+pub fn tools_unsupported(e: &CoreError) -> bool {
+    match e {
+        CoreError::Other(m) => {
+            let m = m.to_ascii_lowercase();
+            m.contains("http 4") && (m.contains("tool") || m.contains("function"))
+        }
+        _ => false,
+    }
 }
 
 /// A single-turn chat completion.
 pub fn chat(cfg: &ModelConfig, system: &str, user: &str) -> Result<String, CoreError> {
+    chat_with_temperature(cfg, system, user, 0.0)
+}
+
+/// A single-turn chat completion at `temperature` (a retry after an unusable
+/// answer benefits from a little variety instead of the same reply again).
+pub fn chat_with_temperature(
+    cfg: &ModelConfig,
+    system: &str,
+    user: &str,
+    temperature: f32,
+) -> Result<String, CoreError> {
     if !cfg.is_configured() {
         return Err(CoreError::AiNotConfigured(
             "AI 文本模型未配置（请在设置中填写）".into(),
@@ -70,7 +156,7 @@ pub fn chat(cfg: &ModelConfig, system: &str, user: &str) -> Result<String, CoreE
     messages.push(serde_json::json!({ "role": "user", "content": user }));
     post(
         cfg,
-        serde_json::json!({ "model": cfg.model, "messages": messages, "temperature": 0 }),
+        serde_json::json!({ "model": cfg.model, "messages": messages, "temperature": temperature }),
     )
 }
 
@@ -183,17 +269,8 @@ pub fn chat_step(
         "messages": messages,
         "tools": tools_json,
     });
-    // We need the full message object (not just `content`), so we can't reuse
-    // `post()` here.
-    let resp = ureq::post(&cfg.endpoint())
-        .timeout(AI_HTTP_TIMEOUT)
-        .set("Authorization", &format!("Bearer {}", cfg.api_key))
-        .set("Content-Type", "application/json")
-        .send_json(body)
-        .map_err(|e| CoreError::Other(format!("AI 请求失败: {e}")))?;
-    let json: serde_json::Value = resp
-        .into_json()
-        .map_err(|e| CoreError::Other(format!("AI 响应解析失败: {e}")))?;
+    // We need the full message object (not just `content`).
+    let json = send(cfg, body)?;
     let usage = Usage {
         prompt_tokens: json["usage"]["prompt_tokens"].as_u64().unwrap_or(0),
         completion_tokens: json["usage"]["completion_tokens"].as_u64().unwrap_or(0),
@@ -218,4 +295,38 @@ pub fn chat_step(
         AssistantTurn::Content(msg["content"].as_str().unwrap_or_default().to_string()),
         usage,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provider_message_prefers_the_error_text() {
+        assert_eq!(
+            provider_message(r#"{"error":{"message":"Incorrect API key provided"}}"#),
+            "Incorrect API key provided"
+        );
+        assert_eq!(provider_message("upstream timeout"), "upstream timeout");
+    }
+
+    #[test]
+    fn only_tool_rejections_count_as_tools_unsupported() {
+        let tools =
+            CoreError::Other("AI 请求失败（HTTP 400）：this model does not support tools".into());
+        let auth = CoreError::Other("AI 请求失败（HTTP 401）（请检查 API Key）：bad key".into());
+        let net = CoreError::Other("AI 请求失败（网络）：dns error".into());
+        assert!(tools_unsupported(&tools));
+        assert!(!tools_unsupported(&auth));
+        assert!(!tools_unsupported(&net));
+        assert!(!tools_unsupported(&CoreError::AiNotConfigured("x".into())));
+    }
+
+    #[test]
+    fn context_limit_defaults_when_unset() {
+        let mut cfg = ModelConfig::default();
+        assert_eq!(cfg.context_limit(), DEFAULT_CONTEXT_TOKENS);
+        cfg.context_tokens = 32_000;
+        assert_eq!(cfg.context_limit(), 32_000);
+    }
 }

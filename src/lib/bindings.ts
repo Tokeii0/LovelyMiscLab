@@ -34,6 +34,8 @@ export interface ModelConfig {
   model: string;
   apiKey: string;
   baseUrl: string;
+  /** Context window in tokens; 0/absent = unknown (the backend assumes 128k). */
+  contextTokens?: number;
 }
 
 export interface AiConfig {

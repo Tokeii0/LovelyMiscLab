@@ -22,14 +22,11 @@ use misclab_core::node::registry::NodeRegistry;
 use misclab_core::node::NodeEnv;
 use misclab_core::progress::NullSink;
 
-use crate::commands::ai_workflow::{build_catalog, generate, param_port_type, pt_str, truncate};
+use crate::commands::ai_common::truncate;
+use crate::commands::ai_workflow::{build_catalog, generate, param_port_type, pt_str};
 use crate::error::AppError;
 use crate::state::AppState;
 
-/// Primary ceiling: stop once the running transcript approaches the model's
-/// context window. Modern models handle ~1M-token contexts, so let the agent
-/// build as large as that allows. Tracked from each response's `usage`.
-const MAX_CONTEXT_TOKENS: u64 = 1_000_000;
 /// Runaway backstop on LLM turns (each turn may emit many tool calls) — the
 /// effective bound only when the provider returns no token usage. Actual work is
 /// bounded by NODES_MAX / RUN_BUDGET and the token budget above.
@@ -722,7 +719,9 @@ fn run_agent(
         let (turn, usage) = match ai::chat_step(cfg, &messages, &tools) {
             Ok(t) => t,
             Err(e) => {
-                if step == 0 {
+                // Only a "no tool calls here" rejection warrants the one-shot
+                // path; auth/network/config errors would just fail again there.
+                if step == 0 && ai::tools_unsupported(&e) {
                     fallback(
                         registry,
                         cfg,
@@ -786,10 +785,11 @@ fn run_agent(
                 }
             }
         }
-        // Primary ceiling: stop before the transcript outgrows the context window.
-        // (total_tokens ≈ current transcript + last completion; the next turn's
-        // prompt would be larger still.)
-        if usage.total_tokens >= MAX_CONTEXT_TOKENS {
+        // Primary ceiling: stop before the transcript outgrows the model's context
+        // window (Settings → AI 模型; conservative default when unset). Leave ~20%
+        // headroom: total_tokens ≈ current transcript + last completion, and the
+        // next turn's prompt is larger still.
+        if usage.total_tokens >= cfg.context_limit() / 5 * 4 {
             let _ = on_event.send(AgentEvent::Done {
                 notes: format!(
                     "已接近上下文上限（约 {} tokens），已尽力搭建",
@@ -818,7 +818,8 @@ pub async fn agent_run(
     }
     let env = state.settings.lock().expect("settings mutex").clone();
     let cfg = env.ai.llm.clone();
-    let registry = state.registry.clone();
+    // Built-ins plus the user's composite/script modules, like the canvas palette.
+    let registry = state.user_registry();
     let cache = state.cache.clone();
     let cancel = CancellationToken::new();
     let job = state.jobs.start(cancel.clone());

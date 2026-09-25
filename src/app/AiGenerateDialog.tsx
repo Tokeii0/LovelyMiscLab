@@ -11,6 +11,7 @@ import { loadTemplate } from "@/flow/loadTemplate";
 import { buildGraph } from "@/flow/runner";
 import { useAgentStore } from "@/store/agent";
 import { useAiStore } from "@/store/ai";
+import { useAiStatus } from "@/store/aiStatus";
 import { useRunStore } from "@/store/run";
 import { useViewStore } from "@/store/view";
 import { errorMessage } from "@/lib/errors";
@@ -37,6 +38,7 @@ export function AiGenerateDialog() {
   const setOpen = useAiStore((s) => s.setOpen);
   const setView = useViewStore((s) => s.setView);
   const lastError = useRunStore((s) => s.lastError);
+  const llmReady = useAiStatus((s) => s.llm);
   const [mode, setMode] = useState<Mode>("generate");
   const [prompt, setPrompt] = useState("");
   const [data, setData] = useState("");
@@ -221,6 +223,21 @@ export function AiGenerateDialog() {
         {mode === "repair" && lastError && (
           <div className="mt-3 rounded-lg bg-destructive/10 p-2.5 text-xs text-destructive">
             最近错误：{lastError}
+          </div>
+        )}
+        {llmReady === false && (
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs text-amber-700 dark:text-amber-400">
+            <span className="flex-1">还没有配置 AI 文本模型（Base URL 与模型名），配置后才能使用。</span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                close();
+                setView("settings");
+              }}
+            >
+              去设置
+            </Button>
           </div>
         )}
         {error && (

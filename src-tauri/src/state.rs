@@ -27,6 +27,17 @@ pub fn combined_registry_from(
     reg
 }
 
+impl AppState {
+    /// The registry the user actually works with: built-ins + their composite
+    /// modules + script nodes. Every command that lists or runs nodes (canvas,
+    /// AI agent/generator, 故事模式) uses this, so they all see the same nodes.
+    pub fn user_registry(&self) -> NodeRegistry {
+        let comps = self.composites.lock().expect("composites mutex poisoned");
+        let scripts = self.scripts.lock().expect("scripts mutex poisoned");
+        combined_registry_from(self.registry.as_ref(), &comps, &scripts)
+    }
+}
+
 pub struct AppState {
     pub db: Db,
     /// Built-in node registry, built once at startup. The effective registry for
