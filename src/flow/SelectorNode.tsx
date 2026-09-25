@@ -58,7 +58,7 @@ function SelectorNodeImpl({ id, data: raw, selected }: NodeProps) {
   // the first option so the connected parameter gets a valid value immediately.
   useEffect(() => {
     if (options && options.length > 0 && !options.includes(value)) {
-      setParam(id, "value", options[0]);
+      setParam(id, "value", options[0], { history: false });
     }
   }, [options, value, id, setParam]);
 

@@ -96,7 +96,7 @@ export function KeyboardShortcuts() {
         if (clip) {
           clipboard = clip;
           pasteOffset = 0;
-          g.nodes.filter((n) => n.selected).forEach((n) => g.deleteNode(n.id));
+          g.deleteSelection();
           e.preventDefault();
         }
       } else if (mod && key === "d") {
@@ -109,13 +109,7 @@ export function KeyboardShortcuts() {
         g.selectAll();
         e.preventDefault();
       } else if (key === "delete" || key === "backspace") {
-        const nodes = g.nodes.filter((n) => n.selected);
-        const dges = g.edges.filter((ed) => ed.selected);
-        if (nodes.length || dges.length) {
-          nodes.forEach((n) => g.deleteNode(n.id));
-          dges.forEach((ed) => g.deleteEdge(ed.id));
-          e.preventDefault();
-        }
+        if (g.deleteSelection()) e.preventDefault();
       } else if (key === "escape") {
         g.deselectAll();
       }

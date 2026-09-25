@@ -5,6 +5,7 @@ import { TEMPLATES, TEMPLATE_CATEGORIES, type Template } from "@/lib/templates";
 import { loadTemplate } from "@/flow/loadTemplate";
 import { useDescriptorStore } from "@/store/descriptors";
 import { useViewStore } from "@/store/view";
+import { toast } from "@/store/toast";
 
 /** A compact, fully-clickable template card. */
 function Card({ t, onUse }: { t: Template; onUse: (t: Template) => void }) {
@@ -52,7 +53,14 @@ export function TemplatesView() {
   );
 
   const use = (t: Template) => {
-    loadTemplate(t);
+    const { loaded, missing } = loadTemplate(t);
+    if (loaded === 0) {
+      toast.error("模板无法载入", {
+        detail: missing.length ? `缺少节点：${missing.join("、")}` : "节点目录尚未加载完成，请稍后再试",
+      });
+      return;
+    }
+    if (missing.length) toast.info(`部分节点未载入：${missing.join("、")}`);
     setView("canvas");
   };
 

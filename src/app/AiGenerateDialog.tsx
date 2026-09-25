@@ -58,7 +58,7 @@ export function AiGenerateDialog() {
       nodes: g.nodes,
       edges: g.edges,
     };
-    const loaded = loadTemplate(template);
+    const { loaded } = loadTemplate(template);
     if (loaded === 0) {
       setError("AI 返回的流程为空或节点无法识别，请换个描述再试。");
       return;

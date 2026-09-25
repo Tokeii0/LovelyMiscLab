@@ -72,20 +72,22 @@ export function PortSuggest() {
       g.nodes.some((n) => Math.abs(n.position.x - x) < 60 && Math.abs(n.position.y - yy) < 60);
     while (occupied(y)) y += 90;
     const pos = { x, y };
-    const newId = g.addNode(d, pos);
-    if (ctx.dir === "out") {
-      const match = firstCompatibleInput(d, srcType);
-      if (match) {
-        if (match.isParam) g.toggleParamInput(newId, match.port);
-        g.onConnect({ source: ctx.nodeId, sourceHandle: ctx.port, target: newId, targetHandle: match.port });
+    // Add + promote + connect is one user action → one undo step.
+    g.transact(() => {
+      const newId = g.addNode(d, pos);
+      if (ctx.dir === "out") {
+        const match = firstCompatibleInput(d, srcType);
+        if (match) {
+          if (match.isParam) g.toggleParamInput(newId, match.port);
+          g.onConnect({ source: ctx.nodeId, sourceHandle: ctx.port, target: newId, targetHandle: match.port });
+        }
+      } else {
+        const outPort = firstCompatibleOutput(d, srcType);
+        if (outPort) {
+          g.onConnect({ source: newId, sourceHandle: outPort, target: ctx.nodeId, targetHandle: ctx.port });
+        }
       }
-    } else {
-      const outPort = firstCompatibleOutput(d, srcType);
-      if (outPort) {
-        g.onConnect({ source: newId, sourceHandle: outPort, target: ctx.nodeId, targetHandle: ctx.port });
-      }
-    }
-    g.setSelected(newId);
+    });
     rf.setCenter(pos.x + 100, pos.y + 40, { zoom: rf.getViewport().zoom, duration: 250 });
     close();
   };

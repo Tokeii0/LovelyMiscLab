@@ -25,7 +25,7 @@ function placeDuringBuild(n: number): { x: number; y: number } {
  * one-node-at-a-time build: each node is placed, then the edges that belong to
  * it fire right after it (pulled forward regardless of how the model batched the
  * tool calls), the camera follows, and every step shows the agent's one-line
- * 巧思. Clears the canvas first — this is a fresh build.
+ * 巧思. Replaces the canvas (once the first node arrives) — this is a fresh build.
  */
 export async function runAgent(
   task: string,
@@ -54,9 +54,11 @@ export async function runAgent(
         `${data.slice(0, 200)}${data.length > 200 ? " …（后略）" : ""}`
       : task;
 
-  useGraphStore.getState().clear();
-  // Collapse the whole build into one undo entry (the pre-build snapshot).
-  useGraphStore.getState().setSuppressHistory(true);
+  // Collapse the whole build into one undo entry (the pre-build snapshot). The
+  // canvas is only cleared once the first node actually arrives, so a failed
+  // request (no AI configured, network error…) leaves the user's graph alone.
+  useGraphStore.getState().beginBatch();
+  let cleared = false;
   useAgentStore.getState().start();
 
   const follow = (pos: { x: number; y: number }) =>
@@ -103,8 +105,12 @@ export async function runAgent(
           a.pushStep({ kind: "error", text: `未知节点 ${ev.descriptorId}`, ok: false });
           return false;
         }
+        if (!cleared) {
+          gg.clear();
+          cleared = true;
+        }
         const pos = placeDuringBuild(placed++);
-        const realId = gg.addNode(d, pos);
+        const realId = useGraphStore.getState().addNode(d, pos);
         idMap[ev.key] = realId;
         placedKeys.add(ev.key);
         if (ev.params && typeof ev.params === "object") {
@@ -119,7 +125,6 @@ export async function runAgent(
           dataInjected = true;
           a.pushStep({ kind: "param", text: `⚙ 已填入数据 → ${d.displayName}`, detail: `${data.length} 字` });
         }
-        gg.setSelected(realId);
         follow(pos);
         a.pushStep({ kind: "add", text: `＋ ${d.displayName}`, detail: ev.reason || undefined });
         // Interleave: pull this node's edges — from the deferred list or from
@@ -216,7 +221,7 @@ export async function runAgent(
     }
     await runPromise;
   } finally {
-    useGraphStore.getState().setSuppressHistory(false);
+    useGraphStore.getState().endBatch();
     const gg = useGraphStore.getState();
     if (completed && gg.nodes.length > 0) {
       gg.arrangeNodes(viewportAspect());

@@ -57,7 +57,10 @@ export function startCanvasSync(): () => void {
     applyingRemote = true;
     try {
       rev = Math.max(rev, e.payload.rev);
-      useGraphStore.getState().loadFlow(e.payload.nodes, e.payload.edges);
+      // Recorded as one undo step, keeping results of nodes the AI didn't touch.
+      useGraphStore
+        .getState()
+        .loadFlow(e.payload.nodes, e.payload.edges, { history: "record", keepRuntime: true });
     } finally {
       applyingRemote = false;
     }

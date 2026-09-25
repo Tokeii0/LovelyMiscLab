@@ -5,20 +5,32 @@ import { useGraphStore } from "@/store/graph";
 /**
  * Replace the current graph with a template: mint fresh node ids, apply preset
  * params, and reconnect edges by template-local key. Returns how many nodes were
- * actually created (descriptors missing from the registry are skipped).
+ * created and which descriptor ids were missing from the registry (skipped).
  */
-export function loadTemplate(t: Template): number {
+export function loadTemplate(t: Template): { loaded: number; missing: string[] } {
+  const byId = useDescriptorStore.getState().byId;
+  // Nothing recognizable (catalog not loaded yet, or an AI result made of unknown
+  // nodes): leave the canvas untouched instead of wiping it for an empty graph.
+  if (!t.nodes.some((n) => byId[n.descriptorId])) {
+    return { loaded: 0, missing: t.nodes.map((n) => n.descriptorId) };
+  }
+  // The whole replacement is one undo step.
+  return useGraphStore.getState().transact(() => buildTemplate(t));
+}
+
+function buildTemplate(t: Template): { loaded: number; missing: string[] } {
   const g = useGraphStore.getState();
   const byId = useDescriptorStore.getState().byId;
 
   g.clear();
   const idMap: Record<string, string> = {};
+  const missing: string[] = [];
   let loaded = 0;
 
   for (const n of t.nodes) {
     const descriptor = byId[n.descriptorId];
     if (!descriptor) {
-      console.warn(`模板「${t.name}」缺少节点: ${n.descriptorId}`);
+      missing.push(n.descriptorId);
       continue;
     }
     const id = g.addNode(descriptor, n.position);
@@ -41,6 +53,6 @@ export function loadTemplate(t: Template): number {
     });
   }
 
-  g.setSelected(null);
-  return loaded;
+  g.deselectAll();
+  return { loaded, missing };
 }
