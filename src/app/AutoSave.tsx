@@ -1,42 +1,29 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 
-import { saveAutoDraft } from "@/lib/project";
+import { installCloseGuard, offerDraftRestore, saveAutoDraft } from "@/lib/project";
 import { useGraphStore } from "@/store/graph";
 import { useProjectStore } from "@/store/project";
 
-/** Persist a lightweight recovery draft whenever the editable graph changes. */
+/** Keeps a crash-recovery draft of the canvas, offers it back on startup, and
+ * asks before the window closes with unsaved edits. */
 export function AutoSave() {
-  const nodes = useGraphStore((s) => s.nodes);
-  const edges = useGraphStore((s) => s.edges);
-  const projectName = useProjectStore((s) => s.name);
-  const projectPath = useProjectStore((s) => s.path);
-
-  const signature = useMemo(
-    () =>
-      JSON.stringify([
-        projectName,
-        projectPath,
-        nodes.map((n) => [
-          n.id,
-          n.data.descriptorId,
-          n.data.label,
-          n.data.color,
-          n.data.params,
-          n.data.inputParams,
-          n.data.disabled,
-          n.position.x,
-          n.position.y,
-        ]),
-        edges.map((e) => [e.id, e.source, e.sourceHandle, e.target, e.targetHandle, e.type]),
-      ]),
-    [edges, nodes, projectName, projectPath]
-  );
+  // editRevision moves on every user edit (never on run results or selection),
+  // so this doesn't re-serialize the graph on each progress event or drag frame.
+  const editRevision = useGraphStore((s) => s.editRevision);
+  const savedRevision = useProjectStore((s) => s.savedRevision);
+  const name = useProjectStore((s) => s.name);
+  const path = useProjectStore((s) => s.path);
 
   useEffect(() => {
-    if (nodes.length === 0 && edges.length === 0) return;
+    offerDraftRestore();
+    return installCloseGuard();
+  }, []);
+
+  useEffect(() => {
+    if (useGraphStore.getState().nodes.length === 0) return;
     const t = window.setTimeout(saveAutoDraft, 600);
     return () => window.clearTimeout(t);
-  }, [signature, nodes.length, edges.length]);
+  }, [editRevision, savedRevision, name, path]);
 
   return null;
 }

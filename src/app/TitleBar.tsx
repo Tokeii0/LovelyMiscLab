@@ -27,17 +27,19 @@ import {
 import logo from "@/assets/logo.svg";
 import { cn } from "@/lib/utils";
 import { inTauri } from "@/lib/devMocks";
-import { newFlow, openFlow, saveFlow } from "@/lib/project";
+import { newFlow, openFlow, renameFlow, saveFlow } from "@/lib/project";
 import { pauseRun, stopRun } from "@/flow/runner";
 import { useAiStore } from "@/store/ai";
 import { useHelpStore } from "@/store/help";
-import { useProjectStore } from "@/store/project";
+import { promptDialog } from "@/store/confirm";
+import { useProjectDirty, useProjectStore } from "@/store/project";
 import { useGraphStore } from "@/store/graph";
 import { useModuleDialogStore } from "@/store/moduleDialog";
 import { useScriptDialogStore } from "@/store/scriptDialog";
 import { useRunStore } from "@/store/run";
 import { useThemeStore } from "@/store/theme";
 import { useViewStore } from "@/store/view";
+import { clearCanvas } from "@/flow/canvasActions";
 
 function IconButton({
   onClick,
@@ -69,7 +71,6 @@ export function TitleBar() {
   const toggleTheme = useThemeStore((s) => s.toggle);
   const mode = useRunStore((s) => s.mode);
   const setMode = useRunStore((s) => s.setMode);
-  const clear = useGraphStore((s) => s.clear);
   const undo = useGraphStore((s) => s.undo);
   const redo = useGraphStore((s) => s.redo);
   const canUndo = useGraphStore((s) => s.past.length > 0);
@@ -77,10 +78,12 @@ export function TitleBar() {
   const selectedCount = useGraphStore((s) => s.nodes.reduce((a, n) => a + (n.selected ? 1 : 0), 0));
   const setView = useViewStore((s) => s.setView);
   const projectName = useProjectStore((s) => s.name);
-  const renameProject = () => {
-    const next = window.prompt("流程名称", projectName);
-    if (next && next.trim()) useProjectStore.getState().setName(next.trim());
+  const dirty = useProjectDirty();
+  const renameProject = async () => {
+    const next = await promptDialog({ title: "重命名流程", initial: projectName, confirmText: "重命名" });
+    if (next != null) renameFlow(next);
   };
+
 
   const [maximized, setMaximized] = useState(false);
   useEffect(() => {
@@ -115,7 +118,7 @@ export function TitleBar() {
       <div className="mx-1 h-4 w-px bg-border" />
       <div className="flex items-center gap-0.5">
         <button
-          onClick={newFlow}
+          onClick={() => void newFlow()}
           title="新建 (Ctrl+N)"
           className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
@@ -137,11 +140,13 @@ export function TitleBar() {
         </button>
       </div>
       <button
-        onClick={renameProject}
-        title="重命名流程"
-        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+        onClick={() => void renameProject()}
+        title={dirty ? "有未保存的修改 · 点击重命名" : "重命名流程"}
+        className="flex min-w-0 max-w-[220px] items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
       >
-        {projectName} <Pencil className="h-3 w-3" />
+        <span className="truncate">{projectName}</span>
+        {dirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />}
+        <Pencil className="h-3 w-3 shrink-0" />
       </button>
       <span
         className="flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]"
@@ -177,7 +182,7 @@ export function TitleBar() {
           </button>
         </div>
         <button
-          onClick={clear}
+          onClick={() => void clearCanvas()}
           className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <Trash2 className="h-3.5 w-3.5" /> 清空

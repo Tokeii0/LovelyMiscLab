@@ -6,6 +6,8 @@ import { loadTemplate } from "@/flow/loadTemplate";
 import { useDescriptorStore } from "@/store/descriptors";
 import { useViewStore } from "@/store/view";
 import { toast } from "@/store/toast";
+import { guardUnsaved } from "@/lib/project";
+import { useProjectStore } from "@/store/project";
 
 /** A compact, fully-clickable template card. */
 function Card({ t, onUse }: { t: Template; onUse: (t: Template) => void }) {
@@ -52,7 +54,8 @@ export function TemplatesView() {
     [cat]
   );
 
-  const use = (t: Template) => {
+  const use = async (t: Template) => {
+    if (!(await guardUnsaved("载入模板"))) return;
     const { loaded, missing } = loadTemplate(t);
     if (loaded === 0) {
       toast.error("模板无法载入", {
@@ -61,6 +64,8 @@ export function TemplatesView() {
       return;
     }
     if (missing.length) toast.info(`部分节点未载入：${missing.join("、")}`);
+    // A template is a new document: saving must not overwrite the file opened before.
+    useProjectStore.getState().detach(t.name);
     setView("canvas");
   };
 

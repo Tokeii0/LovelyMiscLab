@@ -19,6 +19,7 @@ const TINT: Record<ToastKind, string> = {
 export function Toaster() {
   const items = useToastStore((s) => s.items);
   const dismiss = useToastStore((s) => s.dismiss);
+  const settle = useToastStore((s) => s.settle);
   if (items.length === 0) return null;
 
   return (
@@ -45,7 +46,7 @@ export function Toaster() {
                     <button
                       key={a.label}
                       onClick={() => {
-                        dismiss(t.id);
+                        settle(t.id);
                         a.run();
                       }}
                       className="rounded-md border border-border px-2 py-0.5 text-xs font-medium hover:bg-accent"

@@ -5,7 +5,9 @@ import { api } from "@/lib/bindings";
 import { inTauri, mockDescriptors, seedDemo } from "@/lib/devMocks";
 import { startCanvasSync } from "@/flow/canvasSync";
 import { useDescriptorStore } from "@/store/descriptors";
+import { useGraphStore } from "@/store/graph";
 import { usePaletteDrag } from "@/store/paletteDrag";
+import { useProjectStore } from "@/store/project";
 import { useViewStore } from "@/store/view";
 import { AiGenerateDialog } from "@/app/AiGenerateDialog";
 import { AutoSave } from "@/app/AutoSave";
@@ -68,6 +70,7 @@ function App() {
     // Browser dev preview (no Tauri IPC): seed mocks + a demo graph.
     setDescriptors(mockDescriptors);
     seedDemo();
+    useProjectStore.getState().markSaved(useGraphStore.getState().editRevision);
   }, [setDescriptors]);
 
   // Keep the backend canvas mirror in sync so the embedded MCP server can read

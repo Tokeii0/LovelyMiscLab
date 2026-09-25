@@ -388,8 +388,8 @@ export function ResourcesView() {
     setView("canvas");
   };
 
-  const restoreDraft = () => {
-    if (restoreAutoDraft()) setDraft(readAutoDraft());
+  const restoreDraft = async () => {
+    if (await restoreAutoDraft()) setDraft(readAutoDraft());
   };
 
   return (
@@ -412,7 +412,7 @@ export function ResourcesView() {
               <div className="text-xs text-muted-foreground">
                 {draft.project.name} · {new Date(draft.savedAt).toLocaleString()}
               </div>
-              <Button className="mt-3 w-full" size="sm" onClick={restoreDraft}>
+              <Button className="mt-3 w-full" size="sm" onClick={() => void restoreDraft()}>
                 恢复草稿
               </Button>
             </>

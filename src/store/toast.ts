@@ -17,6 +17,8 @@ export interface ToastItem {
   actions: ToastAction[];
   /** Auto-dismiss after this many ms; 0 = stays until dismissed. */
   duration: number;
+  /** Called when the toast goes away without one of its actions being picked. */
+  onDismiss?: () => void;
 }
 
 export interface ToastOptions {
@@ -26,12 +28,15 @@ export interface ToastOptions {
   error?: unknown;
   actions?: ToastAction[];
   duration?: number;
+  onDismiss?: () => void;
 }
 
 interface ToastState {
   items: ToastItem[];
   push: (kind: ToastKind, message: string, opts?: ToastOptions) => number;
   dismiss: (id: number) => void;
+  /** Remove without firing `onDismiss` (an action was picked). */
+  settle: (id: number) => void;
 }
 
 const MAX_VISIBLE = 4;
@@ -46,11 +51,20 @@ export const useToastStore = create<ToastState>((set, get) => ({
     const detail = opts.detail ?? (opts.error !== undefined ? errorMessage(opts.error) : undefined);
     // Toasts with buttons stay a little longer so there is time to act on them.
     const duration = opts.duration ?? (actions.length ? 10000 : DEFAULT_MS[kind]);
-    set({ items: [...get().items, { id, kind, message, detail, actions, duration }].slice(-MAX_VISIBLE) });
+    const items = [...get().items, { id, kind, message, detail, actions, duration, onDismiss: opts.onDismiss }];
+    // Overflow drops the oldest toasts; they count as dismissed.
+    for (const dropped of items.slice(0, Math.max(0, items.length - MAX_VISIBLE))) dropped.onDismiss?.();
+    set({ items: items.slice(-MAX_VISIBLE) });
     if (duration > 0) setTimeout(() => get().dismiss(id), duration);
     return id;
   },
-  dismiss: (id) => set({ items: get().items.filter((t) => t.id !== id) }),
+  dismiss: (id) => {
+    const item = get().items.find((t) => t.id === id);
+    if (!item) return;
+    set({ items: get().items.filter((t) => t.id !== id) });
+    item.onDismiss?.();
+  },
+  settle: (id) => set({ items: get().items.filter((t) => t.id !== id) }),
 }));
 
 /** Fire-and-forget notifications, callable from components and plain modules alike. */

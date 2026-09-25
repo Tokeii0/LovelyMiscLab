@@ -19,7 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { newFlow, openFlow, saveFlow } from "@/lib/project";
+import { newFlow, openFlow, saveFlow, saveFlowAs } from "@/lib/project";
 import { cn } from "@/lib/utils";
 import { executeGraph, stopRun, pauseRun } from "@/flow/runner";
 import { nodeIcon } from "@/flow/nodeIcons";
@@ -75,7 +75,7 @@ export function CommandPalette() {
         hint: "清空当前画布并创建新流程",
         icon: FilePlus,
         keywords: "new flow",
-        action: newFlow,
+        action: () => void newFlow(),
       },
       {
         id: "open",
@@ -92,6 +92,14 @@ export function CommandPalette() {
         icon: Save,
         keywords: "save file",
         action: () => void saveFlow(),
+      },
+      {
+        id: "saveAs",
+        title: "另存为…",
+        hint: "保存为新的流程文件 (Ctrl+Shift+S)",
+        icon: Save,
+        keywords: "save as",
+        action: () => void saveFlowAs(),
       },
       {
         id: "run",

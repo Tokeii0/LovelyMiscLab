@@ -4,6 +4,7 @@ import { api, type AgentEvent } from "@/lib/bindings";
 import { useAgentStore } from "@/store/agent";
 import { useDescriptorStore } from "@/store/descriptors";
 import { useGraphStore } from "@/store/graph";
+import { useProjectStore } from "@/store/project";
 
 import { viewportAspect } from "./layout";
 import { errorMessage } from "@/lib/errors";
@@ -107,6 +108,8 @@ export async function runAgent(
         }
         if (!cleared) {
           gg.clear();
+          // A fresh build is a new document — never saved over the previous file.
+          useProjectStore.getState().detach("AI 生成流程");
           cleared = true;
         }
         const pos = placeDuringBuild(placed++);

@@ -13,6 +13,7 @@ import { useAiStore } from "@/store/ai";
 import { useRunStore } from "@/store/run";
 import { useViewStore } from "@/store/view";
 import { errorMessage } from "@/lib/errors";
+import { guardUnsaved } from "@/lib/project";
 
 type Mode = "generate" | "explain" | "repair";
 
@@ -101,6 +102,8 @@ export function AiGenerateDialog() {
       }
       // generate → hand off to the live agent; the user watches it build the
       // graph node-by-node on the canvas (AgentPanel narrates each step).
+      // The agent replaces the canvas, so unsaved work gets a chance to be saved first.
+      if (!(await guardUnsaved("用 AI 生成新流程"))) return;
       const task = prompt.trim();
       const blob = data.trim();
       setPrompt("");

@@ -192,6 +192,11 @@ function record(
   };
 }
 
+/** Start a fresh undo step on the next edit (e.g. after saving), even mid typing burst. */
+export function breakHistoryMerge() {
+  lastKey = null;
+}
+
 /** Selection flags for "only `ids` selected". */
 function selectOnly(nodes: FlowNode[], ids: Set<string>): FlowNode[] {
   return nodes.map((n) => {

@@ -28,6 +28,7 @@ import { PortSuggest } from "./PortSuggest";
 import { resolvePortType } from "./portUtils";
 import { executeGraph } from "./runner";
 import { SelectorNode } from "./SelectorNode";
+import { clearCanvas } from "@/flow/canvasActions";
 
 const nodeTypes = { generic: GenericNode, selector: SelectorNode };
 const edgeTypes = { labeled: LabeledEdge };
@@ -150,7 +151,7 @@ export function Canvas() {
       },
       { label: "适应视图", onClick: () => rf.fitView({ duration: 200 }) },
       { label: "全选节点", onClick: () => g.selectAll() },
-      { label: "清空画布", danger: true, onClick: () => g.clear() },
+      { label: "清空画布", danger: true, onClick: () => void clearCanvas() },
     ];
   };
 

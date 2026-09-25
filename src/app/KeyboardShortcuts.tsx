@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-import { newFlow, openFlow, saveFlow } from "@/lib/project";
+import { newFlow, openFlow, saveFlow, saveFlowAs } from "@/lib/project";
 import { useCommandPaletteStore } from "@/store/commandPalette";
 import { useGraphStore, type Clipboard } from "@/store/graph";
 
@@ -49,9 +49,9 @@ export function KeyboardShortcuts() {
       }
       if (fileMod && (fileKey === "s" || fileKey === "o" || fileKey === "n")) {
         e.preventDefault();
-        if (fileKey === "s") void saveFlow();
+        if (fileKey === "s") void (e.shiftKey ? saveFlowAs() : saveFlow());
         else if (fileKey === "o") void openFlow();
-        else newFlow();
+        else void newFlow();
         return;
       }
 
