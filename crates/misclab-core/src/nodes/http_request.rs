@@ -181,7 +181,9 @@ pub fn register(reg: &mut NodeRegistry) {
                 ParamSpec::toggle("followRedirects", "跟随重定向", true),
                 ParamSpec::toggle("insecure", "忽略证书错误", false),
             ],
-        ),
+        )
+        .heavy()
+        .volatile(),
         Arc::new(|| Arc::new(N)),
     );
 }

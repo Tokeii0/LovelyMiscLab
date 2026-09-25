@@ -8,6 +8,7 @@ import { useProjectStore } from "@/store/project";
 import { errorMessage } from "@/lib/errors";
 
 import { viewportAspect } from "./layout";
+import { runGraph } from "./runner";
 
 type ConnectEvent = Extract<AgentEvent, { kind: "connect" }>;
 
@@ -224,11 +225,16 @@ export async function runAgent(
     }
     await runPromise;
   } finally {
-    useGraphStore.getState().endBatch();
     const gg = useGraphStore.getState();
-    if (completed && gg.nodes.length > 0) {
-      gg.arrangeNodes(viewportAspect());
+    const built = completed && gg.nodes.length > 0;
+    // Tidy up inside the build's single undo step.
+    if (built) gg.arrangeNodes(viewportAspect());
+    gg.endBatch();
+    if (built) {
       requestAnimationFrame(() => rf.fitView({ duration: 300, padding: 0.15 }));
+      // The agent ran nodes on its own copy of the graph; one real run fills
+      // every node's outputs on the canvas.
+      void runGraph();
     }
   }
 }

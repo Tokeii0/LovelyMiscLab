@@ -91,3 +91,45 @@ export function packedLayout(
   }
   return positions;
 }
+
+/**
+ * Layered left→right layout: one column per dependency depth, so a chain reads
+ * as a straight line and every wire points forward. Within a column nodes are
+ * ordered by the average row of their parents (one barycenter pass), which keeps
+ * branches next to where they come from.
+ */
+export function flowLayout(
+  nodes: FlowNode[],
+  edges: Edge[],
+  opts: LayoutOptions = {}
+): Record<string, { x: number; y: number }> {
+  const colStep = opts.xGap ?? 280;
+  const yGap = opts.yGap ?? 40;
+  const x0 = opts.x0 ?? 40;
+  const y0 = opts.y0 ?? 40;
+  const positions: Record<string, { x: number; y: number }> = {};
+  if (nodes.length === 0) return positions;
+
+  const level = longestPathLevels(nodes, edges);
+  const idx = new Map(nodes.map((n, i) => [n.id, i]));
+  const columns = new Map<number, FlowNode[]>();
+  for (const n of nodes) columns.set(level[n.id], [...(columns.get(level[n.id]) ?? []), n]);
+
+  const row = new Map<string, number>();
+  for (const depth of [...columns.keys()].sort((a, b) => a - b)) {
+    const col = columns.get(depth)!;
+    const key = (n: FlowNode) => {
+      const parents = edges.filter((e) => e.target === n.id && row.has(e.source));
+      if (parents.length === 0) return idx.get(n.id) ?? 0;
+      return parents.reduce((s, e) => s + row.get(e.source)!, 0) / parents.length;
+    };
+    col.sort((a, b) => key(a) - key(b) || (idx.get(a.id) ?? 0) - (idx.get(b.id) ?? 0));
+    let y = y0;
+    col.forEach((n, i) => {
+      row.set(n.id, i);
+      positions[n.id] = { x: x0 + depth * colStep, y };
+      y += (n.measured?.height ?? 120) + yGap;
+    });
+  }
+  return positions;
+}

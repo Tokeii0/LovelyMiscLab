@@ -2,6 +2,8 @@
 //! node-scoped [`ProgressEvent`]s into a [`ProgressSink`]; `src-tauri` supplies a
 //! Channel-backed implementation keyed by node id, while tests use [`NullSink`].
 
+use crate::node::PortMap;
+
 #[derive(Debug, Clone, Copy)]
 pub enum LogLevel {
     Debug,
@@ -20,8 +22,18 @@ pub enum ProgressEvent {
         node: String,
         pct: f32,
     },
+    /// `outputs` carries the node's results (top-level graph only, so the UI can
+    /// show each node's output as soon as it finishes); `cached` = served from the
+    /// run cache without executing.
     NodeDone {
         node: String,
+        outputs: Option<PortMap>,
+        cached: bool,
+    },
+    /// Not executed because a required input's upstream failed or was skipped.
+    NodeSkipped {
+        node: String,
+        reason: String,
     },
     NodeFailed {
         node: String,

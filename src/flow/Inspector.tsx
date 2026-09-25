@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Copy, Link2, Play, StepForward } from "lucide-react";
 
 import { ProgressBar } from "@/components/ui/progress";
@@ -9,8 +9,8 @@ import { useGraphStore, type FlowNode } from "@/store/graph";
 import { useInspectorStore, type InspectorTab as Tab } from "@/store/inspector";
 
 import { nodeIcon } from "./nodeIcons";
-import { valueText } from "./portValue";
-import { executeToNode, runSingleNode } from "./runner";
+import { bytesToHex, OutputValue, valueText } from "./portValue";
+import { runNode, runToNode } from "./runner";
 import { WidgetRenderer } from "./WidgetRenderer";
 
 function CopyButton({ text }: { text: string }) {
@@ -36,6 +36,7 @@ function StatusBadge({ status }: { status: FlowNode["data"]["status"] }) {
     running: { t: "运行中", c: "#3b82f6" },
     done: { t: "执行成功", c: "#22c55e" },
     error: { t: "执行失败", c: "#ef4444" },
+    skipped: { t: "已跳过", c: "#a3a3a3" },
   } as const;
   const s = map[status];
   return (
@@ -45,6 +46,40 @@ function StatusBadge({ status }: { status: FlowNode["data"]["status"] }) {
     >
       {s.t}
     </span>
+  );
+}
+
+/** Node name: edited as a draft, committed on blur/Enter; empty = the default name. */
+function NameField({
+  value,
+  fallback,
+  onCommit,
+}: {
+  value: string;
+  fallback: string;
+  onCommit: (v: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const commit = () => {
+    const next = draft.trim() || fallback;
+    setDraft(next);
+    if (next !== value) onCommit(next);
+  };
+  return (
+    <input
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.nativeEvent.isComposing) return;
+        if (e.key === "Enter") e.currentTarget.blur();
+        else if (e.key === "Escape") setDraft(value);
+      }}
+      placeholder={fallback}
+      title="节点名称（可修改，留空恢复默认）"
+      className="min-w-0 flex-1 rounded border border-transparent bg-transparent text-sm font-semibold hover:border-border focus:border-input focus:bg-background focus:outline-none"
+    />
   );
 }
 
@@ -83,12 +118,11 @@ export function Inspector() {
           >
             <Icon className="h-4 w-4" />
           </span>
-          <input
+          <NameField
+            key={node.id}
             value={node.data.label || descriptor.displayName}
-            onChange={(e) => renameNode(node.id, e.target.value)}
-            placeholder={descriptor.displayName}
-            title="节点名称（可修改）"
-            className="min-w-0 flex-1 rounded border border-transparent bg-transparent text-sm font-semibold hover:border-border focus:border-input focus:bg-background focus:outline-none"
+            fallback={descriptor.displayName}
+            onCommit={(v) => renameNode(node.id, v)}
           />
           <div className="ml-auto shrink-0">
             <StatusBadge status={node.data.status} />
@@ -100,20 +134,25 @@ export function Inspector() {
         </div>
         <div className="mt-2 flex gap-1">
           <button
-            onClick={() => void runSingleNode(node.id)}
+            onClick={() => void runNode(node.id)}
             className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <Play className="h-3 w-3" />
-            单独执行
+            运行此节点
           </button>
           <button
-            onClick={() => void executeToNode(node.id)}
+            onClick={() => void runToNode(node.id)}
             className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <StepForward className="h-3 w-3" />
-            运行到此处
+            运行到此（含上游）
           </button>
         </div>
+        {node.data.hint && node.data.status !== "running" && (
+          <div className="mt-2 rounded bg-secondary px-2 py-1 text-[10px] text-muted-foreground">
+            {node.data.hint}
+          </div>
+        )}
         {node.data.status === "running" && (
           <div className="mt-2">
             <ProgressBar
@@ -204,9 +243,16 @@ export function Inspector() {
           </>
         )}
 
+        {tab === "output" && node.data.stale && Object.keys(outputs).length > 0 && (
+          <div className="mb-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-700 dark:text-amber-400">
+            结果已过期：此节点或上游在上次运行后被修改，重新运行以更新。
+          </div>
+        )}
         {tab === "output" &&
           (Object.keys(outputs).length === 0 ? (
-            <div className="text-muted-foreground">尚未运行，暂无输出</div>
+            <div className="text-muted-foreground">
+              {node.data.status === "error" ? "执行失败，没有输出" : "尚未运行，暂无输出"}
+            </div>
           ) : (
             // Render in declared (descriptor) order; outputs arrive as an unordered
             // map, so append any extra keys not in the descriptor at the end.
@@ -225,19 +271,13 @@ export function Inspector() {
                     <span className="text-[11px] font-medium text-muted-foreground">
                       {label}
                     </span>
-                    {val.type !== "image" && <CopyButton text={valueText(val)} />}
+                    {val.type !== "image" && (
+                      <CopyButton
+                        text={val.type === "bytes" ? bytesToHex(val.value, Infinity) : valueText(val)}
+                      />
+                    )}
                   </div>
-                  {val.type === "image" ? (
-                    <img
-                      src={val.value}
-                      alt={label}
-                      className="max-h-64 w-full rounded border border-border bg-white object-contain"
-                    />
-                  ) : (
-                    <pre className="max-h-64 select-text overflow-auto whitespace-pre-wrap break-all rounded bg-background p-2 font-mono text-[10px] leading-snug">
-                      {valueText(val) || "（空）"}
-                    </pre>
-                  )}
+                  <OutputValue value={val} />
                 </div>
               );
             })

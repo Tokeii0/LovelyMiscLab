@@ -158,4 +158,22 @@ pub struct NodeDescriptor {
     #[serde(default)]
     pub params: Vec<ParamSpec>,
     pub cost: Cost,
+    /// Output depends on more than params + inputs (disk, network, AI, external
+    /// programs): never served from the run cache.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub volatile: bool,
+}
+
+impl NodeDescriptor {
+    /// Mark as expensive: live mode won't auto-run it (needs an explicit run).
+    pub fn heavy(mut self) -> Self {
+        self.cost = Cost::Heavy;
+        self
+    }
+
+    /// Mark as never cacheable (see [`NodeDescriptor::volatile`]).
+    pub fn volatile(mut self) -> Self {
+        self.volatile = true;
+        self
+    }
 }

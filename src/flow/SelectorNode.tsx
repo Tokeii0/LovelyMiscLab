@@ -1,6 +1,6 @@
 import { memo, useEffect } from "react";
 import { Handle, NodeToolbar, Position, type NodeProps } from "@xyflow/react";
-import { Play, Trash2 } from "lucide-react";
+import { Ban, Play, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useDescriptorStore } from "@/store/descriptors";
@@ -8,7 +8,7 @@ import { useGraphStore, type FlowNodeData } from "@/store/graph";
 
 import { nodeIcon } from "./nodeIcons";
 import { portColor } from "./portColors";
-import { runSingleNode } from "./runner";
+import { runNode } from "./runner";
 
 const handleStyle = (color: string): React.CSSProperties => ({
   position: "relative",
@@ -35,19 +35,24 @@ function SelectorNodeImpl({ id, data: raw, selected }: NodeProps) {
   const byId = useDescriptorStore((s) => s.byId);
   const setParam = useGraphStore((s) => s.setParam);
   const deleteNode = useGraphStore((s) => s.deleteNode);
-  const edges = useGraphStore((s) => s.edges);
-  const nodes = useGraphStore((s) => s.nodes);
+  const setDisabled = useGraphStore((s) => s.setDisabled);
+  // Only "which descriptor + param is my wire plugged into" matters here; a
+  // string key keeps this node from re-rendering on every unrelated graph change.
+  const targetKey = useGraphStore((s) => {
+    const e = s.edges.find((x) => x.source === id && x.sourceHandle === "value");
+    const t = e && s.nodes.find((n) => n.id === e.target);
+    return t && e ? `${t.data.descriptorId}\u0000${e.targetHandle ?? ""}` : null;
+  });
 
   const value = (data.params.value as string) ?? "";
 
   // Pull the option list from the connected target's select parameter.
   let options: string[] | null = null;
   let targetLabel = "";
-  const outEdge = edges.find((e) => e.source === id && e.sourceHandle === "value");
-  if (outEdge) {
-    const target = nodes.find((n) => n.id === outEdge.target);
-    const tdesc = target ? byId[target.data.descriptorId] : undefined;
-    const param = tdesc?.params.find((p) => p.name === outEdge.targetHandle);
+  if (targetKey) {
+    const [descriptorId, handle] = targetKey.split("\u0000");
+    const tdesc = byId[descriptorId];
+    const param = tdesc?.params.find((p) => p.name === handle);
     if (param && param.widget.kind === "select") {
       options = param.widget.options;
       targetLabel = `${tdesc?.displayName ?? ""} · ${param.label}`;
@@ -81,8 +86,15 @@ function SelectorNodeImpl({ id, data: raw, selected }: NodeProps) {
         offset={8}
         className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5 shadow-md"
       >
-        <button className={btn} title="执行" onClick={() => void runSingleNode(id)}>
+        <button className={btn} title="运行此节点" onClick={() => void runNode(id)}>
           <Play className="h-3.5 w-3.5" />
+        </button>
+        <button
+          className={btn}
+          title={data.disabled ? "启用" : "禁用"}
+          onClick={() => setDisabled(id, !data.disabled)}
+        >
+          <Ban className="h-3.5 w-3.5" />
         </button>
         <button
           className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
@@ -96,7 +108,12 @@ function SelectorNodeImpl({ id, data: raw, selected }: NodeProps) {
       <div
         className={cn(
           "w-[200px] overflow-hidden rounded-lg border bg-card shadow-sm",
-          selected ? "border-primary ring-2 ring-primary/25" : "border-border"
+          data.disabled && "opacity-50",
+          data.status === "error"
+            ? "border-destructive"
+            : selected
+              ? "border-primary ring-2 ring-primary/25"
+              : "border-border"
         )}
       >
         <div className="flex items-center gap-1.5 border-b border-border px-2 py-1.5">
@@ -148,7 +165,7 @@ function SelectorNodeImpl({ id, data: raw, selected }: NodeProps) {
               type="source"
               position={Position.Right}
               id="value"
-              style={handleStyle(portColor("text"))}
+              style={{ ...handleStyle(portColor("text")), marginRight: -13 }}
             />
           </div>
         </div>

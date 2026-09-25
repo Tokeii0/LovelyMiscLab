@@ -1,6 +1,18 @@
 import { memo, useState } from "react";
 import { Handle, NodeToolbar, Position, type NodeProps } from "@xyflow/react";
-import { Ban, Check, Copy, Eye, Play, Sparkles, Trash2, X } from "lucide-react";
+import {
+  Ban,
+  Check,
+  Copy,
+  Eye,
+  FastForward,
+  History,
+  Minus,
+  Play,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import { ProgressBar } from "@/components/ui/progress";
 import type { PortValue } from "@/lib/types";
@@ -12,12 +24,14 @@ import { useInspectorStore } from "@/store/inspector";
 import { usePortSuggest } from "@/store/portSuggest";
 
 import { nodeIcon } from "./nodeIcons";
-import { paramPortType, portColor } from "./portColors";
-import { runSingleNode } from "./runner";
+import { paramPortType, portColor, portTypeLabel } from "./portColors";
+import { runNode, runToNode } from "./runner";
 import { WidgetRenderer } from "./WidgetRenderer";
 
 // In-flow handle — each port sits on its own row; React Flow still measures it.
-const handleStyle = (color: string): React.CSSProperties => ({
+// The negative margin pulls the dot out of the row padding onto the card border,
+// so wires visibly end at the node edge instead of inside its body.
+const handleStyle = (color: string, side: "left" | "right"): React.CSSProperties => ({
   position: "relative",
   transform: "none",
   left: "auto",
@@ -28,7 +42,17 @@ const handleStyle = (color: string): React.CSSProperties => ({
   borderRadius: 9999,
   background: color,
   border: "2px solid var(--card)",
+  ...(side === "left" ? { marginLeft: -13 } : { marginRight: -13 }),
 });
+
+/** Compact "label=value" for the read-only param summary on nodes with inputs. */
+function paramText(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "—";
+  if (typeof v === "boolean") return v ? "开" : "关";
+  const s = typeof v === "string" ? v : JSON.stringify(v);
+  if (s.startsWith("data:")) return "（已选择）";
+  return s.length > 18 ? `${s.slice(0, 18)}…` : s;
+}
 
 function shortText(v: PortValue): string {
   switch (v.type) {
@@ -79,9 +103,21 @@ function PortSparkle({
   );
 }
 
-function StatusIcon({ status }: { status: FlowNodeData["status"] }) {
+function StatusIcon({ status, stale }: { status: FlowNodeData["status"]; stale?: boolean }) {
+  if (stale && (status === "done" || status === "error"))
+    return (
+      <span title="结果已过期：此节点或上游在上次运行后被修改">
+        <History className="h-3.5 w-3.5 text-amber-500" />
+      </span>
+    );
   if (status === "done") return <Check className="h-3.5 w-3.5 text-green-600" />;
   if (status === "error") return <X className="h-3.5 w-3.5 text-destructive" />;
+  if (status === "skipped")
+    return (
+      <span title="已跳过">
+        <Minus className="h-3.5 w-3.5 text-muted-foreground" />
+      </span>
+    );
   if (status === "running")
     return <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />;
   return <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />;
@@ -126,11 +162,15 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
     }
     return Object.entries(outputs)[0];
   })();
-  // Source nodes (no input ports) show their param widgets inline for direct entry.
-  const inlineParams =
-    descriptor.inputs.length === 0
-      ? descriptor.params.filter((p) => !(data.inputParams ?? []).includes(p.name))
-      : [];
+  // Source nodes (no input ports) show their param widgets inline for direct entry;
+  // other nodes show a read-only summary of their current settings.
+  const ownParams = descriptor.params.filter((p) => !(data.inputParams ?? []).includes(p.name));
+  const inlineParams = descriptor.inputs.length === 0 ? ownParams : [];
+  const summaryParams = descriptor.inputs.length === 0 ? [] : ownParams.slice(0, 3);
+  const finishRename = (value: string) => {
+    renameNode(id, value.trim() || descriptor.displayName);
+    setEditing(false);
+  };
 
   const action =
     "flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground";
@@ -154,8 +194,12 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
         offset={8}
         className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5 shadow-md"
       >
-        <button className={action} title="执行" onClick={() => void runSingleNode(id)}>
-          <Play className="h-3.5 w-3.5" />
+        <button
+          className={action}
+          title="运行到此节点（含上游）"
+          onClick={() => void runToNode(id)}
+        >
+          <FastForward className="h-3.5 w-3.5" />
         </button>
         <button className={action} title="复制" onClick={() => duplicateNode(id)}>
           <Copy className="h-3.5 w-3.5" />
@@ -209,17 +253,11 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
               autoFocus
               defaultValue={data.label || descriptor.displayName}
               onClick={(e) => e.stopPropagation()}
-              onBlur={(e) => {
-                renameNode(id, e.target.value);
-                setEditing(false);
-              }}
+              onBlur={(e) => finishRename(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  renameNode(id, (e.target as HTMLInputElement).value);
-                  setEditing(false);
-                } else if (e.key === "Escape") {
-                  setEditing(false);
-                }
+                if (e.nativeEvent.isComposing) return;
+                if (e.key === "Enter") finishRename((e.target as HTMLInputElement).value);
+                else if (e.key === "Escape") setEditing(false);
               }}
               className="nodrag min-w-0 flex-1 rounded border border-input bg-background px-1 text-xs font-medium focus:outline-none"
             />
@@ -235,13 +273,13 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
               {data.label?.trim() || descriptor.displayName}
             </span>
           )}
-          <StatusIcon status={data.status} />
+          <StatusIcon status={data.status} stale={data.stale} />
           <button
             className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-primary"
-            title="单独执行"
+            title="运行此节点（上游无结果时连同上游一起运行）"
             onClick={(e) => {
               e.stopPropagation();
-              void runSingleNode(id);
+              void runNode(id);
             }}
           >
             <Play className="h-3 w-3" />
@@ -251,6 +289,11 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
         {data.status === "running" && (
           <div className="border-b border-border px-2 py-1.5">
             <ProgressBar value={data.progress ?? 0} status={runningStatus} />
+          </div>
+        )}
+        {data.hint && data.status !== "running" && (
+          <div className="border-b border-border bg-secondary/40 px-2 py-1 text-[10px] leading-snug text-muted-foreground">
+            {data.hint}
           </div>
         )}
 
@@ -264,9 +307,14 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
                 type="target"
                 position={Position.Left}
                 id={p.name}
-                style={handleStyle(portColor(p.type))}
+                style={handleStyle(portColor(p.type), "left")}
               />
-              <span className="text-muted-foreground">{p.label}</span>
+              <span
+                className="text-muted-foreground"
+                title={`${p.label}：${portTypeLabel(p.type)}${p.required ? "" : "（可选）"}`}
+              >
+                {p.label}
+              </span>
               <PortSparkle side="right" onClick={(e) => openSuggest(e, p.name, "in")} />
             </div>
           ))}
@@ -279,7 +327,7 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
                   type="target"
                   position={Position.Left}
                   id={name}
-                  style={handleStyle(portColor(paramPortType(spec.widget)))}
+                  style={handleStyle(portColor(paramPortType(spec.widget)), "left")}
                 />
                 <span className="italic text-muted-foreground/80">{spec.label}</span>
               </div>
@@ -291,12 +339,17 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
               className="group/port relative flex items-center justify-end gap-1.5 text-[11px]"
             >
               <PortSparkle side="left" onClick={(e) => openSuggest(e, p.name, "out")} />
-              <span className="text-muted-foreground">{p.label}</span>
+              <span
+                className="text-muted-foreground"
+                title={`${p.label}：${portTypeLabel(p.type)}`}
+              >
+                {p.label}
+              </span>
               <Handle
                 type="source"
                 position={Position.Right}
                 id={p.name}
-                style={handleStyle(portColor(p.type))}
+                style={handleStyle(portColor(p.type), "right")}
               />
             </div>
           ))}
@@ -319,45 +372,72 @@ function GenericNodeImpl({ id, data: raw, selected }: NodeProps) {
           </div>
         )}
 
-        {firstOut &&
-          (firstOut[1].type === "image" ? (
-            <div className="border-t border-border bg-secondary/40 p-1">
-              <img
-                src={firstOut[1].value}
-                alt=""
-                title="点击查看大图 / 调整"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  useImageViewer
-                    .getState()
-                    .show(
-                      (firstOut[1] as Extract<PortValue, { type: "image" }>).value,
-                      data.label?.trim() || descriptor.displayName
-                    );
-                }}
-                className={cn(
-                  "nodrag w-full cursor-zoom-in rounded object-contain",
-                  isImageView ? "max-h-72" : "max-h-32"
-                )}
-              />
-            </div>
-          ) : isTextView ? (
-            <div className="border-t border-border bg-secondary/40 p-1">
-              <pre className="nodrag nowheel max-h-44 overflow-auto whitespace-pre-wrap break-all rounded bg-background/60 px-2 py-1 font-mono text-[10px] leading-snug">
-                {shortText(firstOut[1]).slice(0, 4000) || "（空）"}
-              </pre>
-            </div>
-          ) : (
-            <div
-              className="truncate border-t border-border bg-secondary/40 px-2 py-1 font-mono text-[10px]"
-              title={shortText(firstOut[1])}
-            >
-              {shortText(firstOut[1]) || "（空）"}
-            </div>
-          ))}
+        {summaryParams.length > 0 && (
+          <button
+            type="button"
+            title="在右侧属性面板中编辑参数"
+            onClick={() => {
+              setSelected(id);
+              setInspectorTab("params");
+            }}
+            className="nodrag block w-full border-t border-border px-2 py-1 text-left text-[10px] leading-snug text-muted-foreground hover:bg-accent/50"
+          >
+            {summaryParams.map((p) => (
+              <div key={p.name} className="truncate">
+                {p.label}：
+                <span className="font-mono text-foreground/80">
+                  {paramText(data.params[p.name])}
+                </span>
+              </div>
+            ))}
+          </button>
+        )}
+
+        {firstOut && (
+          <div className={cn(data.stale && "opacity-50")}>
+            {firstOut[1].type === "image" ? (
+              <div className="border-t border-border bg-secondary/40 p-1">
+                <img
+                  src={firstOut[1].value}
+                  alt=""
+                  title="点击查看大图 / 调整"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    useImageViewer
+                      .getState()
+                      .show(
+                        (firstOut[1] as Extract<PortValue, { type: "image" }>).value,
+                        data.label?.trim() || descriptor.displayName
+                      );
+                  }}
+                  className={cn(
+                    "nodrag w-full cursor-zoom-in rounded object-contain",
+                    isImageView ? "max-h-72" : "max-h-32"
+                  )}
+                />
+              </div>
+            ) : isTextView ? (
+              <div className="border-t border-border bg-secondary/40 p-1">
+                <pre className="nodrag nowheel max-h-44 overflow-auto whitespace-pre-wrap break-all rounded bg-background/60 px-2 py-1 font-mono text-[10px] leading-snug">
+                  {shortText(firstOut[1]).slice(0, 4000) || "（空）"}
+                </pre>
+              </div>
+            ) : (
+              <div
+                className="truncate border-t border-border bg-secondary/40 px-2 py-1 font-mono text-[10px]"
+                title={shortText(firstOut[1]).slice(0, 500)}
+              >
+                {shortText(firstOut[1]).slice(0, 200) || "（空）"}
+              </div>
+            )}
+          </div>
+        )}
 
         {data.status === "error" && data.error && (
-          <div className="border-t border-destructive/30 bg-destructive/10 px-2 py-1 text-[10px] text-destructive">
+          <div
+            className="line-clamp-3 break-words border-t border-destructive/30 bg-destructive/10 px-2 py-1 text-[10px] text-destructive"
+            title={data.error}
+          >
             {data.error}
           </div>
         )}

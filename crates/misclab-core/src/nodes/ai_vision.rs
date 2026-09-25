@@ -53,7 +53,9 @@ pub fn register(reg: &mut NodeRegistry) {
                 "识别图片中的文字或 flag，只输出结果。",
                 true,
             )],
-        ),
+        )
+        .heavy()
+        .volatile(),
         Arc::new(|| Arc::new(N)),
     );
 }

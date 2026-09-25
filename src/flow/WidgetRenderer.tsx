@@ -1,9 +1,10 @@
-import { type ChangeEvent, useRef } from "react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 
 import type { ParamSpec } from "@/lib/types";
 import { inTauri } from "@/lib/devMocks";
 import { useImageViewer } from "@/store/imageViewer";
+import { toast } from "@/store/toast";
 
 interface Props {
   spec: ParamSpec;
@@ -58,6 +59,7 @@ function ImageField({
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => onChange(reader.result as string);
+    reader.onerror = () => toast.error("读取图片失败", { error: reader.error });
     reader.readAsDataURL(file);
     e.target.value = ""; // allow re-picking the same file
   };
@@ -93,6 +95,54 @@ function ImageField({
   );
 }
 
+/** Number input that keeps what's being typed ("", "-", "1.") as a draft and only
+ * commits real numbers — so negative/decimal entry works and NaN never reaches
+ * the graph. Out-of-range values are clamped when the field loses focus. */
+function NumberField({
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  value: unknown;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: unknown) => void;
+}) {
+  const current = Number(value ?? 0);
+  const [draft, setDraft] = useState(String(current));
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focused.current) setDraft(String(current));
+  }, [current]);
+  const parse = (t: string) => (t.trim() === "" ? NaN : Number(t));
+  return (
+    <input
+      type="number"
+      className={base}
+      min={min}
+      max={max}
+      step={step}
+      value={draft}
+      onFocus={() => (focused.current = true)}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        const n = parse(e.target.value);
+        if (Number.isFinite(n)) onChange(n);
+      }}
+      onBlur={() => {
+        focused.current = false;
+        const n = parse(draft);
+        const next = Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : current;
+        setDraft(String(next));
+        if (next !== current) onChange(next);
+      }}
+    />
+  );
+}
+
 export function WidgetRenderer({ spec, value, onChange }: Props) {
   const w = spec.widget;
   switch (w.kind) {
@@ -100,7 +150,8 @@ export function WidgetRenderer({ spec, value, onChange }: Props) {
       return w.multiline ? (
         <textarea
           className={`${base} nopan resize-none`}
-          rows={3}
+          // Grows with the content (3–12 rows) so pasted ciphertext stays readable.
+          rows={Math.min(12, Math.max(3, String(value ?? "").split("\n").length))}
           value={String(value ?? "")}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -112,28 +163,23 @@ export function WidgetRenderer({ spec, value, onChange }: Props) {
         />
       );
     case "number":
-      return (
-        <input
-          type="number"
-          className={base}
-          min={w.min}
-          max={w.max}
-          step={w.step}
-          value={Number(value ?? 0)}
-          onChange={(e) => onChange(parseFloat(e.target.value))}
-        />
-      );
+      return <NumberField value={value} min={w.min} max={w.max} step={w.step} onChange={onChange} />;
     case "slider":
       return (
-        <input
-          type="range"
-          className="nodrag w-full"
-          min={w.min}
-          max={w.max}
-          step={w.step}
-          value={Number(value ?? 0)}
-          onChange={(e) => onChange(parseFloat(e.target.value))}
-        />
+        <div className="flex items-center gap-2">
+          <input
+            type="range"
+            className="nodrag min-w-0 flex-1"
+            min={w.min}
+            max={w.max}
+            step={w.step}
+            value={Number(value ?? 0)}
+            onChange={(e) => onChange(parseFloat(e.target.value))}
+          />
+          <span className="w-8 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
+            {Number(value ?? 0)}
+          </span>
+        </div>
       );
     case "select":
       return (

@@ -44,7 +44,8 @@ pub fn register(reg: &mut NodeRegistry) {
                 opt("size", "大小", PortType::Number),
             ],
             vec![ParamSpec::file("path", "文件")],
-        ),
+        )
+        .volatile(),
         Arc::new(|| Arc::new(N)),
     );
 }

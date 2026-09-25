@@ -13,9 +13,9 @@ import { create } from "zustand";
 import type { NodeDescriptor, PortValue } from "@/lib/types";
 import type { SavedEdge, SavedNode } from "@/lib/project";
 
-import { packedLayout } from "@/flow/layout";
+import { flowLayout, packedLayout } from "@/flow/layout";
 
-export type NodeStatus = "idle" | "running" | "done" | "error";
+export type NodeStatus = "idle" | "running" | "done" | "error" | "skipped";
 
 export interface NodeLog {
   time: string;
@@ -36,6 +36,10 @@ export interface FlowNodeData {
   logs?: NodeLog[];
   /** Param names promoted to input ports (driven by upstream connections). */
   inputParams?: string[];
+  /** The shown result predates an edit to this node or something upstream. */
+  stale?: boolean;
+  /** One-line status note (why it was skipped, why live mode didn't run it…). */
+  hint?: string;
   // Index signature required by React Flow's Node<Data> constraint.
   [key: string]: unknown;
 }
@@ -46,8 +50,7 @@ let counter = 0;
 const nextId = (prefix: string) => `${prefix}_${counter++}`;
 
 /** React Flow node component to use for a descriptor (most use the generic one). */
-const flowType = (descriptorId: string) =>
-  descriptorId === "selector" ? "selector" : "generic";
+const flowType = (descriptorId: string) => (descriptorId === "selector" ? "selector" : "generic");
 
 export interface ClipboardNode {
   oldId: string;
@@ -151,6 +154,8 @@ function restoreNodes(snap: GraphSnapshot, current: FlowNode[]): FlowNode[] {
         outputs: cur?.data.outputs,
         error: cur?.data.error,
         logs: cur?.data.logs ?? [],
+        stale: cur?.data.stale,
+        hint: cur?.data.hint,
       },
     };
   });
@@ -209,6 +214,55 @@ function sameJson(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+/** `roots` plus everything downstream of them along `edges`. */
+function downstreamOf(edges: Edge[], roots: Iterable<string>): Set<string> {
+  const out = new Map<string, string[]>();
+  for (const e of edges) out.set(e.source, [...(out.get(e.source) ?? []), e.target]);
+  const seen = new Set<string>();
+  const stack = [...roots];
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    stack.push(...(out.get(id) ?? []));
+  }
+  return seen;
+}
+
+/** Flag results that an edit invalidated: the edited nodes and all their dependants. */
+function markStale(nodes: FlowNode[], edges: Edge[], roots: Iterable<string>): FlowNode[] {
+  const hit = downstreamOf(edges, roots);
+  if (hit.size === 0) return nodes;
+  return nodes.map((n) =>
+    hit.has(n.id) && n.data.status !== "idle" && !n.data.stale
+      ? { ...n, data: { ...n.data, stale: true } }
+      : n
+  );
+}
+
+/** Ids whose user-edited content differs between two node lists (or that are new). */
+function changedIds(before: FlowNode[], after: FlowNode[]): string[] {
+  const prev = new Map(before.map((n) => [n.id, n]));
+  const key = (n: FlowNode) =>
+    JSON.stringify([
+      n.data.descriptorId,
+      n.data.params,
+      n.data.inputParams ?? [],
+      n.data.disabled ?? false,
+    ]);
+  return after.filter((n) => !prev.has(n.id) || key(prev.get(n.id)!) !== key(n)).map((n) => n.id);
+}
+
+/** Targets of edges present in one list but not the other. */
+function rewiredTargets(before: Edge[], after: Edge[]): string[] {
+  const sig = (e: Edge) => `${e.source}|${e.sourceHandle}|${e.target}|${e.targetHandle}`;
+  const a = new Set(before.map(sig));
+  const b = new Set(after.map(sig));
+  return [...before.filter((e) => !b.has(sig(e))), ...after.filter((e) => !a.has(sig(e)))].map(
+    (e) => e.target
+  );
+}
+
 interface GraphState {
   nodes: FlowNode[];
   edges: Edge[];
@@ -236,9 +290,10 @@ interface GraphState {
   /** Delete every selected node/edge as one undo step. Returns false if nothing was selected. */
   deleteSelection: () => boolean;
   duplicateNode: (id: string) => void;
-  /** Pack all nodes to fit the current view (vertical-first, wrap horizontally).
-   * `aspect` = viewport width/height, so the block matches the screen. */
-  arrangeNodes: (aspect: number) => void;
+  /** Re-position every node. "packed" fits the current view (vertical-first,
+   * wrap horizontally; `aspect` = viewport width/height); "flow" lays the graph
+   * out left→right by dependency depth. */
+  arrangeNodes: (aspect: number, mode?: "packed" | "flow") => void;
   /** Group the following edits into a single undo step (nestable). */
   beginBatch: () => void;
   endBatch: () => void;
@@ -305,16 +360,24 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     set((state) => {
       const edges = applyEdgeChanges(changes, state.edges);
       if (!changes.some((c) => c.type !== "select")) return { edges };
-      return { edges, ...record(state), runRevision: state.runRevision + 1 };
+      return {
+        edges,
+        nodes: markStale(state.nodes, state.edges, rewiredTargets(state.edges, edges)),
+        ...record(state),
+        runRevision: state.runRevision + 1,
+      };
     }),
   onConnect: (conn) =>
     set((state) => {
       // An input holds one value: a new wire into an occupied handle replaces the old one.
       const kept = state.edges.filter(
-        (e) => !(e.target === conn.target && (e.targetHandle ?? null) === (conn.targetHandle ?? null))
+        (e) =>
+          !(e.target === conn.target && (e.targetHandle ?? null) === (conn.targetHandle ?? null))
       );
+      const edges = addEdge(conn, kept);
       return {
-        edges: addEdge(conn, kept),
+        edges,
+        nodes: markStale(state.nodes, edges, [conn.target]),
         ...record(state),
         runRevision: state.runRevision + 1,
       };
@@ -351,10 +414,14 @@ export const useGraphStore = create<GraphState>((set, get) => ({
 
   setParam: (nodeId, name, value, opts) =>
     set((state) => {
-      const nodes = state.nodes.map((n) =>
-        n.id === nodeId
-          ? { ...n, data: { ...n.data, params: { ...n.data.params, [name]: value } } }
-          : n
+      const nodes = markStale(
+        state.nodes.map((n) =>
+          n.id === nodeId
+            ? { ...n, data: { ...n.data, params: { ...n.data.params, [name]: value } } }
+            : n
+        ),
+        state.edges,
+        [nodeId]
       );
       if (opts?.history === false) return { nodes, runRevision: state.runRevision + 1 };
       return {
@@ -385,6 +452,8 @@ export const useGraphStore = create<GraphState>((set, get) => ({
           error: undefined,
           outputs: undefined,
           logs: [],
+          stale: undefined,
+          hint: undefined,
         },
       })),
     }),
@@ -403,7 +472,11 @@ export const useGraphStore = create<GraphState>((set, get) => ({
 
   deleteNode: (id) =>
     set((state) => ({
-      nodes: state.nodes.filter((n) => n.id !== id),
+      nodes: markStale(
+        state.nodes.filter((n) => n.id !== id),
+        state.edges,
+        [id]
+      ),
       edges: state.edges.filter((e) => e.source !== id && e.target !== id),
       selectedId: state.selectedId === id ? null : state.selectedId,
       ...record(state),
@@ -413,6 +486,11 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   deleteEdge: (id) =>
     set((state) => ({
       edges: state.edges.filter((e) => e.id !== id),
+      nodes: markStale(
+        state.nodes,
+        state.edges,
+        state.edges.filter((e) => e.id === id).map((e) => e.target)
+      ),
       ...record(state),
       runRevision: state.runRevision + 1,
     })),
@@ -422,7 +500,11 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     const ids = new Set(nodes.filter((n) => n.selected).map((n) => n.id));
     if (ids.size === 0 && !edges.some((e) => e.selected)) return false;
     set((state) => ({
-      nodes: state.nodes.filter((n) => !ids.has(n.id)),
+      nodes: markStale(
+        state.nodes.filter((n) => !ids.has(n.id)),
+        state.edges,
+        [...ids, ...state.edges.filter((e) => e.selected).map((e) => e.target)]
+      ),
       edges: state.edges.filter((e) => !e.selected && !ids.has(e.source) && !ids.has(e.target)),
       selectedId: state.selectedId && ids.has(state.selectedId) ? null : state.selectedId,
       ...record(state),
@@ -458,14 +540,15 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     }));
   },
 
-  arrangeNodes: (aspect) =>
+  arrangeNodes: (aspect, mode = "packed") =>
     set((state) => {
       if (state.nodes.length === 0) return {};
-      const pos = packedLayout(state.nodes, state.edges, aspect);
+      const pos =
+        mode === "flow"
+          ? flowLayout(state.nodes, state.edges)
+          : packedLayout(state.nodes, state.edges, aspect);
       return {
-        nodes: state.nodes.map((n) =>
-          pos[n.id] ? { ...n, position: pos[n.id] } : n
-        ),
+        nodes: state.nodes.map((n) => (pos[n.id] ? { ...n, position: pos[n.id] } : n)),
         ...record(state),
       };
     }),
@@ -498,12 +581,15 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     }
   },
 
-  selectAll: () => set({ nodes: get().nodes.map((n) => (n.selected ? n : { ...n, selected: true })) }),
+  selectAll: () =>
+    set({ nodes: get().nodes.map((n) => (n.selected ? n : { ...n, selected: true })) }),
 
   setDisabled: (id, disabled) =>
     set((state) => ({
-      nodes: state.nodes.map((n) =>
-        n.id === id ? { ...n, data: { ...n.data, disabled } } : n
+      nodes: markStale(
+        state.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, disabled } } : n)),
+        state.edges,
+        [id]
       ),
       ...record(state),
       runRevision: state.runRevision + 1,
@@ -512,9 +598,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   appendLog: (id, log) =>
     set({
       nodes: get().nodes.map((n) =>
-        n.id === id
-          ? { ...n, data: { ...n.data, logs: [...(n.data.logs ?? []), log] } }
-          : n
+        n.id === id ? { ...n, data: { ...n.data, logs: [...(n.data.logs ?? []), log] } } : n
       ),
     }),
 
@@ -522,7 +606,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     const node = get().nodes.find((n) => n.id === nodeId);
     const removing = node?.data.inputParams?.includes(name) ?? false;
     set((state) => ({
-      nodes: state.nodes.map((n) =>
+      nodes: markStale(state.nodes, state.edges, [nodeId]).map((n) =>
         n.id === nodeId
           ? {
               ...n,
@@ -546,9 +630,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
 
   renameNode: (id, label) =>
     set((state) => ({
-      nodes: state.nodes.map((n) =>
-        n.id === id ? { ...n, data: { ...n.data, label } } : n
-      ),
+      nodes: state.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, label } } : n)),
       ...record(state, `label:${id}`),
     })),
 
@@ -656,6 +738,13 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       if (m) max = Math.max(max, Number(m[1]) + 1);
     }
     counter = max;
+    // Results kept for unchanged nodes are stale if anything upstream changed.
+    const nodesOut = keepRuntime
+      ? markStale(flowNodes, flowEdges, [
+          ...flowNodes.filter((n) => n.data.status === "idle").map((n) => n.id),
+          ...rewiredTargets(get().edges, flowEdges),
+        ])
+      : flowNodes;
     set((state) => {
       const selectedId =
         keepRuntime && state.selectedId && flowNodes.some((n) => n.id === state.selectedId)
@@ -665,7 +754,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
         history === "record" ? record(state) : { past: [], future: [], editRevision: ++revSeq };
       lastKey = null;
       return {
-        nodes: flowNodes,
+        nodes: nodesOut,
         edges: flowEdges,
         selectedId,
         ...hist,
@@ -679,10 +768,15 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       const previous = state.past[state.past.length - 1];
       if (!previous) return {};
       lastKey = null;
-      const nodes = restoreNodes(previous, state.nodes);
+      const restored = restoreNodes(previous, state.nodes);
+      const edges = restoreEdges(previous, state.edges);
+      const nodes = markStale(restored, edges, [
+        ...changedIds(state.nodes, restored),
+        ...rewiredTargets(state.edges, edges),
+      ]);
       return {
         nodes,
-        edges: restoreEdges(previous, state.edges),
+        edges,
         selectedId: nodes.some((n) => n.id === state.selectedId) ? state.selectedId : null,
         past: state.past.slice(0, -1),
         future: [snapshot(state.nodes, state.edges, state.editRevision), ...state.future].slice(
@@ -699,10 +793,15 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       const next = state.future[0];
       if (!next) return {};
       lastKey = null;
-      const nodes = restoreNodes(next, state.nodes);
+      const restored = restoreNodes(next, state.nodes);
+      const edges = restoreEdges(next, state.edges);
+      const nodes = markStale(restored, edges, [
+        ...changedIds(state.nodes, restored),
+        ...rewiredTargets(state.edges, edges),
+      ]);
       return {
         nodes,
-        edges: restoreEdges(next, state.edges),
+        edges,
         selectedId: nodes.some((n) => n.id === state.selectedId) ? state.selectedId : null,
         past: pushPast(state.past, snapshot(state.nodes, state.edges, state.editRevision)),
         future: state.future.slice(1),

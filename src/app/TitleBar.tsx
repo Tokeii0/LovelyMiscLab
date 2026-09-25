@@ -6,10 +6,10 @@ import {
   FilePlus,
   FolderOpen,
   HelpCircle,
+  Loader2,
   Minus,
   Moon,
   MoreHorizontal,
-  Pause,
   Pencil,
   Play,
   Redo2,
@@ -19,6 +19,7 @@ import {
   Sun,
   Undo2,
   X,
+  Zap,
 } from "lucide-react";
 
 import logo from "@/assets/logo.svg";
@@ -27,7 +28,7 @@ import { inTauri } from "@/lib/devMocks";
 import { newFlow, openFlow, renameFlow, saveFlow } from "@/lib/project";
 import { clearCanvas } from "@/flow/canvasActions";
 import { ContextMenu, type MenuItem } from "@/flow/ContextMenu";
-import { pauseRun, stopRun } from "@/flow/runner";
+import { clearResults, runGraph, setLiveMode, stopRun } from "@/flow/runner";
 import { useWindowMaximized } from "@/hooks/useWindowMaximized";
 import { useAiStore } from "@/store/ai";
 import { promptDialog } from "@/store/confirm";
@@ -71,11 +72,14 @@ function MoreMenu() {
 
   const items: MenuItem[] = [
     {
-      label: selectedCount ? `封装选中的 ${selectedCount} 个节点为模块…` : "封装为模块…（先选择节点）",
+      label: selectedCount
+        ? `封装选中的 ${selectedCount} 个节点为模块…`
+        : "封装为模块…（先选择节点）",
       disabled: selectedCount === 0,
       onClick: () => useModuleDialogStore.getState().setOpen(true),
     },
     { label: "接入外部脚本为节点…", onClick: () => useScriptDialogStore.getState().setOpen(true) },
+    { label: "清除运行结果", separator: true, onClick: () => void clearResults() },
     { label: "清空画布…", danger: true, onClick: () => void clearCanvas() },
   ];
 
@@ -100,8 +104,9 @@ function MoreMenu() {
 export function TitleBar() {
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggle);
-  const mode = useRunStore((s) => s.mode);
-  const setMode = useRunStore((s) => s.setMode);
+  const live = useRunStore((s) => s.mode === "live");
+  const running = useRunStore((s) => s.running);
+  const activeRun = useRunStore((s) => s.activeRun);
   const undo = useGraphStore((s) => s.undo);
   const redo = useGraphStore((s) => s.redo);
   const canUndo = useGraphStore((s) => s.past.length > 0);
@@ -112,16 +117,19 @@ export function TitleBar() {
   const maximized = useWindowMaximized();
 
   const renameProject = async () => {
-    const next = await promptDialog({ title: "重命名流程", initial: projectName, confirmText: "重命名" });
+    const next = await promptDialog({
+      title: "重命名流程",
+      initial: projectName,
+      confirmText: "重命名",
+    });
     if (next != null) renameFlow(next);
   };
 
-  const status =
-    mode === "live"
-      ? { text: "实时运行中", color: "#22c55e" }
-      : mode === "paused"
-        ? { text: "已暂停", color: "#f59e0b" }
-        : { text: "就绪", color: "#94a3b8" };
+  const status = running
+    ? { text: activeRun?.title ? `${activeRun.title}…` : "运行中…", color: "#3b82f6", spin: true }
+    : live
+      ? { text: "实时", color: "#22c55e", spin: false }
+      : { text: "就绪", color: "#94a3b8", spin: false };
 
   const ctrl =
     "flex h-8 w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground";
@@ -166,36 +174,48 @@ export function TitleBar() {
       <div data-tauri-drag-region className="flex min-w-0 flex-1 items-center justify-center gap-2">
         {onCanvas && (
           <>
-            <span
-              className="flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]"
-              style={{ borderColor: `${status.color}55`, color: status.color }}
-            >
-              <Circle className="h-2 w-2 fill-current" />
-              {status.text}
-            </span>
             <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border bg-background p-0.5">
               <button
-                onClick={() => setMode("live")}
-                disabled={mode === "live"}
-                className="flex items-center gap-1 rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
+                onClick={() => void runGraph()}
+                title="运行整图一次 (Ctrl+Enter)"
+                className="flex items-center gap-1 rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition hover:bg-primary/90"
               >
                 <Play className="h-3.5 w-3.5" /> 运行
               </button>
               <button
-                onClick={() => void pauseRun()}
-                disabled={mode !== "live"}
-                className="flex items-center gap-1 rounded-md px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
+                onClick={() => setLiveMode(!live)}
+                title={live ? "关闭实时模式" : "实时模式：编辑后自动增量运行（耗时节点除外）"}
+                aria-pressed={live}
+                className={cn(
+                  "flex items-center gap-1 rounded-md px-2.5 py-1 text-xs transition-colors",
+                  live
+                    ? "bg-emerald-500/15 font-medium text-emerald-600 hover:bg-emerald-500/20"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
               >
-                <Pause className="h-3.5 w-3.5" /> 暂停
+                <Zap className={cn("h-3.5 w-3.5", live && "fill-current")} /> 实时
               </button>
               <button
                 onClick={() => void stopRun()}
-                disabled={mode === "idle"}
-                className="flex items-center gap-1 rounded-md px-2.5 py-1 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+                disabled={!running && !live}
+                title="停止运行（已有结果保留）"
+                className="flex items-center gap-1 rounded-md px-2.5 py-1 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-40"
               >
                 <Square className="h-3.5 w-3.5" /> 停止
               </button>
             </div>
+            <span
+              className="flex min-w-0 max-w-[220px] shrink items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]"
+              style={{ borderColor: `${status.color}55`, color: status.color }}
+              title={status.text}
+            >
+              {status.spin ? (
+                <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+              ) : (
+                <Circle className="h-2 w-2 shrink-0 fill-current" />
+              )}
+              <span className="truncate">{status.text}</span>
+            </span>
           </>
         )}
       </div>
@@ -222,7 +242,10 @@ export function TitleBar() {
       {/* app utilities */}
       <div className="flex shrink-0 items-center gap-0.5">
         <div className="mx-1 h-4 w-px bg-border" />
-        <IconButton title={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"} onClick={toggleTheme}>
+        <IconButton
+          title={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}
+          onClick={toggleTheme}
+        >
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </IconButton>
         <IconButton title="帮助" onClick={() => useHelpStore.getState().openForNode()}>

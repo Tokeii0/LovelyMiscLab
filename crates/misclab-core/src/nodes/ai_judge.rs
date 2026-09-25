@@ -49,7 +49,9 @@ pub fn register(reg: &mut NodeRegistry) {
                 ParamSpec::text("instruction", "指令", "分析以下内容并给出结果：", true),
                 ParamSpec::text("format", "输出格式(可选)", "", true),
             ],
-        ),
+        )
+        .heavy()
+        .volatile(),
         Arc::new(|| Arc::new(N)),
     );
 }

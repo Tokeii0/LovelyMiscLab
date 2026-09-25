@@ -7,7 +7,6 @@ export type { AppError } from "@/lib/errors";
 
 import type {
   CompositeModule,
-  GraphOutputs,
   NodeDescriptor,
   PortValue,
   ProgressMsg,
@@ -207,7 +206,8 @@ export const api = {
   runGraph: (graph: SerializedGraph, onEvent: (m: ProgressMsg) => void) => {
     const channel = new Channel<ProgressMsg>();
     channel.onmessage = onEvent;
-    return invoke<GraphOutputs>("run_graph", { graph, onEvent: channel });
+    // Outputs stream in each node's `nodeDone`; nothing is returned at the end.
+    return invoke<void>("run_graph", { graph, onEvent: channel });
   },
 
   cancelJob: (job: string) => invoke<void>("cancel_job", { job }),

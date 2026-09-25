@@ -119,6 +119,7 @@ impl ScriptModule {
                 .collect(),
             params: self.params.clone(),
             cost: Cost::Heavy,
+            volatile: true,
         }
     }
 

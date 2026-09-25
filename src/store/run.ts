@@ -2,7 +2,8 @@ import { create } from "zustand";
 
 import type { PortValue, ProgressMsg } from "@/lib/types";
 
-export type RunMode = "idle" | "live" | "paused";
+/** manual = runs only when asked; live = re-run automatically after every edit. */
+export type RunMode = "manual" | "live";
 export type RunStatus = "running" | "success" | "error" | "cancelled";
 
 export interface RunHistoryNode {
@@ -68,14 +69,16 @@ function eventFromProgress(msg: ProgressMsg): RunHistoryEvent | null {
     case "nodeEntered":
       return { time, level: "info", node: msg.node, message: "节点开始执行" };
     case "nodeProgress":
+      return null; // too chatty for the timeline; the node shows live progress
+    case "nodeDone":
       return {
         time,
-        level: "info",
+        level: "success",
         node: msg.node,
-        message: `进度 ${Math.round(msg.pct * 100)}%`,
+        message: msg.cached ? "节点结果来自缓存" : "节点执行成功",
       };
-    case "nodeDone":
-      return { time, level: "success", node: msg.node, message: "节点执行成功" };
+    case "nodeSkipped":
+      return { time, level: "warn", node: msg.node, message: msg.reason };
     case "nodeFailed":
       return { time, level: "error", node: msg.node, message: msg.error };
     case "log":
@@ -92,11 +95,17 @@ function eventFromProgress(msg: ProgressMsg): RunHistoryEvent | null {
   }
 }
 
+/** What is executing right now (drives the title-bar status). */
+export interface ActiveRun {
+  kind: "graph" | "toNode" | "node" | "live";
+  title: string;
+}
+
 interface RunState {
-  /** idle = not running; live = auto-run on changes; paused = frozen. */
   mode: RunMode;
   /** True while a run is in flight. */
   running: boolean;
+  activeRun: ActiveRun | null;
   /** Duration of the last run, in ms. */
   elapsed: number;
   /** Most recent graph-level error, shown when no node captured it. */
@@ -105,11 +114,13 @@ interface RunState {
   history: RunHistoryEntry[];
   activeHistoryId: string | null;
   setMode: (m: RunMode) => void;
-  setRunning: (r: boolean) => void;
+  setRunning: (r: boolean, active?: ActiveRun | null) => void;
   setElapsed: (ms: number) => void;
   setLastError: (error: string | null) => void;
+  /** `replaceId`: reuse that entry (live mode keeps one rolling "实时运行" record). */
   startHistory: (
-    entry: Omit<RunHistoryEntry, "id" | "startedAt" | "elapsed" | "status" | "events">
+    entry: Omit<RunHistoryEntry, "id" | "startedAt" | "elapsed" | "status" | "events">,
+    replaceId?: string | null
   ) => string;
   recordProgress: (msg: ProgressMsg) => void;
   appendHistoryEvent: (entryId: string, event: RunHistoryEvent) => void;
@@ -122,18 +133,19 @@ interface RunState {
 }
 
 export const useRunStore = create<RunState>((set) => ({
-  mode: "idle",
+  mode: "manual",
   running: false,
+  activeRun: null,
   elapsed: 0,
   lastError: null,
   history: loadHistory(),
   activeHistoryId: null,
   setMode: (mode) => set({ mode }),
-  setRunning: (running) => set({ running }),
+  setRunning: (running, active) => set({ running, activeRun: running ? (active ?? null) : null }),
   setElapsed: (elapsed) => set({ elapsed }),
   setLastError: (lastError) => set({ lastError }),
-  startHistory: (entry) => {
-    const id = `run_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  startHistory: (entry, replaceId) => {
+    const id = replaceId ?? `run_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const full: RunHistoryEntry = {
       ...entry,
       id,
@@ -143,12 +155,14 @@ export const useRunStore = create<RunState>((set) => ({
       events: [],
     };
     set((state) => {
-      const history = [full, ...state.history].slice(0, MAX_HISTORY);
+      const history = [full, ...state.history.filter((e) => e.id !== id)].slice(0, MAX_HISTORY);
       persistHistory(history);
       return { history, activeHistoryId: id };
     });
     return id;
   },
+  // Events accumulate in memory; storage is written when the run finishes, not
+  // on every progress message (which re-serialized the whole history each time).
   recordProgress: (msg) => {
     const event = eventFromProgress(msg);
     if (!event) return;
@@ -159,7 +173,6 @@ export const useRunStore = create<RunState>((set) => ({
           ? { ...entry, events: [...entry.events, event].slice(-300) }
           : entry
       );
-      persistHistory(history);
       return { history };
     });
   },
@@ -168,7 +181,6 @@ export const useRunStore = create<RunState>((set) => ({
       const history = state.history.map((entry) =>
         entry.id === entryId ? { ...entry, events: [...entry.events, event].slice(-300) } : entry
       );
-      persistHistory(history);
       return { history };
     }),
   finishHistory: (entryId, patch) =>

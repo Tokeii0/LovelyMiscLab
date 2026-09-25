@@ -1,45 +1,60 @@
+// Run coordination. Every run — the 运行 button, live mode, "运行到此节点",
+// a node's ▶ — goes through one queue: only one run is in flight, the most
+// recent request waits behind it, and Stop cancels without throwing results away.
+
 import { api } from "@/lib/bindings";
-import { inTauri } from "@/lib/devMocks";
+import { inTauri, mockCancelJob, mockRunGraph } from "@/lib/devMocks";
+import { errorMessage, isCancelled } from "@/lib/errors";
 import type { ParamWidget, PortValue, ProgressMsg, SerializedGraph } from "@/lib/types";
 import { useDescriptorStore } from "@/store/descriptors";
 import { useGraphStore } from "@/store/graph";
 import { useProjectStore } from "@/store/project";
-import { useRunStore } from "@/store/run";
-import { errorMessage, isCancelled } from "@/lib/errors";
+import { useRunStore, type ActiveRun } from "@/store/run";
+import { toast } from "@/store/toast";
 
-// Module-level run coordination (single in-flight run; latest state coalesced).
+export type RunRequest =
+  | { kind: "graph" }
+  | { kind: "live" }
+  | { kind: "toNode"; nodeId: string }
+  | { kind: "node"; nodeId: string };
+
 let currentJob: string | null = null;
 let inFlight = false;
-let pending = false;
+let queued: RunRequest | null = null;
+/** The one run-history entry live mode keeps updating instead of adding hundreds. */
+let liveEntryId: string | null = null;
+
+const LIVE_HINT = "耗时节点：实时模式不会自动运行，点「运行」执行";
 
 function now() {
   return new Date().toLocaleTimeString();
 }
 
 /** Coerce a connected port value into the JS type a param widget expects (mirrors
- * the Rust executor), so single-node execution honors param connections too. */
+ * the Rust executor), so single-node execution honors param connections too.
+ * `undefined` = no usable value (the param keeps its own setting). */
 function coerceParam(v: PortValue, widget: ParamWidget): unknown {
   if (widget.kind === "number" || widget.kind === "slider") {
     if (v.type === "number") return v.value;
     if (v.type === "bool") return v.value ? 1 : 0;
     if (v.type === "text") {
       const n = parseFloat(v.value);
-      return Number.isNaN(n) ? 0 : n;
+      return Number.isNaN(n) ? undefined : n;
     }
-    return 0;
+    return undefined;
   }
   if (widget.kind === "toggle") {
     if (v.type === "bool") return v.value;
     if (v.type === "number") return v.value !== 0;
     if (v.type === "text")
       return ["true", "1", "yes", "on", "是"].includes(v.value.trim().toLowerCase());
-    return false;
+    return undefined;
   }
   if (v.type === "text") return v.value;
   if (v.type === "number") return String(v.value);
   if (v.type === "bool") return String(v.value);
   if (v.type === "stringList") return v.value.join("\n");
-  return "";
+  return undefined;
 }
 
 /** Serialize the current graph, excluding disabled nodes (and their edges). */
@@ -55,15 +70,40 @@ export function buildGraph(onlyIds?: Set<string>): SerializedGraph {
       position: [n.position.x, n.position.y],
     })),
     edges: g.edges
-      .filter(
-        (e) =>
-          e.sourceHandle && e.targetHandle && ids.has(e.source) && ids.has(e.target)
-      )
+      .filter((e) => e.sourceHandle && e.targetHandle && ids.has(e.source) && ids.has(e.target))
       .map((e) => ({
         from: { node: e.source, port: e.sourceHandle as string },
         to: { node: e.target, port: e.targetHandle as string },
       })),
   };
+}
+
+function upstreamNodeIds(nodeId: string): Set<string> {
+  const g = useGraphStore.getState();
+  const ids = new Set<string>();
+  const visit = (id: string) => {
+    if (ids.has(id)) return;
+    ids.add(id);
+    for (const edge of g.edges) if (edge.target === id) visit(edge.source);
+  };
+  visit(nodeId);
+  return ids;
+}
+
+/** Heavy nodes (cracking, AI, HTTP, external programs) and everything downstream:
+ * live mode leaves these for an explicit run. */
+function heavyAndDownstream(): Set<string> {
+  const g = useGraphStore.getState();
+  const byId = useDescriptorStore.getState().byId;
+  const out = new Set<string>();
+  const stack = g.nodes.filter((n) => byId[n.data.descriptorId]?.cost === "heavy").map((n) => n.id);
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (out.has(id)) continue;
+    out.add(id);
+    for (const e of g.edges) if (e.source === id) stack.push(e.target);
+  }
+  return out;
 }
 
 function handleEvent(m: ProgressMsg) {
@@ -78,6 +118,7 @@ function handleEvent(m: ProgressMsg) {
         status: "running",
         progress: 0,
         error: undefined,
+        hint: undefined,
         logs: [{ time: now(), level: "info", message: "开始执行" }],
       });
       break;
@@ -85,21 +126,59 @@ function handleEvent(m: ProgressMsg) {
       s.updateRuntime(m.node, { progress: m.pct });
       break;
     case "nodeDone":
-      s.updateRuntime(m.node, { status: "done", progress: 1 });
-      s.appendLog(m.node, { time: now(), level: "success", message: "执行成功" });
+      s.updateRuntime(m.node, {
+        status: "done",
+        progress: 1,
+        error: undefined,
+        stale: false,
+        hint: undefined,
+        ...(m.outputs ? { outputs: m.outputs } : {}),
+      });
+      if (!m.cached) s.appendLog(m.node, { time: now(), level: "success", message: "执行成功" });
+      break;
+    case "nodeSkipped":
+      s.updateRuntime(m.node, {
+        status: "skipped",
+        outputs: undefined,
+        error: undefined,
+        stale: false,
+        hint: m.reason,
+      });
       break;
     case "nodeFailed":
-      s.updateRuntime(m.node, { status: "error", error: m.error });
+      // A failed node's previous outputs no longer describe anything real.
+      s.updateRuntime(m.node, {
+        status: "error",
+        error: m.error,
+        outputs: undefined,
+        stale: false,
+        hint: undefined,
+      });
       s.appendLog(m.node, { time: now(), level: "error", message: m.error });
       break;
     case "jobFailed":
-      useRunStore.getState().setLastError(m.error);
+      if (!/取消|cancel/i.test(m.error)) useRunStore.getState().setLastError(m.error);
       break;
     case "log":
       if (m.node) s.appendLog(m.node, { time: now(), level: m.level, message: m.message });
       break;
     default:
       break;
+  }
+}
+
+/** Nodes left "running" by a cancelled run go back to their previous look. */
+function settleInterrupted() {
+  const s = useGraphStore.getState();
+  for (const n of s.nodes) {
+    if (n.data.status === "running") {
+      s.updateRuntime(n.id, {
+        status: n.data.outputs ? "done" : "idle",
+        progress: 0,
+        stale: !!n.data.outputs,
+      });
+      s.appendLog(n.id, { time: now(), level: "warn", message: "已取消" });
+    }
   }
 }
 
@@ -139,244 +218,270 @@ function sanitizeOutputs(
   return Object.keys(out).length ? out : undefined;
 }
 
-function historyNodes() {
+function historyNodes(only?: Set<string>) {
   const byId = useDescriptorStore.getState().byId;
-  return useGraphStore.getState().nodes.map((n) => ({
-    id: n.id,
-    label: n.data.label || byId[n.data.descriptorId]?.displayName || n.data.descriptorId,
-    descriptorId: n.data.descriptorId,
-    status: n.data.status,
-    error: n.data.error,
-    outputs: sanitizeOutputs(n.data.outputs),
-  }));
+  return useGraphStore
+    .getState()
+    .nodes.filter((n) => !only || only.has(n.id))
+    .map((n) => ({
+      id: n.id,
+      label: n.data.label || byId[n.data.descriptorId]?.displayName || n.data.descriptorId,
+      descriptorId: n.data.descriptorId,
+      status: n.data.status,
+      error: n.data.error,
+      outputs: sanitizeOutputs(n.data.outputs),
+    }));
 }
 
-function startHistory(scope: "graph" | "node" | "debug", title: string, graph: SerializedGraph) {
-  return useRunStore.getState().startHistory({
-    scope,
-    title,
-    projectName: useProjectStore.getState().name,
-    nodeCount: graph.nodes.length,
-    edgeCount: graph.edges.length,
-    nodes: historyNodes(),
-  });
+// ---------------------------------------------------------------------------
+// The queue
+// ---------------------------------------------------------------------------
+
+/** Merge a new request with one already waiting: an explicit run beats a live
+ * re-run; otherwise the newest request wins. */
+function mergeQueued(prev: RunRequest | null, next: RunRequest): RunRequest {
+  if (prev && prev.kind !== "live" && next.kind === "live") return prev;
+  return next;
 }
 
-function finishHistory(entryId: string, elapsed: number, graph: SerializedGraph, error?: unknown) {
-  const text = error ? errorMessage(error) : "";
-  const ids = new Set(graph.nodes.map((n) => n.id));
-  const status = error
-    ? isCancelled(error)
-      ? "cancelled"
-      : "error"
-    : useGraphStore.getState().nodes.some((n) => ids.has(n.id) && n.data.status === "error")
-      ? "error"
-      : "success";
-  useRunStore.getState().finishHistory(entryId, {
-    elapsed,
-    status,
-    error: text || undefined,
-    nodes: historyNodes(),
-  });
+function describe(req: RunRequest): ActiveRun {
+  const label = (id: string) =>
+    useGraphStore.getState().nodes.find((n) => n.id === id)?.data.label || id;
+  switch (req.kind) {
+    case "graph":
+      return { kind: "graph", title: "整图运行" };
+    case "live":
+      return { kind: "live", title: "实时运行" };
+    case "toNode":
+      return { kind: "toNode", title: `运行到：${label(req.nodeId)}` };
+    case "node":
+      return { kind: "node", title: `单节点运行：${label(req.nodeId)}` };
+  }
 }
 
-async function runSerializedGraph(graph: SerializedGraph, scope: "graph" | "debug", title: string) {
-  if (!inTauri) return; // graphs execute in the Rust backend; no-op in a browser
-  if (graph.nodes.length === 0) return;
+export async function requestRun(req: RunRequest): Promise<void> {
   if (inFlight) {
-    pending = true;
+    queued = mergeQueued(queued, req);
     return;
   }
   inFlight = true;
-  useRunStore.getState().setRunning(true);
-  useRunStore.getState().setLastError(null);
-  const t0 = Date.now();
-  const entryId = startHistory(scope, title, graph);
-  let failure: unknown;
+  const active = describe(req);
+  useRunStore.getState().setRunning(true, active);
   try {
-    const outputs = await api.runGraph(graph, handleEvent);
-    const s = useGraphStore.getState();
-    for (const [nodeId, portmap] of Object.entries(outputs)) {
-      s.updateRuntime(nodeId, { outputs: portmap });
-    }
-  } catch (e) {
-    failure = e;
-    if (!isCancelled(e)) useRunStore.getState().setLastError(errorMessage(e));
+    if (req.kind === "node") await execNode(req.nodeId, active);
+    else await execGraph(req, active);
   } finally {
     inFlight = false;
     currentJob = null;
-    const elapsed = Date.now() - t0;
     useRunStore.getState().setRunning(false);
-    useRunStore.getState().setElapsed(elapsed);
-    finishHistory(entryId, elapsed, graph, failure);
-    if (pending) {
-      pending = false;
-      void executeGraph();
+    const next = queued;
+    queued = null;
+    // A live re-run only makes sense while live mode is still on.
+    if (next && (next.kind !== "live" || useRunStore.getState().mode === "live")) {
+      void requestRun(next);
     }
   }
 }
 
-/** Run the whole graph. Backend caching makes this incremental. */
-export async function executeGraph() {
-  return runSerializedGraph(buildGraph(), "graph", "整图运行");
-}
-
-function upstreamNodeIds(nodeId: string): Set<string> {
-  const g = useGraphStore.getState();
-  const ids = new Set<string>();
-  const visit = (id: string) => {
-    if (ids.has(id)) return;
-    ids.add(id);
-    for (const edge of g.edges) {
-      if (edge.target === id) visit(edge.source);
+async function execGraph(req: Exclude<RunRequest, { kind: "node" }>, active: ActiveRun) {
+  let only: Set<string> | undefined;
+  if (req.kind === "toNode") only = upstreamNodeIds(req.nodeId);
+  if (req.kind === "live") {
+    // Live mode skips expensive nodes; tell them why they didn't update.
+    const heavy = heavyAndDownstream();
+    if (heavy.size) {
+      const g = useGraphStore.getState();
+      for (const n of g.nodes) {
+        if (
+          heavy.has(n.id) &&
+          (n.data.status === "idle" || n.data.stale) &&
+          n.data.hint !== LIVE_HINT
+        ) {
+          g.updateRuntime(n.id, { hint: LIVE_HINT });
+        }
+      }
+      only = new Set(g.nodes.filter((n) => !heavy.has(n.id)).map((n) => n.id));
     }
-  };
-  visit(nodeId);
-  return ids;
+  }
+  const graph = buildGraph(only);
+  if (graph.nodes.length === 0) return;
+
+  useRunStore.getState().setLastError(null);
+  const t0 = Date.now();
+  const ids = new Set(graph.nodes.map((n) => n.id));
+  const entryId = useRunStore.getState().startHistory(
+    {
+      scope: req.kind === "toNode" ? "debug" : "graph",
+      title: active.title,
+      projectName: useProjectStore.getState().name,
+      nodeCount: graph.nodes.length,
+      edgeCount: graph.edges.length,
+      nodes: historyNodes(ids),
+    },
+    req.kind === "live" ? liveEntryId : null
+  );
+  if (req.kind === "live") liveEntryId = entryId;
+
+  let failure: unknown;
+  try {
+    if (inTauri) await api.runGraph(graph, handleEvent);
+    else await mockRunGraph(graph, handleEvent);
+  } catch (e) {
+    failure = e;
+    if (isCancelled(e)) settleInterrupted();
+    else useRunStore.getState().setLastError(errorMessage(e));
+  } finally {
+    const elapsed = Date.now() - t0;
+    useRunStore.getState().setElapsed(elapsed);
+    const failedNode = useGraphStore
+      .getState()
+      .nodes.some((n) => ids.has(n.id) && n.data.status === "error");
+    useRunStore.getState().finishHistory(entryId, {
+      elapsed,
+      status: failure
+        ? isCancelled(failure)
+          ? "cancelled"
+          : "error"
+        : failedNode
+          ? "error"
+          : "success",
+      error: failure ? errorMessage(failure) : undefined,
+      nodes: historyNodes(ids),
+    });
+  }
 }
 
-/** Run the selected node and all of its upstream dependencies as a debug subgraph. */
-export async function executeToNode(nodeId: string) {
-  const graph = buildGraph(upstreamNodeIds(nodeId));
-  const node = useGraphStore.getState().nodes.find((n) => n.id === nodeId);
-  await runSerializedGraph(graph, "debug", `运行到：${node?.data.label || nodeId}`);
-}
-
-/** Run a single node, gathering its inputs from upstream nodes' last outputs. */
-export async function runSingleNode(nodeId: string) {
+/** Run one node with the upstream results already on the canvas. When those are
+ * missing or out of date (fresh graph, edits upstream) it runs the upstream too. */
+async function execNode(nodeId: string, active: ActiveRun) {
   const g = useGraphStore.getState();
   const node = g.nodes.find((n) => n.id === nodeId);
   if (!node) return;
+  if (node.data.disabled) {
+    toast.info("该节点已禁用", { detail: "先在右键菜单或节点工具栏中启用它" });
+    return;
+  }
   const descriptor = useDescriptorStore.getState().byId[node.data.descriptorId];
 
   const inputPortNames = new Set((descriptor?.inputs ?? []).map((p) => p.name));
   const inputs: Record<string, PortValue> = {};
   const paramOverrides: Record<string, unknown> = {};
+  let upstreamMissing = false;
   for (const e of g.edges) {
-    if (e.target === nodeId && e.sourceHandle && e.targetHandle) {
-      const src = g.nodes.find((n) => n.id === e.source);
-      const val = src?.data.outputs?.[e.sourceHandle];
-      if (!val) continue;
-      if (inputPortNames.has(e.targetHandle)) {
-        inputs[e.targetHandle] = val;
-      } else {
-        // An edge into a promoted parameter overrides that param's value.
-        const spec = descriptor?.params.find((p) => p.name === e.targetHandle);
-        if (spec) paramOverrides[e.targetHandle] = coerceParam(val, spec.widget);
-      }
+    if (e.target !== nodeId || !e.sourceHandle || !e.targetHandle) continue;
+    const src = g.nodes.find((n) => n.id === e.source);
+    const val = src?.data.outputs?.[e.sourceHandle];
+    if (!val || src?.data.stale) {
+      upstreamMissing = true;
+      continue;
+    }
+    if (inputPortNames.has(e.targetHandle)) {
+      inputs[e.targetHandle] = val;
+    } else {
+      // An edge into a promoted parameter overrides that param's value.
+      const spec = descriptor?.params.find((p) => p.name === e.targetHandle);
+      const coerced = spec ? coerceParam(val, spec.widget) : undefined;
+      if (coerced !== undefined) paramOverrides[e.targetHandle] = coerced;
     }
   }
-
-  const missing = (descriptor?.inputs ?? []).filter(
-    (p) => p.required && !(p.name in inputs)
-  );
-  if (missing.length > 0) {
-    g.updateRuntime(nodeId, {
-      status: "error",
-      error: `缺少输入：${missing.map((p) => p.label).join("、")}（请先执行上游节点）`,
-    });
-    g.appendLog(nodeId, { time: now(), level: "error", message: "缺少输入" });
+  if (upstreamMissing || !inTauri) {
+    await execGraph({ kind: "toNode", nodeId }, active);
     return;
   }
 
-  if (!inTauri) {
-    g.updateRuntime(nodeId, { status: "error", error: "浏览器预览无法执行节点" });
-    return;
-  }
-
-  g.updateRuntime(nodeId, {
-    status: "running",
-    progress: 0,
-    error: undefined,
-    logs: [{ time: now(), level: "info", message: "单独执行" }],
-  });
-  const descriptorName = descriptor?.displayName ?? node.data.descriptorId;
+  handleEvent({ kind: "nodeEntered", node: nodeId });
   const entryId = useRunStore.getState().startHistory({
     scope: "node",
-    title: `单节点运行：${node.data.label || descriptorName}`,
+    title: active.title,
     projectName: useProjectStore.getState().name,
     nodeCount: 1,
     edgeCount: 0,
-    nodes: historyNodes().filter((n) => n.id === nodeId),
+    nodes: historyNodes(new Set([nodeId])),
   });
   const t0 = Date.now();
   try {
     const params = { ...node.data.params, ...paramOverrides };
-    // Stream live progress/logs so long-running nodes (e.g. bkcrack) drive the
-    // node's progress bar; also captures the job id so the Stop control cancels it.
+    // Streams progress/logs so long nodes (e.g. bkcrack) drive the progress bar,
+    // and registers a job so 停止 can cancel it.
     const outputs = await api.runNodeStreamed(
       node.data.descriptorId,
       nodeId,
       inputs,
       params,
       (m) => {
-        const gs = useGraphStore.getState();
         if (m.kind === "jobStarted") currentJob = m.job;
-        else if (m.kind === "nodeProgress") gs.updateRuntime(m.node, { progress: m.pct });
-        else if (m.kind === "log" && m.node)
-          gs.appendLog(m.node, { time: now(), level: m.level, message: m.message });
+        else if (m.kind === "nodeProgress" || m.kind === "log") handleEvent(m);
       }
     );
-    g.updateRuntime(nodeId, { status: "done", progress: 1, outputs });
-    g.appendLog(nodeId, { time: now(), level: "success", message: "执行成功" });
-    useRunStore.getState().appendHistoryEvent(entryId, {
-      time: now(),
-      level: "success",
-      node: nodeId,
-      message: "单节点执行成功",
-    });
+    handleEvent({ kind: "nodeDone", node: nodeId, outputs, cached: false });
     useRunStore.getState().finishHistory(entryId, {
       status: "success",
       elapsed: Date.now() - t0,
-      nodes: historyNodes().filter((n) => n.id === nodeId),
+      nodes: historyNodes(new Set([nodeId])),
     });
   } catch (e) {
     const msg = errorMessage(e);
-    g.updateRuntime(nodeId, { status: "error", error: msg });
-    g.appendLog(nodeId, { time: now(), level: "error", message: msg });
-    useRunStore.getState().appendHistoryEvent(entryId, {
-      time: now(),
-      level: "error",
-      node: nodeId,
-      message: msg,
-    });
+    if (isCancelled(e)) settleInterrupted();
+    else handleEvent({ kind: "nodeFailed", node: nodeId, error: msg });
     useRunStore.getState().finishHistory(entryId, {
       status: isCancelled(e) ? "cancelled" : "error",
       elapsed: Date.now() - t0,
       error: msg,
-      nodes: historyNodes().filter((n) => n.id === nodeId),
+      nodes: historyNodes(new Set([nodeId])),
     });
-  } finally {
-    currentJob = null;
   }
 }
 
-/** Pause live mode (halt the current run; completed nodes stay cached). */
-export async function pauseRun() {
-  useRunStore.getState().setMode("paused");
-  if (currentJob) {
-    try {
-      await api.cancelJob(currentJob);
-    } catch {
-      /* ignore */
-    }
-  }
+// ---------------------------------------------------------------------------
+// Public controls
+// ---------------------------------------------------------------------------
+
+/** 运行 / Ctrl+Enter: run the whole graph once, heavy nodes included. */
+export function runGraph() {
+  return requestRun({ kind: "graph" });
 }
 
-/** Stop: cancel, clear the incremental cache, and reset node runtime state. */
+/** Run a node together with everything it depends on. */
+export function runToNode(nodeId: string) {
+  return requestRun({ kind: "toNode", nodeId });
+}
+
+/** Run just this node on its upstream's current results. */
+export function runNode(nodeId: string) {
+  return requestRun({ kind: "node", nodeId });
+}
+
+/** Turn live mode on/off. Turning it on runs right away. */
+export function setLiveMode(on: boolean) {
+  useRunStore.getState().setMode(on ? "live" : "manual");
+  if (on) void requestRun({ kind: "live" });
+  else if (queued?.kind === "live") queued = null;
+}
+
+/** 停止: cancel what's running and anything queued. Results so far stay. */
 export async function stopRun() {
-  useRunStore.getState().setMode("idle");
+  queued = null;
+  if (useRunStore.getState().mode === "live") useRunStore.getState().setMode("manual");
   if (currentJob) {
     try {
-      await api.cancelJob(currentJob);
+      if (inTauri) await api.cancelJob(currentJob);
+      else mockCancelJob(currentJob);
     } catch {
-      /* ignore */
+      /* already finished */
     }
   }
-  try {
-    await api.resetRun();
-  } catch {
-    /* ignore (unavailable outside Tauri) */
+}
+
+/** 清除结果: stop, drop the backend cache and every node's results. */
+export async function clearResults() {
+  await stopRun();
+  if (inTauri) {
+    try {
+      await api.resetRun();
+    } catch (e) {
+      toast.error("清除缓存失败", { error: e });
+    }
   }
   useGraphStore.getState().resetRuntime();
+  useRunStore.getState().setLastError(null);
 }

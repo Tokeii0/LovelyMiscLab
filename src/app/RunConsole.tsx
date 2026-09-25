@@ -10,7 +10,9 @@ function statusColor(s: string) {
       ? "bg-blue-500/15 text-blue-600"
       : s === "error"
         ? "bg-red-500/15 text-red-600"
-        : "bg-secondary text-muted-foreground";
+        : s === "stale"
+          ? "bg-amber-500/15 text-amber-600"
+          : "bg-secondary text-muted-foreground";
 }
 
 export function RunConsole() {
@@ -18,16 +20,33 @@ export function RunConsole() {
   const edges = useGraphStore((s) => s.edges);
   const selectedId = useGraphStore((s) => s.selectedId);
   const byId = useDescriptorStore((s) => s.byId);
-  const mode = useRunStore((s) => s.mode);
+  const live = useRunStore((s) => s.mode === "live");
+  const running = useRunStore((s) => s.running);
   const elapsed = useRunStore((s) => s.elapsed);
   const lastError = useRunStore((s) => s.lastError);
   const historyCount = useRunStore((s) => s.history.length);
 
   const errors = nodes.filter((n) => n.data.status === "error").length;
+  const count = (f: (d: (typeof nodes)[number]["data"]) => boolean) =>
+    nodes.filter((n) => f(n.data)).length;
+  const counts: [string, string, number][] = [
+    ["done", "完成", count((d) => d.status === "done" && !d.stale)],
+    ["stale", "过期", count((d) => !!d.stale)],
+    ["skipped", "跳过", count((d) => d.status === "skipped")],
+    ["running", "运行中", count((d) => d.status === "running")],
+  ];
   const selected = nodes.find((n) => n.id === selectedId);
-  const modeText = mode === "live" ? "实时" : mode === "paused" ? "暂停" : "手动";
+  const modeText = running ? "运行中" : live ? "实时" : "就绪";
 
-  const Stat = ({ label, value, tone }: { label: string; value: React.ReactNode; tone?: string }) => (
+  const Stat = ({
+    label,
+    value,
+    tone,
+  }: {
+    label: string;
+    value: React.ReactNode;
+    tone?: string;
+  }) => (
     <span className="flex items-center gap-1 text-muted-foreground">
       {label}
       <b className={cn("font-semibold", tone ?? "text-foreground")}>{value}</b>
@@ -39,16 +58,16 @@ export function RunConsole() {
       <span className="font-medium">运行控制台</span>
       <Stat label="节点" value={nodes.length} />
       <Stat label="连接" value={edges.length} />
-      <Stat
-        label="错误"
-        value={errors}
-        tone={errors ? "text-destructive" : "text-green-600"}
-      />
+      <Stat label="错误" value={errors} tone={errors ? "text-destructive" : "text-green-600"} />
       <Stat
         label="选中"
-        value={selected ? byId[selected.data.descriptorId]?.displayName ?? "—" : "—"}
+        value={selected ? (byId[selected.data.descriptorId]?.displayName ?? "—") : "—"}
       />
-      <Stat label="模式" value={modeText} />
+      <Stat
+        label="状态"
+        value={modeText}
+        tone={running ? "text-blue-500" : live ? "text-emerald-600" : undefined}
+      />
       <Stat label="耗时" value={`${(elapsed / 1000).toFixed(2)}s`} />
       <Stat label="历史" value={historyCount} />
       {lastError && (
@@ -59,17 +78,14 @@ export function RunConsole() {
 
       <div className="flex-1" />
 
-      <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
-        {nodes.slice(0, 10).map((n, i) => (
-          <div key={n.id} className="flex items-center gap-1">
-            {i > 0 && <span className="text-muted-foreground/50">→</span>}
-            <span
-              className={cn("whitespace-nowrap rounded px-1.5 py-0.5", statusColor(n.data.status))}
-            >
-              {byId[n.data.descriptorId]?.displayName ?? n.data.descriptorId}
+      <div className="flex shrink-0 items-center gap-1">
+        {counts.map(([key, label, n]) =>
+          n > 0 ? (
+            <span key={key} className={cn("whitespace-nowrap rounded px-1.5 py-0.5", statusColor(key))}>
+              {label} {n}
             </span>
-          </div>
-        ))}
+          ) : null
+        )}
       </div>
 
       <span

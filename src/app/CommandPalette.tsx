@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
   Bot,
+  Eraser,
   FilePlus,
   FolderOpen,
   HelpCircle,
   History,
   LayoutGrid,
   Package,
-  Pause,
   Play,
   Save,
   Search,
@@ -16,12 +16,13 @@ import {
   Square,
   Workflow,
   X,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 
 import { newFlow, openFlow, saveFlow, saveFlowAs } from "@/lib/project";
 import { cn } from "@/lib/utils";
-import { executeGraph, stopRun, pauseRun } from "@/flow/runner";
+import { clearResults, runGraph, setLiveMode, stopRun } from "@/flow/runner";
 import { nodeIcon } from "@/flow/nodeIcons";
 import { useAiStore } from "@/store/ai";
 import { useCommandPaletteStore } from "@/store/commandPalette";
@@ -61,7 +62,6 @@ export function CommandPalette() {
   const descriptors = useDescriptorStore((s) => s.list);
   const addNode = useGraphStore((s) => s.addNode);
   const setView = useViewStore((s) => s.setView);
-  const setRunMode = useRunStore((s) => s.setMode);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -111,34 +111,37 @@ export function CommandPalette() {
       {
         id: "run",
         title: "运行整图",
-        hint: "手动执行当前工作流",
+        hint: "执行一次当前工作流 (Ctrl+Enter)",
         icon: Play,
         keywords: "run execute",
-        action: () => void executeGraph(),
+        action: () => {
+          setView("canvas");
+          void runGraph();
+        },
       },
       {
         id: "live",
-        title: "开启实时模式",
-        hint: "参数或连线变化后自动增量运行",
-        icon: Play,
-        keywords: "live auto",
-        action: () => setRunMode("live"),
-      },
-      {
-        id: "pause",
-        title: "暂停运行",
-        hint: "取消当前任务并保留结果",
-        icon: Pause,
-        keywords: "pause",
-        action: () => void pauseRun(),
+        title: "切换实时模式",
+        hint: "开启后，参数或连线变化会自动增量运行（耗时节点除外）",
+        icon: Zap,
+        keywords: "live auto realtime",
+        action: () => setLiveMode(useRunStore.getState().mode !== "live"),
       },
       {
         id: "stop",
-        title: "停止并清空运行状态",
-        hint: "取消任务、清缓存、清节点输出",
+        title: "停止运行",
+        hint: "取消正在进行的运行，已有结果保留",
         icon: Square,
-        keywords: "stop reset",
+        keywords: "stop cancel",
         action: () => void stopRun(),
+      },
+      {
+        id: "clear-results",
+        title: "清除运行结果",
+        hint: "清空所有节点的输出与缓存",
+        icon: Eraser,
+        keywords: "clear reset results cache",
+        action: () => void clearResults(),
       },
       {
         id: "ai",
@@ -166,7 +169,7 @@ export function CommandPalette() {
       })),
     ];
     return base;
-  }, [setRunMode, setView]);
+  }, [setView]);
 
   const nodeCommand = useCallback(
     (d: NodeDescriptor): Command => ({
@@ -238,7 +241,10 @@ export function CommandPalette() {
             placeholder="输入命令、节点名或视图..."
             className="min-w-0 flex-1 bg-transparent py-2 text-sm focus:outline-none"
           />
-          <button className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground" onClick={() => setOpen(false)}>
+          <button
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            onClick={() => setOpen(false)}
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -264,7 +270,9 @@ export function CommandPalette() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{command.title}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{command.hint}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {command.hint}
+                    </span>
                   </span>
                 </button>
               );

@@ -210,6 +210,7 @@ pub fn desc(
         outputs,
         params,
         cost: Cost::Cheap,
+        volatile: false,
     }
 }
 

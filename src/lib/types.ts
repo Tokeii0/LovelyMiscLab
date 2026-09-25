@@ -149,7 +149,8 @@ export type ProgressMsg =
   | { kind: "jobStarted"; job: string }
   | { kind: "nodeEntered"; node: string }
   | { kind: "nodeProgress"; node: string; pct: number }
-  | { kind: "nodeDone"; node: string }
+  | { kind: "nodeDone"; node: string; outputs?: Record<string, PortValue>; cached: boolean }
+  | { kind: "nodeSkipped"; node: string; reason: string }
   | { kind: "nodeFailed"; node: string; error: string }
   | { kind: "log"; node: string | null; level: string; message: string }
   | { kind: "jobDone"; job: string }

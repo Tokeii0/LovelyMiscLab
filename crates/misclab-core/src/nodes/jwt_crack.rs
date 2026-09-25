@@ -129,7 +129,8 @@ pub fn register(reg: &mut NodeRegistry) {
                 &["自动", "HS256", "HS384", "HS512"],
                 "自动",
             )],
-        ),
+        )
+        .heavy(),
         Arc::new(|| Arc::new(N)),
     );
 }

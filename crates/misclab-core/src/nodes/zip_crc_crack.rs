@@ -132,7 +132,8 @@ pub fn register(reg: &mut NodeRegistry) {
                 ParamSpec::number("maxLen", "最大明文长度", 1.0, 8.0, 1.0, 4.0),
                 ParamSpec::text("charset", "字符集", DEFAULT_CHARSET, false),
             ],
-        ),
+        )
+        .heavy(),
         Arc::new(|| Arc::new(N)),
     );
 }

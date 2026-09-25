@@ -105,7 +105,8 @@ pub fn register(reg: &mut NodeRegistry) {
                 ParamSpec::text("salt", "盐(可选)", "", false),
                 ParamSpec::select("saltMode", "加盐位置", &["无", "前缀", "后缀"], "无"),
             ],
-        ),
+        )
+        .heavy(),
         Arc::new(|| Arc::new(Crack)),
     );
 }

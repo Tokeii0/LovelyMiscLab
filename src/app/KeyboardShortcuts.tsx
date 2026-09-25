@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 import { copySelection, cutSelection, duplicateSelection, pasteClipboard } from "@/flow/clipboard";
-import { executeGraph } from "@/flow/runner";
+import { runGraph } from "@/flow/runner";
 import { newFlow, openFlow, saveFlow, saveFlowAs } from "@/lib/project";
 import { hasTextSelection, isTextInput } from "@/lib/shortcuts";
 import { useCommandPaletteStore } from "@/store/commandPalette";
@@ -47,7 +47,7 @@ export function KeyboardShortcuts() {
 
       if (mod && key === "enter") {
         e.preventDefault();
-        void executeGraph();
+        void runGraph();
       } else if (mod && key === "c") {
         // Selected text (an output preview, a log line…) copies as text.
         if (!hasTextSelection() && copySelection()) e.preventDefault();

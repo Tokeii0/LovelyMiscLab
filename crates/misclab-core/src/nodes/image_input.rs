@@ -88,7 +88,8 @@ pub fn register(reg: &mut NodeRegistry) {
                 opt("dataUrl", "数据URL", PortType::Text),
             ],
             vec![ParamSpec::image("image", "图片")],
-        ),
+        )
+        .volatile(),
         Arc::new(|| Arc::new(N)),
     );
 }

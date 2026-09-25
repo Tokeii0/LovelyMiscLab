@@ -1,6 +1,14 @@
 import { useGraphStore } from "@/store/graph";
 
-import type { NodeDescriptor, ParamSpec, PortSpec, PortType } from "./types";
+import type {
+  NodeDescriptor,
+  ParamSpec,
+  PortSpec,
+  PortType,
+  PortValue,
+  ProgressMsg,
+  SerializedGraph,
+} from "./types";
 
 /** True when running inside the Tauri webview (IPC available). */
 export const inTauri =
@@ -766,4 +774,100 @@ export function seedDemo() {
     status: "done",
     outputs: { image: { type: "image", value: DEMO_IMAGE } },
   });
+  // The demo is the starting point, not something to undo.
+  useGraphStore.setState({ past: [], future: [] });
+}
+
+// ---- mock graph execution (browser preview) ----
+// Streams the same events the Rust executor sends, evaluating a handful of
+// simple nodes for real so the run UI can be exercised without the backend.
+
+const cancelledJobs = new Set<string>();
+
+export function mockCancelJob(job: string) {
+  cancelledJobs.add(job);
+}
+
+function mockEval(
+  descriptorId: string,
+  params: Record<string, unknown>,
+  inputs: Record<string, PortValue>
+): Record<string, PortValue> {
+  const text = (k = "text") => {
+    const v = inputs[k];
+    if (!v) throw new Error(`缺少输入「${k}」`);
+    return v.type === "text" ? v.value : JSON.stringify("value" in v ? v.value : "");
+  };
+  const t = (value: string): PortValue => ({ type: "text", value });
+  switch (descriptorId) {
+    case "text_input":
+      return { text: t(String(params.text ?? "")) };
+    case "base64_decode": {
+      const bin = atob(text().replace(/\s+/g, ""));
+      return { text: t(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)))) };
+    }
+    case "base64_encode":
+      return { text: t(btoa(String.fromCharCode(...new TextEncoder().encode(text())))) };
+    case "rot13":
+      return {
+        text: t(
+          text().replace(/[a-z]/gi, (c) => {
+            const b = c <= "Z" ? 65 : 97;
+            return String.fromCharCode(((c.charCodeAt(0) - b + 13) % 26) + b);
+          })
+        ),
+      };
+    case "reverse":
+      return { text: t([...text()].reverse().join("")) };
+    case "text_output":
+      return { value: t(text()) };
+    default: {
+      // Unknown to the mock: pass the first input through to every output port.
+      const d = mockDescriptors.find((x) => x.id === descriptorId);
+      const first = Object.values(inputs)[0] ?? t(`（预览模式未实现 ${descriptorId}）`);
+      return Object.fromEntries((d?.outputs ?? []).map((p) => [p.name, first]));
+    }
+  }
+}
+
+export async function mockRunGraph(graph: SerializedGraph, onEvent: (m: ProgressMsg) => void) {
+  const job = `mock_${Date.now()}`;
+  onEvent({ kind: "jobStarted", job });
+  const incoming = new Map<string, number>(graph.nodes.map((n) => [n.id, 0]));
+  for (const e of graph.edges) incoming.set(e.to.node, (incoming.get(e.to.node) ?? 0) + 1);
+  const ready = graph.nodes.filter((n) => incoming.get(n.id) === 0);
+  const outputs: Record<string, Record<string, PortValue>> = {};
+  const dead = new Set<string>();
+  while (ready.length) {
+    const n = ready.shift()!;
+    if (cancelledJobs.has(job)) throw { code: "cancelled", message: "已取消" };
+    const inputs: Record<string, PortValue> = {};
+    let blocked = false;
+    for (const e of graph.edges.filter((x) => x.to.node === n.id)) {
+      if (dead.has(e.from.node)) blocked = true;
+      const v = outputs[e.from.node]?.[e.from.port];
+      if (v) inputs[e.to.port] = v;
+    }
+    if (blocked) {
+      dead.add(n.id);
+      onEvent({ kind: "nodeSkipped", node: n.id, reason: "上游未产出，已跳过" });
+    } else {
+      onEvent({ kind: "nodeEntered", node: n.id });
+      await new Promise((r) => setTimeout(r, 150));
+      try {
+        outputs[n.id] = mockEval(n.descriptorId, (n.params ?? {}) as Record<string, unknown>, inputs);
+        onEvent({ kind: "nodeDone", node: n.id, outputs: outputs[n.id], cached: false });
+      } catch (err) {
+        dead.add(n.id);
+        const error = err instanceof Error ? err.message : String(err);
+        onEvent({ kind: "nodeFailed", node: n.id, error });
+      }
+    }
+    for (const e of graph.edges.filter((x) => x.from.node === n.id)) {
+      const left = (incoming.get(e.to.node) ?? 1) - 1;
+      incoming.set(e.to.node, left);
+      if (left === 0) ready.push(graph.nodes.find((x) => x.id === e.to.node)!);
+    }
+  }
+  onEvent({ kind: "jobDone", job });
 }

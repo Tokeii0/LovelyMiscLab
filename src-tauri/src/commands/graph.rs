@@ -6,7 +6,7 @@ use tauri::ipc::Channel;
 use tauri::State;
 
 use misclab_core::cancel::CancellationToken;
-use misclab_core::graph::executor::{GraphExecutor, GraphOutputs};
+use misclab_core::graph::executor::GraphExecutor;
 use misclab_core::graph::model::SerializedGraph;
 use misclab_core::node::descriptor::NodeDescriptor;
 use misclab_core::node::registry::NodeRegistry;
@@ -42,6 +42,13 @@ pub enum ProgressMsg {
     },
     NodeDone {
         node: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        outputs: Option<PortMap>,
+        cached: bool,
+    },
+    NodeSkipped {
+        node: String,
+        reason: String,
     },
     NodeFailed {
         node: String,
@@ -75,7 +82,16 @@ fn map_event(event: ProgressEvent) -> ProgressMsg {
     match event {
         ProgressEvent::NodeEntered { node } => ProgressMsg::NodeEntered { node },
         ProgressEvent::NodeProgress { node, pct } => ProgressMsg::NodeProgress { node, pct },
-        ProgressEvent::NodeDone { node } => ProgressMsg::NodeDone { node },
+        ProgressEvent::NodeDone {
+            node,
+            outputs,
+            cached,
+        } => ProgressMsg::NodeDone {
+            node,
+            outputs,
+            cached,
+        },
+        ProgressEvent::NodeSkipped { node, reason } => ProgressMsg::NodeSkipped { node, reason },
         ProgressEvent::NodeFailed { node, error } => ProgressMsg::NodeFailed { node, error },
         ProgressEvent::Log {
             node,
@@ -180,7 +196,11 @@ pub async fn run_node_streamed(
 
     match result {
         Ok(Ok(out)) => {
-            let _ = on_event.send(ProgressMsg::NodeDone { node: node_id });
+            let _ = on_event.send(ProgressMsg::NodeDone {
+                node: node_id,
+                outputs: None,
+                cached: false,
+            });
             let _ = on_event.send(ProgressMsg::JobDone { job });
             Ok(out)
         }
@@ -205,13 +225,15 @@ pub async fn run_node_streamed(
     }
 }
 
-/// Run a whole graph, streaming per-node progress and returning all node outputs.
+/// Run a whole graph, streaming per-node progress. Each node's outputs arrive in
+/// its `nodeDone` message the moment it finishes, so a cancelled or failed run
+/// still delivers everything that completed (nothing is returned at the end).
 #[tauri::command]
 pub async fn run_graph(
     state: State<'_, AppState>,
     graph: SerializedGraph,
     on_event: Channel<ProgressMsg>,
-) -> Result<GraphOutputs, AppError> {
+) -> Result<(), AppError> {
     let registry = combined_registry(&state);
     let cache = state.cache.clone();
     let env = state
@@ -236,9 +258,9 @@ pub async fn run_graph(
     state.jobs.finish(&job);
 
     match result {
-        Ok(Ok(outputs)) => {
+        Ok(Ok(_)) => {
             let _ = on_event.send(ProgressMsg::JobDone { job });
-            Ok(outputs)
+            Ok(())
         }
         Ok(Err(core_err)) => {
             let _ = on_event.send(ProgressMsg::JobFailed {
@@ -263,10 +285,17 @@ pub fn cancel_job(state: State<'_, AppState>, job: String) {
     state.jobs.cancel(&job);
 }
 
-/// Clear the incremental-execution cache (used by the Stop control).
+/// Clear the incremental-execution cache ("清除结果"). Async + blocking pool: a
+/// running graph holds the cache lock, and waiting for it on the main thread
+/// would freeze the whole window.
 #[tauri::command]
-pub fn reset_run(state: State<'_, AppState>) {
-    if let Ok(mut cache) = state.cache.lock() {
-        cache.clear();
-    }
+pub async fn reset_run(state: State<'_, AppState>) -> Result<(), AppError> {
+    let cache = state.cache.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        if let Ok(mut cache) = cache.lock() {
+            cache.clear();
+        }
+    })
+    .await
+    .map_err(|e| AppError::new("join", e.to_string()))
 }

@@ -232,7 +232,8 @@ pub fn register(reg: &mut NodeRegistry) {
                 ParamSpec::text("inputPort", "目标输入端口(留空自动)", "", false),
                 ParamSpec::text("extraParams", "目标额外参数(JSON)", "", false),
             ],
-        ),
+        )
+        .heavy(),
         Arc::new(|| Arc::new(Crack)),
     );
 }

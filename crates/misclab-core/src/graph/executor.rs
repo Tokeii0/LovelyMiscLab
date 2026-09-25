@@ -7,7 +7,7 @@
 //! [`GraphExecutor::run_node`].
 
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
 use serde_json::{json, Value};
@@ -106,9 +106,11 @@ pub type GraphOutputs = HashMap<NodeId, PortMap>;
 pub type NodeCache = HashMap<u64, PortMap>;
 
 /// A stable (within-process) hash of everything that determines a node's output:
-/// its descriptor, params, and the values on its input ports.
-fn cache_key(descriptor_id: &str, params: &Value, inputs: &PortMap) -> u64 {
+/// its descriptor, params, the values on its input ports, and the runtime
+/// environment (AI model, tool paths… — changing settings must not serve stale results).
+fn cache_key(descriptor_id: &str, params: &Value, inputs: &PortMap, env_key: u64) -> u64 {
     let mut hasher = DefaultHasher::new();
+    env_key.hash(&mut hasher);
     descriptor_id.hash(&mut hasher);
     params.to_string().hash(&mut hasher);
     let mut names: Vec<&String> = inputs.keys().collect();
@@ -191,6 +193,15 @@ impl<'a> GraphExecutor<'a> {
     ) -> Result<GraphOutputs, CoreError> {
         let order = self.compute.execution_order()?;
         let mut outputs: GraphOutputs = HashMap::new();
+        // Nodes that failed or were skipped: their dependants can't get real input.
+        let mut dead: HashSet<NodeId> = HashSet::new();
+        let env_key = {
+            let mut h = DefaultHasher::new();
+            serde_json::to_string(&self.env)
+                .unwrap_or_default()
+                .hash(&mut h);
+            h.finish()
+        };
 
         for node_id in order {
             cancel.check()?;
@@ -200,39 +211,117 @@ impl<'a> GraphExecutor<'a> {
                 .expect("execution order only contains known nodes")
                 .clone();
 
-            sink.emit(ProgressEvent::NodeEntered {
-                node: node_id.clone(),
-            });
-
-            let inputs = self.gather_inputs(&node_id, &outputs);
-            let params = self.effective_params(&inst, &inputs);
-            let key = cache_key(&inst.descriptor_id, &params, &inputs);
-
-            if let Some(cached) = cache.get(&key) {
-                outputs.insert(node_id.clone(), cached.clone());
-                sink.emit(ProgressEvent::NodeDone { node: node_id });
+            if let Some(reason) = self.blocked_by(&inst, &dead) {
+                dead.insert(node_id.clone());
+                sink.emit(ProgressEvent::NodeSkipped {
+                    node: node_id,
+                    reason,
+                });
                 continue;
             }
 
+            let inputs = self.gather_inputs(&node_id, &outputs);
+            let params = self.effective_params(&inst, &inputs);
+            let volatile = self
+                .registry
+                .get(&inst.descriptor_id)
+                .is_some_and(|e| e.descriptor.volatile);
+            let key = cache_key(&inst.descriptor_id, &params, &inputs, env_key);
+
+            if !volatile {
+                if let Some(cached) = cache.get(&key) {
+                    sink.emit(ProgressEvent::NodeDone {
+                        node: node_id.clone(),
+                        outputs: self.report(cached),
+                        cached: true,
+                    });
+                    outputs.insert(node_id, cached.clone());
+                    continue;
+                }
+            }
+
+            // Only real executions announce themselves, so cached nodes keep
+            // their logs and don't flash "running" on every live re-run.
+            sink.emit(ProgressEvent::NodeEntered {
+                node: node_id.clone(),
+            });
             match self.run_one(&inst, &inputs, &params, sink, cancel) {
                 Ok(out) => {
-                    if cache.len() >= 4096 {
-                        cache.clear();
+                    if !volatile {
+                        if cache.len() >= 4096 {
+                            cache.clear();
+                        }
+                        cache.insert(key, out.clone());
                     }
-                    cache.insert(key, out.clone());
-                    outputs.insert(node_id.clone(), out);
-                    sink.emit(ProgressEvent::NodeDone { node: node_id });
+                    sink.emit(ProgressEvent::NodeDone {
+                        node: node_id.clone(),
+                        outputs: self.report(&out),
+                        cached: false,
+                    });
+                    outputs.insert(node_id, out);
                 }
+                // A cancelled node ends the run; it didn't "fail".
+                Err(CoreError::Cancelled) => return Err(CoreError::Cancelled),
                 Err(e) => {
+                    dead.insert(node_id.clone());
                     sink.emit(ProgressEvent::NodeFailed {
                         node: node_id,
-                        error: e.to_string(),
+                        error: self.describe_error(&inst, e),
                     });
                 }
             }
         }
 
         Ok(outputs)
+    }
+
+    /// Outputs to attach to a `NodeDone` event: only for the top-level graph
+    /// (a composite's inner node ids don't exist on the canvas).
+    fn report(&self, out: &PortMap) -> Option<PortMap> {
+        (self.depth == 0).then(|| out.clone())
+    }
+
+    /// Why a node can't run: one of its required inputs is wired only to nodes
+    /// that failed or were skipped. `None` = runnable.
+    fn blocked_by(&self, inst: &NodeInstance, dead: &HashSet<NodeId>) -> Option<String> {
+        let entry = self.registry.get(&inst.descriptor_id)?;
+        for port in entry.descriptor.inputs.iter().filter(|p| p.required) {
+            let sources: Vec<&NodeId> = self
+                .compute
+                .edges
+                .iter()
+                .filter(|e| e.to.node == inst.id && e.to.port == port.name)
+                .map(|e| &e.from.node)
+                .collect();
+            if !sources.is_empty() && sources.iter().all(|n| dead.contains(*n)) {
+                return Some(format!("上游未产出「{}」，已跳过", port.label));
+            }
+        }
+        None
+    }
+
+    /// User-facing error text: a missing input names the port's label, not its id.
+    fn describe_error(&self, inst: &NodeInstance, e: CoreError) -> String {
+        if let CoreError::MissingInput(port) = &e {
+            if let Some(entry) = self.registry.get(&inst.descriptor_id) {
+                let d = &entry.descriptor;
+                let label = d
+                    .inputs
+                    .iter()
+                    .find(|p| &p.name == port)
+                    .map(|p| p.label.as_str())
+                    .or_else(|| {
+                        d.params
+                            .iter()
+                            .find(|p| &p.name == port)
+                            .map(|p| p.label.as_str())
+                    });
+                if let Some(label) = label {
+                    return format!("缺少输入「{label}」，请连接上游节点");
+                }
+            }
+        }
+        e.to_string()
     }
 
     /// Collect a node's inputs by reading upstream outputs along incoming edges.

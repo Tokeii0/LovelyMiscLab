@@ -21,7 +21,7 @@ pub enum CoreError {
     #[error("graph error: {0}")]
     Graph(String),
 
-    #[error("missing input: {0}")]
+    #[error("缺少输入：{0}")]
     MissingInput(String),
 
     #[error("node not found: {0}")]
@@ -30,7 +30,7 @@ pub enum CoreError {
     #[error("budget exceeded: {0}")]
     BudgetExceeded(String),
 
-    #[error("operation cancelled")]
+    #[error("已取消")]
     Cancelled,
 
     /// An AI model is required but not set up in Settings.

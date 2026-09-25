@@ -32,8 +32,13 @@ import { LabeledEdge } from "./LabeledEdge";
 import { NodeSearchMenu } from "./NodeSearchMenu";
 import { canConnect, portTypeLabel } from "./portColors";
 import { PortSuggest } from "./PortSuggest";
-import { candidateNodes, firstCompatibleInput, firstCompatibleOutput, resolvePortType } from "./portUtils";
-import { executeGraph, executeToNode, runSingleNode } from "./runner";
+import {
+  candidateNodes,
+  firstCompatibleInput,
+  firstCompatibleOutput,
+  resolvePortType,
+} from "./portUtils";
+import { runGraph, runNode, runToNode } from "./runner";
 import { SelectorNode } from "./SelectorNode";
 
 const nodeTypes = { generic: GenericNode, selector: SelectorNode };
@@ -56,7 +61,11 @@ type Search = {
 };
 
 /** Would a new edge source→target close a cycle (is source reachable from target)? */
-function createsCycle(edges: { source: string; target: string }[], source: string, target: string): boolean {
+function createsCycle(
+  edges: { source: string; target: string }[],
+  source: string,
+  target: string
+): boolean {
   const out = new Map<string, string[]>();
   for (const e of edges) out.set(e.source, [...(out.get(e.source) ?? []), e.target]);
   const stack = [target];
@@ -177,17 +186,29 @@ export function Canvas() {
         // Add + connect as one undo step; an upstream node sits left of the drop point.
         const g = useGraphStore.getState();
         g.transact(() => {
-          const pos = wire.dir === "in" ? { x: search.flow.x - 220, y: search.flow.y } : search.flow;
+          const pos =
+            wire.dir === "in" ? { x: search.flow.x - 220, y: search.flow.y } : search.flow;
           const id = g.addNode(d, pos);
           if (wire.dir === "out") {
             const match = firstCompatibleInput(d, wire.type);
             if (match) {
               if (match.isParam) g.toggleParamInput(id, match.port);
-              g.onConnect({ source: wire.nodeId, sourceHandle: wire.port, target: id, targetHandle: match.port });
+              g.onConnect({
+                source: wire.nodeId,
+                sourceHandle: wire.port,
+                target: id,
+                targetHandle: match.port,
+              });
             }
           } else {
             const out = firstCompatibleOutput(d, wire.type);
-            if (out) g.onConnect({ source: id, sourceHandle: out, target: wire.nodeId, targetHandle: wire.port });
+            if (out)
+              g.onConnect({
+                source: id,
+                sourceHandle: out,
+                target: wire.nodeId,
+                targetHandle: wire.port,
+              });
           }
         });
       }
@@ -205,7 +226,11 @@ export function Canvas() {
       // Right-clicking inside a multi-selection acts on the whole selection.
       if (node?.selected && selected.length > 1) {
         return [
-          { label: `复制 ${selected.length} 个节点`, hint: "Ctrl+C", onClick: () => void copySelection() },
+          {
+            label: `复制 ${selected.length} 个节点`,
+            hint: "Ctrl+C",
+            onClick: () => void copySelection(),
+          },
           { label: "创建副本", hint: "Ctrl+D", onClick: () => void duplicateSelection() },
           {
             label: "封装为模块…",
@@ -222,13 +247,16 @@ export function Canvas() {
       }
       const disabled = node?.data.disabled ?? false;
       return [
-        { label: "运行到此节点", onClick: () => void executeToNode(id) },
-        { label: "仅运行此节点", onClick: () => void runSingleNode(id) },
+        { label: "运行到此节点", onClick: () => void runToNode(id) },
+        { label: "仅运行此节点", onClick: () => void runNode(id) },
         {
           label: "重命名…",
           separator: true,
           onClick: async () => {
-            const next = await promptDialog({ title: "重命名节点", initial: node?.data.label ?? "" });
+            const next = await promptDialog({
+              title: "重命名节点",
+              initial: node?.data.label ?? "",
+            });
             if (next != null) g.renameNode(id, next.trim() || (node?.data.label ?? ""));
           },
         },
@@ -238,7 +266,13 @@ export function Canvas() {
           label: "节点帮助",
           onClick: () => useHelpStore.getState().openForNode(node?.data.descriptorId),
         },
-        { label: "删除节点", hint: "Delete", danger: true, separator: true, onClick: () => g.deleteNode(id) },
+        {
+          label: "删除节点",
+          hint: "Delete",
+          danger: true,
+          separator: true,
+          onClick: () => g.deleteNode(id),
+        },
       ];
     }
     if (menu.kind === "edge") {
@@ -254,9 +288,16 @@ export function Canvas() {
         disabled: !hasClipboard(),
         onClick: () => void pasteClipboard(flow),
       },
-      { label: "运行整图", hint: "Ctrl+Enter", separator: true, onClick: () => void executeGraph() },
+      { label: "运行整图", hint: "Ctrl+Enter", separator: true, onClick: () => void runGraph() },
       {
-        label: "整理节点",
+        label: "整理节点（按数据流 左→右）",
+        onClick: () => {
+          g.arrangeNodes(viewportAspect(), "flow");
+          requestAnimationFrame(() => rf.fitView({ duration: 250, padding: 0.15 }));
+        },
+      },
+      {
+        label: "整理节点（紧凑，适配视口）",
         onClick: () => {
           g.arrangeNodes(viewportAspect());
           // Let React Flow apply the new positions before fitView measures them.
@@ -328,9 +369,7 @@ export function Canvas() {
         />
       </ReactFlow>
 
-      {menu && (
-        <ContextMenu x={menu.x} y={menu.y} items={menuItems()} onClose={closeMenu} />
-      )}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems()} onClose={closeMenu} />}
       {search && (
         <NodeSearchMenu
           x={search.x}
@@ -338,7 +377,11 @@ export function Canvas() {
           onPick={onPick}
           onClose={() => setSearch(null)}
           candidates={search.wire ? candidateNodes(search.wire.type, search.wire.dir) : undefined}
-          title={search.wire ? `${search.wire.dir === "out" ? "接下游" : "接上游"}：${portTypeLabel(search.wire.type)}` : undefined}
+          title={
+            search.wire
+              ? `${search.wire.dir === "out" ? "接下游" : "接上游"}：${portTypeLabel(search.wire.type)}`
+              : undefined
+          }
         />
       )}
       {suggestCtx && <PortSuggest />}

@@ -73,6 +73,7 @@ impl CompositeModule {
             outputs: self.outputs.iter().map(ports).collect(),
             params: vec![],
             cost: Cost::Medium,
+            volatile: false,
         }
     }
 
