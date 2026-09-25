@@ -2,9 +2,8 @@
 //! the frontend.
 //!
 //! [`McpState`] is a cheap, `Clone`-able projection of the app's [`AppState`]
-//! that holds only what the tools need — deliberately **excluding** `db`
-//! (rusqlite is `!Sync`) and `jobs`. It's safe to move into the server thread and
-//! to clone per rmcp session.
+//! that holds only what the tools need (not `jobs`). It's safe to move into the
+//! server thread and to clone per rmcp session.
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};

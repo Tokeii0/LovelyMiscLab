@@ -68,17 +68,23 @@ pub fn get_settings(state: State<'_, AppState>) -> NodeEnv {
 }
 
 #[tauri::command]
-pub fn set_settings(
+pub async fn set_settings(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     settings: NodeEnv,
 ) -> Result<(), AppError> {
-    *state.settings.lock().expect("settings mutex poisoned") = settings.clone();
     let dir = app
         .path()
         .app_data_dir()
         .map_err(|e| AppError::new("path", e.to_string()))?;
-    std::fs::create_dir_all(&dir).ok();
-    crate::settings::save(&dir, &settings).map_err(|e| AppError::new("io", e.to_string()))?;
+    let to_save = settings.clone();
+    // Persist first: the in-memory copy only changes once the file is written,
+    // so a failed save doesn't leave the app running on settings it will forget.
+    crate::commands::blocking(move || {
+        std::fs::create_dir_all(&dir).ok();
+        crate::settings::save(&dir, &to_save).map_err(|e| AppError::new("io", e.to_string()))
+    })
+    .await?;
+    *state.settings.lock().expect("settings mutex poisoned") = settings;
     Ok(())
 }

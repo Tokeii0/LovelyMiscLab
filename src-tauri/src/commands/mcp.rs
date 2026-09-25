@@ -3,6 +3,7 @@
 
 use tauri::{Manager, State};
 
+use crate::commands::blocking;
 use crate::error::AppError;
 use crate::mcp::state::{load_config, save_config, CanvasSnapshot, McpSettings, McpState};
 use crate::state::AppState;
@@ -39,25 +40,32 @@ fn status(running: bool, cfg: &McpSettings) -> McpStatus {
 /// Current config (includes the token — this is the local GUI, not the MCP tool
 /// surface, so the user can view/copy it).
 #[tauri::command]
-pub fn mcp_get_config(app: tauri::AppHandle) -> Result<McpSettings, AppError> {
-    Ok(load_config(&data_dir(&app)?))
+pub async fn mcp_get_config(app: tauri::AppHandle) -> Result<McpSettings, AppError> {
+    let dir = data_dir(&app)?;
+    blocking(move || Ok(load_config(&dir))).await
 }
 
 /// Persist config. Does not start/stop a running server (call mcp_start/stop).
 #[tauri::command]
-pub fn mcp_set_config(app: tauri::AppHandle, config: McpSettings) -> Result<(), AppError> {
-    save_config(&data_dir(&app)?, &config).map_err(AppError::from)
+pub async fn mcp_set_config(app: tauri::AppHandle, config: McpSettings) -> Result<(), AppError> {
+    let dir = data_dir(&app)?;
+    blocking(move || save_config(&dir, &config).map_err(AppError::from)).await
 }
 
-/// Frontend → backend canvas mirror. Called (debounced) whenever the React Flow
-/// store changes so `get_canvas` reflects what the user sees. Keeps `rev`
-/// monotonic to help break the echo loop.
+/// Frontend → backend canvas mirror. Called (debounced) after edits while the
+/// MCP server runs, so `get_canvas` reflects what the user sees. Keeps `rev`
+/// monotonic to help break the echo loop. Async so the (possibly large) payload
+/// isn't handled on the main thread.
 #[tauri::command]
-pub fn sync_canvas(state: State<'_, AppState>, snapshot: CanvasSnapshot) {
+pub async fn sync_canvas(
+    state: State<'_, AppState>,
+    snapshot: CanvasSnapshot,
+) -> Result<(), AppError> {
     let mut cv = state.canvas.lock().expect("canvas mutex poisoned");
     let rev = snapshot.rev.max(cv.rev);
     *cv = snapshot;
     cv.rev = rev;
+    Ok(())
 }
 
 #[tauri::command]

@@ -158,6 +158,17 @@ pub async fn check_update() -> AppResult<UpdateInfo> {
         .map_err(|e| err(e.to_string()))?
 }
 
+/// `https://github.com/<REPO>/releases/download/<tag>/<asset>` and nothing else.
+fn is_release_asset_url(url: &str) -> bool {
+    let prefix = format!("https://github.com/{REPO}/releases/download/");
+    url.strip_prefix(&prefix).is_some_and(|rest| {
+        let parts: Vec<&str> = rest.split('/').collect();
+        parts.len() == 2
+            && parts.iter().all(|p| !p.is_empty() && *p != "..")
+            && !rest.contains(['?', '#', '\\'])
+    })
+}
+
 fn download(url: &str, dest: &Path) -> AppResult<()> {
     let resp = ureq::get(url)
         .set("User-Agent", USER_AGENT)
@@ -224,6 +235,11 @@ pub async fn install_update(app: tauri::AppHandle, download_url: String) -> AppR
     if download_url.is_empty() {
         return Err(err("没有可用的下载地址。"));
     }
+    // The URL comes from the webview: only accept this project's own release
+    // assets, never an arbitrary executable.
+    if !is_release_asset_url(&download_url) {
+        return Err(err("下载地址不是本项目的 GitHub 发布文件，已拒绝。"));
+    }
     tauri::async_runtime::spawn_blocking(move || swap_in_place(&download_url))
         .await
         .map_err(|e| err(e.to_string()))??;
@@ -246,7 +262,24 @@ pub fn cleanup_leftovers() {
 
 #[cfg(test)]
 mod tests {
-    use super::version_gt;
+    use super::{is_release_asset_url, version_gt, REPO};
+
+    #[test]
+    fn only_this_repos_release_assets_are_installable() {
+        let ok =
+            format!("https://github.com/{REPO}/releases/download/v0.3.0/LovelyMiscLab-linux-x64");
+        assert!(is_release_asset_url(&ok));
+        for bad in [
+            "https://evil.example/LovelyMiscLab.exe".to_string(),
+            format!("http://github.com/{REPO}/releases/download/v1/a"),
+            "https://github.com/someone/else/releases/download/v1/a".to_string(),
+            format!("https://github.com/{REPO}/releases/download/v1/../../x"),
+            format!("https://github.com/{REPO}/releases/download/v1/a?x=1"),
+            format!("https://github.com/{REPO}/releases/download/v1"),
+        ] {
+            assert!(!is_release_asset_url(&bad), "{bad}");
+        }
+    }
 
     #[test]
     fn compares_versions_numerically() {

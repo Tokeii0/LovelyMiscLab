@@ -4,6 +4,7 @@ import { Check, Copy, Loader2, RefreshCw, Server, ShieldAlert } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { api, type McpSettings, type McpStatus } from "@/lib/bindings";
 import { inTauri } from "@/lib/devMocks";
+import { setCanvasSyncActive } from "@/flow/canvasSync";
 import { toast } from "@/store/toast";
 
 type ClientId = "claude-code" | "cursor" | "codex" | "other";
@@ -46,6 +47,7 @@ export function McpPanel() {
     const [c, st] = await Promise.all([api.mcpGetConfig(), api.mcpStatus()]);
     setCfg(c);
     setStatus(st);
+    setCanvasSyncActive(st.running);
   };
 
   useEffect(() => {

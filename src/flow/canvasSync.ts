@@ -1,8 +1,10 @@
 // Bidirectional live-sync between the frontend React Flow store and the backend
-// canvas mirror, so the embedded MCP server can read (and, in M5, modify) the
-// canvas the user is looking at.
+// canvas mirror, so the embedded MCP server can read and modify the canvas the
+// user is looking at.
 //
-//  • Frontend → backend: debounced `sync_canvas` on every store change.
+//  • Frontend → backend: debounced `sync_canvas` after *edits* (editRevision),
+//    and only while the MCP server runs — run progress, selection and drags in
+//    flight don't re-send the whole graph over IPC.
 //  • Backend → frontend: `mcp://canvas-update` events applied via `loadFlow`.
 //
 // The echo loop (push → emit → loadFlow → store change → push …) is broken by
@@ -24,18 +26,27 @@ export interface CanvasSnapshot {
 let rev = 0;
 let applyingRemote = false;
 let timer: number | undefined;
+/** True while the embedded MCP server runs (nobody reads the mirror otherwise). */
+let active = false;
+
+/** Called with the MCP server's state; starting it pushes the current canvas. */
+export function setCanvasSyncActive(on: boolean) {
+  const turnedOn = on && !active;
+  active = on;
+  if (turnedOn) pushNow();
+}
 
 function snapshot(): CanvasSnapshot {
   return { ...graphToSaved(), rev: ++rev };
 }
 
 function pushNow() {
-  if (!inTauri || applyingRemote) return;
+  if (!inTauri || applyingRemote || !active) return;
   api.syncCanvas(snapshot()).catch((e) => console.error("syncCanvas failed", e));
 }
 
 function schedulePush() {
-  if (applyingRemote) return;
+  if (applyingRemote || !active) return;
   clearTimeout(timer);
   timer = window.setTimeout(pushNow, 250);
 }
@@ -44,11 +55,14 @@ function schedulePush() {
 export function startCanvasSync(): () => void {
   if (!inTauri) return () => {};
 
-  // Seed the backend mirror immediately so `get_canvas` is populated.
-  pushNow();
+  // The server may already be running (auto-start); seed the mirror if so.
+  api
+    .mcpStatus()
+    .then((st) => setCanvasSyncActive(st.running))
+    .catch(() => {});
 
   const unsub = useGraphStore.subscribe((s, prev) => {
-    if (s.nodes !== prev.nodes || s.edges !== prev.edges) schedulePush();
+    if (s.editRevision !== prev.editRevision) schedulePush();
   });
 
   // AI-applied canvas updates land here. `applyingRemote` suppresses the echo

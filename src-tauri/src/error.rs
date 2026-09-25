@@ -25,12 +25,6 @@ impl std::fmt::Display for AppError {
     }
 }
 
-impl From<rusqlite::Error> for AppError {
-    fn from(e: rusqlite::Error) -> Self {
-        AppError::new("db", e.to_string())
-    }
-}
-
 impl From<misclab_core::CoreError> for AppError {
     fn from(e: misclab_core::CoreError) -> Self {
         use misclab_core::CoreError;

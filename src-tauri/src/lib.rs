@@ -1,9 +1,8 @@
 //! LovelyMiscLab Tauri application shell — a thin adapter over `misclab-core`.
-//! Registers plugins, builds the node registry, bootstraps the SQLite database
+//! Registers plugins, builds the node registry, loads settings and user modules
 //! into managed state, and exposes the command surface.
 
 mod commands;
-mod db;
 mod error;
 mod jobs;
 #[cfg(feature = "mcp")]
@@ -23,24 +22,17 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_log::Builder::default().build())
         .setup(|app| {
             // Remove any leftover files from a previous self-update.
             commands::update::cleanup_leftovers();
 
-            // App data dir holds the SQLite DB, artifact dirs, dictionaries, etc.
+            // App data dir holds settings, user modules and MCP config.
             let data_dir = app
                 .path()
                 .app_data_dir()
                 .expect("failed to resolve app data dir");
             std::fs::create_dir_all(&data_dir).ok();
-
-            let db_path = data_dir.join("lovelymisclab.db");
-            let db = db::Db::open(&db_path).expect("failed to open database");
 
             let registry = Arc::new(misclab_core::nodes::default_registry());
             let app_settings = settings::load(&data_dir);
@@ -52,7 +44,6 @@ pub fn run() {
             scripts.sort_by(|a, b| a.name.cmp(&b.name));
 
             app.manage(AppState {
-                db,
                 registry,
                 composites: Arc::new(Mutex::new(composites)),
                 scripts: Arc::new(Mutex::new(scripts)),
@@ -92,9 +83,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::system::ping,
             commands::system::app_info,
-            commands::system::db_health,
             commands::graph::list_node_descriptors,
             commands::graph::run_node,
             commands::graph::run_node_streamed,

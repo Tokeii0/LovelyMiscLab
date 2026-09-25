@@ -9,7 +9,6 @@ use misclab_core::graph::script_node::ScriptModule;
 use misclab_core::node::registry::NodeRegistry;
 use misclab_core::node::NodeEnv;
 
-use crate::db::Db;
 use crate::jobs::JobManager;
 
 /// The effective registry = built-ins + the user's composite modules + script
@@ -39,7 +38,6 @@ impl AppState {
 }
 
 pub struct AppState {
-    pub db: Db,
     /// Built-in node registry, built once at startup. The effective registry for
     /// palette + execution is this plus the user's `composites` (merged on demand).
     pub registry: Arc<NodeRegistry>,

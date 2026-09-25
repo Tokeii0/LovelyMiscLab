@@ -1,16 +1,6 @@
-//! System / health commands. These prove the frontend↔Rust round-trip and that
-//! the database initialized, satisfying the M0 milestone.
+//! System info command (app + engine version for the settings/about screen).
 
 use serde::Serialize;
-
-use crate::error::AppResult;
-use crate::state::AppState;
-
-/// Round-trip smoke test.
-#[tauri::command]
-pub fn ping(name: String) -> String {
-    format!("pong: {name}")
-}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,12 +17,4 @@ pub fn app_info() -> AppInfo {
         version: env!("CARGO_PKG_VERSION").into(),
         core_version: misclab_core::core_version().into(),
     }
-}
-
-/// Proves the database is initialized and queryable (counts projects).
-#[tauri::command]
-pub fn db_health(state: tauri::State<'_, AppState>) -> AppResult<u32> {
-    let conn = state.db.conn();
-    let n: u32 = conn.query_row("SELECT count(*) FROM projects", [], |r| r.get(0))?;
-    Ok(n)
 }

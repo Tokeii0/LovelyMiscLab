@@ -165,9 +165,7 @@ export type AgentEvent =
   | { kind: "error"; message: string };
 
 export const api = {
-  ping: (name: string) => invoke<string>("ping", { name }),
   appInfo: () => invoke<AppInfo>("app_info"),
-  dbHealth: () => invoke<number>("db_health"),
 
   // Self-update (portable exe): check GitHub Releases, then download + swap.
   checkUpdate: () => invoke<UpdateInfo>("check_update"),
