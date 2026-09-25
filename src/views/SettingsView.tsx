@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Save,
   Server,
+  SlidersHorizontal,
   Sparkles,
   Wrench,
   X,
@@ -19,11 +20,13 @@ import { Button } from "@/components/ui/button";
 import { api, type AppSettings, type ModelConfig, type ToolStatus } from "@/lib/bindings";
 import { inTauri } from "@/lib/devMocks";
 import { TOOLS } from "@/lib/tools";
+import { usePrefs } from "@/store/prefs";
+import { useThemeStore } from "@/store/theme";
 import { useUpdate } from "@/store/update";
 import { McpPanel } from "@/views/McpPanel";
 import { choose } from "@/store/confirm";
 import { toast } from "@/store/toast";
-import { useViewStore } from "@/store/view";
+import { useViewStore, VIEW_LABEL } from "@/store/view";
 import { isAnyModalOpen } from "@/store/modal";
 
 const EMPTY: AppSettings = {
@@ -189,7 +192,101 @@ function UpdatePanel() {
   );
 }
 
+function Choice<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: [T, string][];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="inline-flex rounded-md border border-border bg-background p-0.5">
+      {options.map(([v, label]) => (
+        <button
+          key={v}
+          onClick={() => onChange(v)}
+          className={`rounded px-2.5 py-1 text-xs transition-colors ${
+            value === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Interface preferences. They live in this browser profile and apply at once
+ * (no 保存 needed), unlike the backend settings on the other tabs. */
+function GeneralSettings() {
+  const themePref = useThemeStore((s) => s.pref);
+  const setThemePref = useThemeStore((s) => s.setPref);
+  const edgeLabels = usePrefs((s) => s.edgeLabels);
+  const galgame = usePrefs((s) => s.experimentalGalgame);
+  const setPref = usePrefs((s) => s.set);
+  const row = "flex items-center justify-between gap-4 border-b border-border py-3 last:border-0";
+  return (
+    <section>
+      <h2 className="mb-1 text-sm font-semibold">界面</h2>
+      <p className="mb-2 text-[11px] text-muted-foreground">修改后立即生效。</p>
+      <div className="rounded-xl border border-border bg-card px-4">
+        <div className={row}>
+          <div>
+            <div className="text-xs font-medium">主题</div>
+            <div className="text-[11px] text-muted-foreground">「跟随系统」随操作系统的浅色/深色切换</div>
+          </div>
+          <Choice
+            value={themePref}
+            onChange={setThemePref}
+            options={[
+              ["system", "跟随系统"],
+              ["light", "浅色"],
+              ["dark", "深色"],
+            ]}
+          />
+        </div>
+        <div className={row}>
+          <div>
+            <div className="text-xs font-medium">连线数据标签</div>
+            <div className="text-[11px] text-muted-foreground">在连线上显示数据类型与值预览</div>
+          </div>
+          <Choice
+            value={edgeLabels}
+            onChange={(v) => setPref("edgeLabels", v)}
+            options={[
+              ["focus", "悬停/选中时"],
+              ["always", "始终"],
+            ]}
+          />
+        </div>
+      </div>
+
+      <h2 className="mb-1 mt-6 text-sm font-semibold">实验功能</h2>
+      <p className="mb-2 text-[11px] text-muted-foreground">仍在打磨中的功能，默认关闭。</p>
+      <div className="rounded-xl border border-border bg-card px-4">
+        <label className={`${row} cursor-pointer`}>
+          <div>
+            <div className="text-xs font-medium">故事模式（galgame）</div>
+            <div className="text-[11px] text-muted-foreground">
+              由 AI 角色引导逐步解题；需要先配置 AI 文本模型。开启后出现在左侧栏。
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={galgame}
+            onChange={(e) => setPref("experimentalGalgame", e.target.checked)}
+          />
+        </label>
+      </div>
+    </section>
+  );
+}
+
 const TABS = [
+  { id: "general" as const, label: "通用", icon: SlidersHorizontal },
   { id: "ai" as const, label: "AI 模型", icon: Bot },
   { id: "output" as const, label: "输出目录", icon: FolderOpen },
   { id: "tools" as const, label: "外部工具", icon: Wrench },
@@ -204,7 +301,7 @@ export function SettingsView() {
   const [stored, setStored] = useState<AppSettings>(EMPTY);
   const [status, setStatus] = useState<Record<string, ToolStatus | "checking">>({});
   const [saved, setSaved] = useState(false);
-  const [tab, setTab] = useState<Tab>("ai");
+  const [tab, setTab] = useState<Tab>("general");
   const dirty = useMemo(() => JSON.stringify(s) !== JSON.stringify(stored), [s, stored]);
 
   useEffect(() => {
@@ -301,10 +398,10 @@ export function SettingsView() {
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <div>
-          <h1 className="text-lg font-semibold">设置</h1>
+          <h1 className="text-lg font-semibold">{VIEW_LABEL.settings}</h1>
           <p className="text-xs text-muted-foreground">配置 AI 模型、输出目录、外部工具与 MCP 服务。</p>
         </div>
-        {tab !== "mcp" && tab !== "update" && (
+        {tab !== "general" && tab !== "mcp" && tab !== "update" && (
           <Button size="sm" onClick={() => void save()} disabled={!dirty && !saved}>
             {saved ? (
               <>
@@ -340,6 +437,8 @@ export function SettingsView() {
 
         {/* active category */}
         <div className="flex-1 space-y-6 overflow-y-auto p-6">
+          {tab === "general" && <GeneralSettings />}
+
           {tab === "ai" && (
             <section>
               <h2 className="mb-2 text-sm font-semibold">AI 模型</h2>
@@ -438,7 +537,7 @@ export function SettingsView() {
 
           {tab === "update" && <UpdatePanel />}
 
-          {tab !== "mcp" && tab !== "update" && !inTauri && (
+          {tab !== "general" && tab !== "mcp" && tab !== "update" && !inTauri && (
             <p className="text-[11px] text-muted-foreground">
               浏览器预览下设置不会保存，请在应用内配置。
             </p>

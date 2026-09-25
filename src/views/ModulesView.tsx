@@ -11,7 +11,7 @@ import { confirmDialog } from "@/store/confirm";
 import { useDescriptorStore } from "@/store/descriptors";
 import { useGraphStore } from "@/store/graph";
 import { toast } from "@/store/toast";
-import { useViewStore } from "@/store/view";
+import { useViewStore, VIEW_LABEL } from "@/store/view";
 import { nodeIcon } from "@/flow/nodeIcons";
 import { nodeSummary } from "@/flow/nodeDescriptions";
 import { placeInView } from "@/flow/placement";
@@ -103,8 +103,8 @@ export function ModulesView() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-border p-4">
-        <h1 className="text-lg font-semibold">模块库</h1>
+      <div className="border-b border-border px-6 py-4">
+        <h1 className="text-lg font-semibold">{VIEW_LABEL.modules}</h1>
         <p className="text-xs text-muted-foreground">
           浏览全部模块 — 添加到画布编排流程，或直接单独调用执行。
         </p>

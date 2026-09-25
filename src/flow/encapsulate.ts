@@ -5,12 +5,13 @@ import type {
   BoundaryPort,
   CompositeModule,
   NodeDescriptor,
-  ParamWidget,
   PortType,
   SerializedGraph,
 } from "@/lib/types";
 import { useDescriptorStore } from "@/store/descriptors";
 import { useGraphStore } from "@/store/graph";
+
+import { paramPortType } from "./portColors";
 
 /** A candidate boundary port surfaced in the create dialog (user can rename/drop). */
 export interface DetectedPort {
@@ -28,11 +29,6 @@ export interface Encapsulation {
   outputs: DetectedPort[];
 }
 
-function paramType(w: ParamWidget): PortType {
-  if (w.kind === "number" || w.kind === "slider") return "number";
-  if (w.kind === "toggle") return "bool";
-  return "text";
-}
 
 /** Read the selection and derive the inner graph + dangling boundary ports. */
 export function buildEncapsulation(): Encapsulation | null {
@@ -72,7 +68,7 @@ export function buildEncapsulation(): Encapsulation | null {
       ...d.inputs.map((p) => ({ name: p.name, label: p.label, type: p.type })),
       ...d.params
         .filter((p) => promoted.has(p.name))
-        .map((p) => ({ name: p.name, label: p.label, type: paramType(p.widget) })),
+        .map((p) => ({ name: p.name, label: p.label, type: paramPortType(p.widget) })),
     ];
     for (const p of inPorts) {
       if (!fed.has(`${n.id}:${p.name}`)) {
@@ -140,4 +136,33 @@ export function compositeDescriptor(m: CompositeModule): NodeDescriptor {
     params: [],
     cost: "medium",
   };
+}
+
+/**
+ * Swap the module's source nodes on the canvas for one instance of the module,
+ * rewiring outside connections to its boundary ports. One undo step.
+ */
+export function replaceWithModule(m: CompositeModule, descriptor: NodeDescriptor) {
+  const g = useGraphStore.getState();
+  const ids = new Set(m.graph.nodes.map((n) => n.id));
+  const inner = g.nodes.filter((n) => ids.has(n.id));
+  if (inner.length === 0) return;
+  const pos = {
+    x: Math.min(...inner.map((n) => n.position.x)),
+    y: Math.min(...inner.map((n) => n.position.y)),
+  };
+  const incoming = g.edges.filter((e) => !ids.has(e.source) && ids.has(e.target));
+  const outgoing = g.edges.filter((e) => ids.has(e.source) && !ids.has(e.target));
+  g.transact(() => {
+    const id = g.addNode(descriptor, pos);
+    for (const e of incoming) {
+      const b = m.inputs.find((p) => p.node === e.target && p.port === e.targetHandle);
+      if (b) g.onConnect({ source: e.source, sourceHandle: e.sourceHandle ?? null, target: id, targetHandle: b.name });
+    }
+    for (const e of outgoing) {
+      const b = m.outputs.find((p) => p.node === e.source && p.port === e.sourceHandle);
+      if (b) g.onConnect({ source: id, sourceHandle: b.name, target: e.target, targetHandle: e.targetHandle ?? null });
+    }
+    for (const n of inner) g.deleteNode(n.id);
+  });
 }

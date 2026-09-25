@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { api } from "@/lib/bindings";
 import { inTauri } from "@/lib/devMocks";
-import type { NodeDescriptor, ParamSpec, PortValue } from "@/lib/types";
+import type { NodeDescriptor, ParamSpec, PortType, PortValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { nodeIcon } from "@/flow/nodeIcons";
+import { portTypeLabel } from "@/flow/portColors";
+import { toast } from "@/store/toast";
 import { errorMessage } from "@/lib/errors";
 
 // ---- helpers ---------------------------------------------------------------
@@ -149,6 +151,54 @@ interface HistoryEntry {
   elapsed: number;
 }
 
+/** Turn what was typed (or a picked file) into the value the input port's type
+ * expects, instead of sending every input as text. Throws a readable message. */
+function toPortValue(type: PortType, text: string, file?: PortValue): PortValue {
+  if (file) return file;
+  switch (type) {
+    case "number": {
+      const n = Number(text.trim());
+      if (!text.trim() || !Number.isFinite(n)) throw new Error("需要填写数字");
+      return { type: "number", value: n };
+    }
+    case "bool":
+      return { type: "bool", value: ["true", "1", "yes", "on", "是"].includes(text.trim().toLowerCase()) };
+    case "stringList":
+      return { type: "stringList", value: text.split(/\r?\n/).filter((l) => l.length > 0) };
+    case "json":
+      try {
+        return { type: "json", value: JSON.parse(text) };
+      } catch {
+        throw new Error("需要合法的 JSON");
+      }
+    case "bytes":
+      return { type: "bytes", value: Array.from(new TextEncoder().encode(text)) };
+    case "image":
+      if (!text.trim().startsWith("data:")) throw new Error("请选择图片文件");
+      return { type: "image", value: text.trim() };
+    default:
+      return { type: "text", value: text };
+  }
+}
+
+/** Ports whose data usually comes from a file rather than typed text. */
+const FILE_PORTS: PortType[] = ["bytes", "image", "artifact", "any"];
+
+function readFile(file: File, asImage: boolean): Promise<PortValue> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onerror = () => reject(r.error);
+    r.onload = () =>
+      resolve(
+        asImage
+          ? { type: "image", value: r.result as string }
+          : { type: "bytes", value: Array.from(new Uint8Array(r.result as ArrayBuffer)) }
+      );
+    if (asImage) r.readAsDataURL(file);
+    else r.readAsArrayBuffer(file);
+  });
+}
+
 // ---- component -------------------------------------------------------------
 
 export function ModuleRunDialog({
@@ -159,6 +209,8 @@ export function ModuleRunDialog({
   onClose: () => void;
 }) {
   const [inputs, setInputs] = useState<Record<string, string>>({});
+  // Files picked for byte/image ports: shown by name, sent as real bytes / data URLs.
+  const [files, setFiles] = useState<Record<string, { name: string; value: PortValue }>>({});
   const [params, setParams] = useState<Record<string, unknown>>(() =>
     Object.fromEntries(descriptor.params.map((p) => [p.name, p.default]))
   );
@@ -195,8 +247,17 @@ export function ModuleRunDialog({
     const time = new Date().toLocaleTimeString();
     setLogs((l) => [...l, { time, level: "info", message: "开始执行" }]);
     const inputMap: Record<string, PortValue> = {};
-    for (const port of descriptor.inputs) {
-      inputMap[port.name] = { type: "text", value: inputs[port.name] ?? "" };
+    try {
+      for (const port of descriptor.inputs) {
+        const text = inputs[port.name] ?? "";
+        if (!port.required && !text && !files[port.name]) continue;
+        inputMap[port.name] = toPortValue(port.type, text, files[port.name]?.value);
+      }
+    } catch (e) {
+      setRunning(false);
+      setError(`输入有误：${errorMessage(e)}`);
+      setTab("result");
+      return;
     }
     try {
       const out = await api.runNode(descriptor.id, inputMap, params);
@@ -227,6 +288,7 @@ export function ModuleRunDialog({
   const reset = () => {
     setParams(Object.fromEntries(descriptor.params.map((p) => [p.name, p.default])));
     setInputs({});
+    setFiles({});
   };
 
   const restore = (h: HistoryEntry) => {
@@ -394,25 +456,74 @@ export function ModuleRunDialog({
               <div className="mt-2 space-y-3">
                 {descriptor.inputs.map((port) => {
                   const val = inputs[port.name] ?? "";
+                  const file = files[port.name];
+                  const acceptsFile = FILE_PORTS.includes(port.type);
                   return (
                     <div key={port.name}>
-                      {descriptor.inputs.length > 1 && (
-                        <div className="mb-1 text-[11px] text-muted-foreground">
-                          {port.label} <span className="opacity-50">({port.type})</span>
+                      <div className="mb-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <span>
+                          {port.label} <span className="opacity-60">（{portTypeLabel(port.type)}）</span>
+                        </span>
+                        {acceptsFile && (
+                          <label className="ml-auto cursor-pointer rounded border border-border px-1.5 py-0.5 hover:bg-accent">
+                            选择文件
+                            <input
+                              type="file"
+                              className="hidden"
+                              accept={port.type === "image" ? "image/*" : undefined}
+                              onChange={async (e) => {
+                                const f = e.target.files?.[0];
+                                e.target.value = "";
+                                if (!f) return;
+                                try {
+                                  const value = await readFile(f, port.type === "image");
+                                  setFiles((p) => ({ ...p, [port.name]: { name: f.name, value } }));
+                                } catch (err) {
+                                  toast.error("读取文件失败", { error: err });
+                                }
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                      {file ? (
+                        <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-xs">
+                          <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                          <button
+                            onClick={() =>
+                              setFiles((p) => {
+                                const next = { ...p };
+                                delete next[port.name];
+                                return next;
+                              })
+                            }
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            清除
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <textarea
+                            rows={4}
+                            value={val}
+                            onChange={(e) => setInputs((p) => ({ ...p, [port.name]: e.target.value }))}
+                            placeholder={
+                              port.type === "number"
+                                ? "输入数字…"
+                                : port.type === "json"
+                                  ? "输入 JSON…"
+                                  : acceptsFile
+                                    ? "输入文本（按 UTF-8 字节传入），或点「选择文件」…"
+                                    : "输入文本或粘贴 Base64 / Hex 数据…"
+                            }
+                            className={cn(inputCls, "resize-y pb-6")}
+                          />
+                          <span className="pointer-events-none absolute bottom-2 right-3 text-[10px] text-muted-foreground">
+                            {byteLen(val)} 字节
+                          </span>
                         </div>
                       )}
-                      <div className="relative">
-                        <textarea
-                          rows={4}
-                          value={val}
-                          onChange={(e) => setInputs((p) => ({ ...p, [port.name]: e.target.value }))}
-                          placeholder="输入文本或粘贴 Base64 / Hex 数据…"
-                          className={cn(inputCls, "resize-y pb-6")}
-                        />
-                        <span className="pointer-events-none absolute bottom-2 right-3 text-[10px] text-muted-foreground">
-                          {byteLen(val)} 字节
-                        </span>
-                      </div>
                     </div>
                   );
                 })}

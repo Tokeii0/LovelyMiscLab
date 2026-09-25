@@ -26,7 +26,7 @@
   --ring: #2563eb;
 }
 
-/* Dark-first ComfyUI-style palette (default for the app). */
+/* Dark palette, applied via the `dark` class (see store/theme.ts). */
 .dark {
   --background: #0d1017;
   --foreground: #e6edf3;

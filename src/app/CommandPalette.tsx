@@ -5,6 +5,7 @@ import {
   Eraser,
   FilePlus,
   FolderOpen,
+  Gamepad2,
   HelpCircle,
   History,
   LayoutGrid,
@@ -29,8 +30,9 @@ import { useCommandPaletteStore } from "@/store/commandPalette";
 import { useDescriptorStore } from "@/store/descriptors";
 import { useGraphStore } from "@/store/graph";
 import { useHelpStore } from "@/store/help";
+import { usePrefs } from "@/store/prefs";
 import { useRunStore } from "@/store/run";
-import { useViewStore, type View } from "@/store/view";
+import { useViewStore, VIEW_LABEL, type View } from "@/store/view";
 import { useScrollActiveIntoView } from "@/hooks/useScrollActiveIntoView";
 import { useEscapeToClose } from "@/store/modal";
 import { nodeSummary } from "@/flow/nodeDescriptions";
@@ -47,13 +49,14 @@ interface Command {
   action: () => void;
 }
 
-const viewCommands: { view: View; title: string; icon: LucideIcon }[] = [
-  { view: "canvas", title: "打开画布", icon: LayoutGrid },
-  { view: "modules", title: "打开模块库", icon: Boxes },
-  { view: "templates", title: "打开模板", icon: Workflow },
-  { view: "runs", title: "打开运行记录", icon: History },
-  { view: "resources", title: "打开资源库", icon: Package },
-  { view: "settings", title: "打开设置", icon: Settings },
+const viewCommands: { view: View; icon: LucideIcon }[] = [
+  { view: "canvas", icon: LayoutGrid },
+  { view: "modules", icon: Boxes },
+  { view: "templates", icon: Workflow },
+  { view: "runs", icon: History },
+  { view: "resources", icon: Package },
+  { view: "settings", icon: Settings },
+  { view: "galgame", icon: Gamepad2 },
 ];
 
 export function CommandPalette() {
@@ -62,6 +65,7 @@ export function CommandPalette() {
   const descriptors = useDescriptorStore((s) => s.list);
   const addNode = useGraphStore((s) => s.addNode);
   const setView = useViewStore((s) => s.setView);
+  const galgame = usePrefs((s) => s.experimentalGalgame);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -159,9 +163,11 @@ export function CommandPalette() {
         keywords: "help docs shortcut",
         action: () => useHelpStore.getState().openForNode(),
       },
-      ...viewCommands.map((v) => ({
+      ...viewCommands
+        .filter((v) => v.view !== "galgame" || galgame)
+        .map((v) => ({
         id: `view-${v.view}`,
-        title: v.title,
+        title: `前往「${VIEW_LABEL[v.view]}」`,
         hint: "切换主视图",
         icon: v.icon,
         keywords: `view ${v.view}`,
@@ -169,7 +175,7 @@ export function CommandPalette() {
       })),
     ];
     return base;
-  }, [setView]);
+  }, [galgame, setView]);
 
   const nodeCommand = useCallback(
     (d: NodeDescriptor): Command => ({

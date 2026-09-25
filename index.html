@@ -6,12 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LovelyMiscLab</title>
     <script>
-      // Apply persisted theme before paint to avoid a flash (default: light).
+      // Apply the theme before paint to avoid a flash (default: follow the OS).
       (function () {
         try {
-          if (localStorage.getItem("misclab-theme") === "dark") {
-            document.documentElement.classList.add("dark");
-          }
+          var p = localStorage.getItem("misclab-theme");
+          var dark =
+            p === "dark" ||
+            (p !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
         } catch (e) {}
       })();
     </script>

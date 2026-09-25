@@ -10,23 +10,26 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { useViewStore, type View } from "@/store/view";
+import { usePrefs } from "@/store/prefs";
+import { useViewStore, VIEW_LABEL, type View } from "@/store/view";
 
 type Item = { view: View; label: string; icon: LucideIcon };
 
 const ITEMS: Item[] = [
-  { view: "canvas", label: "画布", icon: LayoutGrid },
-  { view: "galgame", label: "故事模式", icon: Gamepad2 },
-  { view: "modules", label: "模块", icon: Boxes },
-  { view: "templates", label: "模板", icon: Workflow },
-  { view: "runs", label: "运行记录", icon: History },
-  { view: "resources", label: "资源", icon: Package },
+  { view: "canvas", label: VIEW_LABEL.canvas, icon: LayoutGrid },
+  { view: "modules", label: VIEW_LABEL.modules, icon: Boxes },
+  { view: "templates", label: VIEW_LABEL.templates, icon: Workflow },
+  { view: "runs", label: VIEW_LABEL.runs, icon: History },
+  { view: "resources", label: VIEW_LABEL.resources, icon: Package },
+  { view: "galgame", label: VIEW_LABEL.galgame, icon: Gamepad2 },
 ];
-const SETTINGS: Item = { view: "settings", label: "设置", icon: Settings };
+const SETTINGS: Item = { view: "settings", label: VIEW_LABEL.settings, icon: Settings };
 
 export function LeftRail() {
   const view = useViewStore((s) => s.view);
   const setView = useViewStore((s) => s.setView);
+  const galgame = usePrefs((s) => s.experimentalGalgame);
+  const items = ITEMS.filter((i) => i.view !== "galgame" || galgame || view === "galgame");
 
   const renderItem = ({ view: v, label, icon: Icon }: Item) => {
     const active = view === v;
@@ -52,7 +55,7 @@ export function LeftRail() {
 
   return (
     <div className="flex w-16 shrink-0 flex-col items-center gap-1 border-r border-border bg-card py-2">
-      {ITEMS.map(renderItem)}
+      {items.map(renderItem)}
       <div className="flex-1" />
       {renderItem(SETTINGS)}
     </div>

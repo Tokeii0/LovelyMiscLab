@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "LovelyMiscLab",
-        "width": 1920,
-        "height": 1080,
+        "width": 1440,
+        "height": 900,
         "minWidth": 1120,
         "minHeight": 720,
         "center": true,

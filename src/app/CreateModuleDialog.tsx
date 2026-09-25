@@ -12,11 +12,13 @@ import {
   type DetectedPort,
   type Encapsulation,
   newModuleId,
+  replaceWithModule,
   toBoundaryPorts,
 } from "@/flow/encapsulate";
 import { useDescriptorStore } from "@/store/descriptors";
 import { useModuleDialogStore } from "@/store/moduleDialog";
 import { errorMessage } from "@/lib/errors";
+import { toast } from "@/store/toast";
 
 const COLORS = ["#8b5cf6", "#f43f5e", "#06b6d4", "#22c55e", "#f59e0b", "#3b82f6"];
 
@@ -72,6 +74,7 @@ export function CreateModuleDialog() {
   const [outputs, setOutputs] = useState<DetectedPort[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [replace, setReplace] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -118,6 +121,13 @@ export function CreateModuleDialog() {
         const cur = useDescriptorStore.getState().list.filter((x) => x.id !== d.id);
         setDescriptors([...cur, d]);
       }
+      if (replace) {
+        const d = useDescriptorStore.getState().byId[module.id] ?? compositeDescriptor(module);
+        replaceWithModule(module, d);
+      }
+      toast.success(`已创建模块「${module.name}」`, {
+        detail: replace ? "已用新模块替换画布上的选中节点" : "可在节点库「自定义」分类中找到",
+      });
       setOpen(false);
     } catch (e) {
       setError(errorMessage(e));
@@ -228,6 +238,10 @@ export function CreateModuleDialog() {
       )}
 
       <div className="flex items-center justify-end gap-2 border-t border-border p-4">
+        <label className="mr-auto flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+          <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
+          用新模块替换画布上的选中节点
+        </label>
         <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={saving}>
           取消
         </Button>

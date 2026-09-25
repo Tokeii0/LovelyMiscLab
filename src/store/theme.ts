@@ -1,48 +1,69 @@
 import { create } from "zustand";
 
 export type Theme = "light" | "dark";
+/** What the user picked; "system" follows the OS light/dark setting. */
+export type ThemePref = Theme | "system";
 
 const KEY = "misclab-theme";
+const media =
+  typeof window !== "undefined" && window.matchMedia
+    ? window.matchMedia("(prefers-color-scheme: dark)")
+    : null;
 
-function readInitial(): Theme {
+function readPref(): ThemePref {
   try {
-    return localStorage.getItem(KEY) === "dark" ? "dark" : "light";
+    const v = localStorage.getItem(KEY);
+    return v === "dark" || v === "light" ? v : "system";
   } catch {
-    return "light";
+    return "system";
   }
 }
 
+function resolve(pref: ThemePref): Theme {
+  if (pref !== "system") return pref;
+  return media?.matches ? "dark" : "light";
+}
+
+/** Sync <html>: the `dark` class (Tailwind variants) and `color-scheme`, so native
+ * controls — selects, number spinners, scrollbars — match the theme too. */
 function apply(theme: Theme) {
   document.documentElement.classList.toggle("dark", theme === "dark");
-  try {
-    localStorage.setItem(KEY, theme);
-  } catch {
-    /* ignore */
-  }
+  document.documentElement.style.colorScheme = theme;
 }
 
 interface ThemeState {
+  pref: ThemePref;
+  /** The theme actually shown. */
   theme: Theme;
-  setTheme: (t: Theme) => void;
+  setPref: (p: ThemePref) => void;
+  /** Title-bar button: switch to the opposite of what's shown (an explicit choice). */
   toggle: () => void;
 }
 
-/** Light by default; toggles the `dark` class on <html> and persists the choice. */
 export const useThemeStore = create<ThemeState>((set, get) => {
-  // Sync the <html> class to the persisted/default theme once at startup so the
-  // DOM (Tailwind `dark:` variants) and the store (React Flow colorMode) agree.
-  const initial = readInitial();
+  const pref = readPref();
+  const initial = resolve(pref);
   apply(initial);
+  media?.addEventListener("change", () => {
+    if (get().pref !== "system") return;
+    const theme = resolve("system");
+    apply(theme);
+    set({ theme });
+  });
+  const setPref = (p: ThemePref) => {
+    const theme = resolve(p);
+    apply(theme);
+    try {
+      localStorage.setItem(KEY, p);
+    } catch {
+      /* ignore */
+    }
+    set({ pref: p, theme });
+  };
   return {
+    pref,
     theme: initial,
-    setTheme: (t) => {
-      apply(t);
-      set({ theme: t });
-    },
-    toggle: () => {
-      const t: Theme = get().theme === "dark" ? "light" : "dark";
-      apply(t);
-      set({ theme: t });
-    },
+    setPref,
+    toggle: () => setPref(get().theme === "dark" ? "light" : "dark"),
   };
 });

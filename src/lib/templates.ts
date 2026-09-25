@@ -58,7 +58,7 @@ export const TEMPLATE_CATEGORIES = [
   "编码解码",
   "文本处理",
   "密码学",
-  "控制/流程",
+  "控制/逻辑",
   "隐写术",
   "取证/文件",
   "二进制分析",
@@ -331,7 +331,7 @@ export const TEMPLATES: Template[] = [
     id: "foreach-hash",
     name: "批量哈希 (for-each)",
     description: "for 循环生成 1..8，逐项算 SHA-256，再合并成多行——演示 范围 → 逐项映射 → 合并 的数据流循环。",
-    category: "控制/流程",
+    category: "控制/逻辑",
     icon: Network,
     nodes: [
       { key: "r", descriptorId: "range", position: { x: X(0), y: Y }, params: { start: 1, end: 8, step: 1 } },
@@ -349,7 +349,7 @@ export const TEMPLATES: Template[] = [
     id: "iterate-decode",
     name: "循环解码 (while)",
     description: "反复应用同一操作，直到命中正则。示例：对套娃 Base64 反复解码，直到出现 flag。",
-    category: "控制/流程",
+    category: "控制/逻辑",
     icon: Repeat,
     nodes: [
       { key: "in", descriptorId: "text_input", position: { x: X(0), y: Y }, params: { text: "ZmxhZ3tpdGVyfQ==" } },

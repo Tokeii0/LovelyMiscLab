@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { TEMPLATES, TEMPLATE_CATEGORIES, type Template } from "@/lib/templates";
 import { loadTemplate } from "@/flow/loadTemplate";
 import { useDescriptorStore } from "@/store/descriptors";
-import { useViewStore } from "@/store/view";
+import { useViewStore, VIEW_LABEL } from "@/store/view";
 import { toast } from "@/store/toast";
 import { guardUnsaved } from "@/lib/project";
 import { useProjectStore } from "@/store/project";
@@ -71,8 +71,8 @@ export function TemplatesView() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-border px-4 py-3">
-        <h1 className="text-base font-semibold">流程模板</h1>
+      <div className="border-b border-border px-6 py-4">
+        <h1 className="text-lg font-semibold">{VIEW_LABEL.templates}</h1>
         <p className="text-[11px] text-muted-foreground">
           内置常见 CTF Misc 解题流程，一键载入画布即可运行或在其上改造。
         </p>
